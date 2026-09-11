@@ -1,6 +1,6 @@
 import { pgTable, serial, uuid, varchar, text, boolean, timestamp, jsonb, integer, uniqueIndex } from 'drizzle-orm/pg-core';
-import { companies } from './companies';
-import { orders } from './orders';
+import { companies, terminals } from './companies.js';
+import { orders } from './orders.js';
 
 export const rycosClients = pgTable('rycos_clients', {
   companyId: integer('company_id').primaryKey().references(() => companies.id, { onDelete: 'cascade' }),
@@ -20,6 +20,7 @@ export const fiscalDevices = pgTable('fiscal_devices', {
   companyId: integer('company_id').references(() => companies.id, { onDelete: 'cascade' }).notNull(),
   deviceId: varchar('device_id', { length: 64 }).notNull(), // e.g. SBT-NMLL2M or SBF-hub
   name: varchar('name', { length: 128 }).notNull(),
+  status: varchar('status', { length: 32 }).default('active').notNull(),
   source: varchar('source', { length: 16 }).default('manual').notNull(), // 'manual' | 'rycos'
   kind: varchar('kind', { length: 8 }).default('device').notNull(), // 'device' | 'hub'
   isPrimary: boolean('is_primary').default(false).notNull(),
@@ -28,6 +29,16 @@ export const fiscalDevices = pgTable('fiscal_devices', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => [
   uniqueIndex('uq_company_fiscal_device').on(t.companyId, t.deviceId),
+]);
+
+export const terminalFiscalDevices = pgTable('terminal_fiscal_devices', {
+  id: serial('id').primaryKey(),
+  terminalId: integer('terminal_id').references(() => terminals.id, { onDelete: 'cascade' }).notNull(),
+  fiscalDeviceId: integer('fiscal_device_id').references(() => fiscalDevices.id, { onDelete: 'cascade' }).notNull(),
+  position: integer('position').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex('uq_terminal_fiscal_device').on(t.terminalId, t.fiscalDeviceId),
 ]);
 
 export const fiscalReceipts = pgTable('fiscal_receipts', {

@@ -176,11 +176,20 @@ CREATE TABLE IF NOT EXISTS "fiscal_devices" (
 	"company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
 	"device_id" varchar(64) NOT NULL,
 	"name" varchar(128) NOT NULL,
+	"status" varchar(32) DEFAULT 'active' NOT NULL,
 	"source" varchar(16) DEFAULT 'manual' NOT NULL,
 	"kind" varchar(8) DEFAULT 'device' NOT NULL,
 	"is_primary" boolean DEFAULT false NOT NULL,
 	"is_online" boolean DEFAULT true NOT NULL,
 	"last_seen_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "terminal_fiscal_devices" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"terminal_id" integer NOT NULL REFERENCES "terminals"("id") ON DELETE cascade,
+	"fiscal_device_id" integer NOT NULL REFERENCES "fiscal_devices"("id") ON DELETE cascade,
+	"position" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 
@@ -275,6 +284,7 @@ CREATE INDEX IF NOT EXISTS "idx_orders_company_status" ON "orders" ("company_id"
 CREATE INDEX IF NOT EXISTS "idx_orders_brand" ON "orders" ("brand_id");
 CREATE INDEX IF NOT EXISTS "idx_orders_created" ON "orders" ("created_at");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_company_fiscal_device" ON "fiscal_devices" ("company_id", "device_id");
+CREATE UNIQUE INDEX IF NOT EXISTS "uq_terminal_fiscal_device" ON "terminal_fiscal_devices" ("terminal_id", "fiscal_device_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_order_fiscal_receipt" ON "fiscal_receipts" ("order_id");
 CREATE INDEX IF NOT EXISTS "idx_outbox_status_created" ON "outbox_events" ("status", "created_at");
 `;
@@ -295,7 +305,7 @@ export async function ensureDatabaseSchema() {
       if (check.length === 0) {
         console.log('⚡ [DB Auto-Init] Core tables not found. Provisioning 100k_rycos schema...');
         await raw.unsafe(SCHEMA_DDL);
-        console.log('✓ [DB Auto-Init] PostgreSQL schema provisioned (21 tables, indexes & foreign keys)');
+        console.log('✓ [DB Auto-Init] PostgreSQL schema provisioned (22 tables, indexes & foreign keys)');
       } else {
         // Idempotent migration for existing installations
         await raw.unsafe(`
@@ -324,6 +334,15 @@ export async function ensureDatabaseSchema() {
             "updated_at" timestamp DEFAULT now() NOT NULL
           );
           ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
+          ALTER TABLE "fiscal_devices" ADD COLUMN IF NOT EXISTS "status" varchar(32) DEFAULT 'active' NOT NULL;
+          CREATE TABLE IF NOT EXISTS "terminal_fiscal_devices" (
+            "id" serial PRIMARY KEY NOT NULL,
+            "terminal_id" integer NOT NULL REFERENCES "terminals"("id") ON DELETE cascade,
+            "fiscal_device_id" integer NOT NULL REFERENCES "fiscal_devices"("id") ON DELETE cascade,
+            "position" integer DEFAULT 0 NOT NULL,
+            "created_at" timestamp DEFAULT now() NOT NULL
+          );
+          CREATE UNIQUE INDEX IF NOT EXISTS "uq_terminal_fiscal_device" ON "terminal_fiscal_devices" ("terminal_id", "fiscal_device_id");
         `);
       }
 

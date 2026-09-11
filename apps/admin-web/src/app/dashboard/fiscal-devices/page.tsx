@@ -40,15 +40,42 @@ export default async function FiscalDevicesPage({
 }) {
   if (!isManager(await currentUser())) return <NoAccess />
   const sp = await searchParams
-  const data = (await adminApiData<FiscalDevicesResponse>('/fiscal-devices')) ?? { devices: [], unassigned: [] }
-  const devices = data.devices
-  const unassigned = data.unassigned
+  const rawData: any = await adminApiData('/fiscal-devices')
+  const rawDevices = Array.isArray(rawData) ? rawData : (rawData?.devices ?? [])
+  const rawUnassigned = Array.isArray(rawData?.unassigned) ? rawData.unassigned : []
+
+  const devices: FiscalDevice[] = (rawDevices || []).map((d: any) => ({
+    id: d.id,
+    name: d.name || '',
+    device_id: d.device_id || d.deviceId || '',
+    status: d.status || 'active',
+    is_primary: Boolean(d.is_primary ?? d.isPrimary),
+    terminals: (Array.isArray(d.terminals) ? d.terminals : []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      terminal_id: t.terminal_id || t.terminalId || '',
+    })),
+    source: d.source || 'manual',
+    kind: d.kind || 'device',
+    tier: d.tier ?? null,
+    online: d.online ?? d.is_online ?? d.isOnline ?? null,
+    aplikasa_installed: d.aplikasa_installed ?? null,
+    last_seen_at: d.last_seen_at || d.lastSeenAt || null,
+    license_expires_at: d.license_expires_at || null,
+  }))
+
+  const unassigned: TerminalRef[] = (rawUnassigned || []).map((t: any) => ({
+    id: t.id,
+    name: t.name,
+    terminal_id: t.terminal_id || t.terminalId || '',
+  }))
+
   const hasPrimary = devices.some((d) => d.is_primary)
 
   // Full terminal pool (assigned + unassigned) is the checkbox source for
   // each device's terminals form. Sorted alphabetically for stable UI.
   const allTerminals: TerminalRef[] = [
-    ...devices.flatMap((d) => d.terminals),
+    ...devices.flatMap((d) => d.terminals || []),
     ...unassigned,
   ]
     // De-dup: a terminal that's on multiple fiscal devices (M:N) would

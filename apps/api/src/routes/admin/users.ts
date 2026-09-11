@@ -150,4 +150,100 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
       return error(reply, err.message || 'Failed to delete user');
     }
   });
+
+  // Team aliases used by company-admin frontend (/team)
+  fastify.get('/v1/admin/team', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    const rows = await db
+      .select()
+      .from(users)
+      .where(eq(users.companyId, companyId))
+      .orderBy(desc(users.createdAt));
+    return success(reply, rows, 'Team retrieved');
+  });
+
+  fastify.post('/v1/admin/team', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    const body = (req.body ?? {}) as any;
+
+    if (!body.email) {
+      return validationError(reply, { email: 'Email is required' });
+    }
+
+    const userId = body.id ? String(body.id) : crypto.randomUUID();
+
+    try {
+      const [inserted] = await db
+        .insert(users)
+        .values({
+          id: userId,
+          companyId,
+          email: String(body.email).trim().toLowerCase(),
+          name: body.name ? String(body.name).trim() : null,
+          role: body.role ? String(body.role).trim() : 'staff',
+          isActive: body.isActive !== false,
+        })
+        .returning();
+
+      return success(reply, inserted, 'User invited', 201);
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to invite user');
+    }
+  });
+
+  const updateTeamUser = async (req: any, reply: any) => {
+    const { id } = req.params as { id: string };
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+    const body = (req.body ?? {}) as any;
+
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (body.name !== undefined) updateData.name = body.name ? String(body.name).trim() : null;
+    if (body.role !== undefined) updateData.role = String(body.role).trim();
+    if (body.email !== undefined) updateData.email = String(body.email).trim().toLowerCase();
+    if (body.isActive !== undefined) updateData.isActive = Boolean(body.isActive);
+    if (body.is_active !== undefined) updateData.isActive = Boolean(body.is_active);
+
+    try {
+      const [updated] = await db
+        .update(users)
+        .set(updateData)
+        .where(and(eq(users.id, id), eq(users.companyId, companyId)))
+        .returning();
+
+      if (!updated) {
+        return notFound(reply, 'User not found');
+      }
+
+      return success(reply, updated, 'User updated');
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to update user');
+    }
+  };
+
+  fastify.put('/v1/admin/team/:id', updateTeamUser);
+  fastify.patch('/v1/admin/team/:id', updateTeamUser);
+
+  fastify.delete('/v1/admin/team/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+
+    try {
+      const [deleted] = await db
+        .delete(users)
+        .where(and(eq(users.id, id), eq(users.companyId, companyId)))
+        .returning();
+
+      if (!deleted) {
+        return notFound(reply, 'User not found');
+      }
+
+      return success(reply, { id }, 'User removed');
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to delete user');
+    }
+  });
 }

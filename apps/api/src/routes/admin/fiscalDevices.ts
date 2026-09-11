@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, fiscalDevices, eq, and, desc } from '@rycos/database';
+import { getDatabase, fiscalDevices, terminals, terminalFiscalDevices, eq, and, desc, inArray } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import mqtt from 'mqtt';
@@ -9,18 +9,79 @@ import { randomUUID } from 'crypto';
 export async function adminFiscalDevicesRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
 
-  // GET /v1/admin/fiscal-devices - List registered devices
+  // GET /v1/admin/fiscal-devices - List registered devices with their terminals
   fastify.get('/v1/admin/fiscal-devices', async (req, reply) => {
     const db = getDatabase();
     const companyId = getCompanyId(req);
 
-    const rows = await db
+    const devices = await db
       .select()
       .from(fiscalDevices)
       .where(eq(fiscalDevices.companyId, companyId))
       .orderBy(desc(fiscalDevices.isPrimary), desc(fiscalDevices.id));
 
-    return success(reply, rows, 'Fiscal devices retrieved');
+    const terms = await db
+      .select()
+      .from(terminals)
+      .where(and(eq(terminals.companyId, companyId), eq(terminals.status, 'active')))
+      .orderBy(terminals.name);
+
+    const edges = devices.length > 0
+      ? await db
+          .select()
+          .from(terminalFiscalDevices)
+          .where(inArray(terminalFiscalDevices.fiscalDeviceId, devices.map((d) => d.id)))
+      : [];
+
+    const termMap = new Map(
+      terms.map((t) => [
+        t.id,
+        { id: t.id, name: t.name, terminal_id: t.terminalId, terminalId: t.terminalId },
+      ])
+    );
+    const assignedIds = new Set<number>();
+    const termsByDevice: Record<number, Array<{ id: number; name: string; terminal_id: string; terminalId: string }>> = {};
+
+    for (const e of edges) {
+      const t = termMap.get(e.terminalId);
+      if (!t) continue;
+      (termsByDevice[e.fiscalDeviceId] ??= []).push(t);
+      assignedIds.add(e.terminalId);
+    }
+
+    const mappedDevices = devices.map((d) => ({
+      id: d.id,
+      name: d.name,
+      deviceId: d.deviceId,
+      device_id: d.deviceId,
+      status: d.status || 'active',
+      isPrimary: d.isPrimary,
+      is_primary: d.isPrimary,
+      source: (d.source as any) || 'manual',
+      kind: (d.kind as any) || 'device',
+      tier: null,
+      online: d.isOnline,
+      is_online: d.isOnline,
+      isOnline: d.isOnline,
+      aplikasa_installed: null,
+      terminals: termsByDevice[d.id] ?? [],
+      lastSeenAt: d.lastSeenAt,
+      last_seen_at: d.lastSeenAt ? d.lastSeenAt.toISOString() : null,
+      license_expires_at: null,
+      createdAt: d.createdAt,
+      created_at: d.createdAt,
+    }));
+
+    const unassigned = terms
+      .filter((t) => !assignedIds.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        terminalId: t.terminalId,
+        terminal_id: t.terminalId,
+      }));
+
+    return success(reply, { devices: mappedDevices, unassigned }, 'Fiscal devices retrieved');
   });
 
   // POST /v1/admin/fiscal-devices - Register fiscal device
@@ -29,16 +90,16 @@ export async function adminFiscalDevicesRoutes(fastify: FastifyInstance) {
     const companyId = getCompanyId(req);
     const body = req.body as any;
 
-    if (!body.deviceId || !body.name) {
+    const deviceId = String(body.deviceId || body.device_id || '').trim();
+    const name = String(body.name || '').trim();
+    const isPrimary = Boolean(body.isPrimary || body.is_primary);
+
+    if (!deviceId || !name) {
       return validationError(reply, {
-        deviceId: !body.deviceId ? 'deviceId (e.g. SBR-C5N34S) is required' : '',
-        name: !body.name ? 'name is required' : '',
+        deviceId: !deviceId ? 'deviceId (e.g. SBR-C5N34S) is required' : '',
+        name: !name ? 'name is required' : '',
       });
     }
-
-    const deviceId = String(body.deviceId).trim();
-    const name = String(body.name).trim();
-    const isPrimary = Boolean(body.isPrimary);
 
     try {
       // If marking as primary, unmark existing primary devices
@@ -55,6 +116,7 @@ export async function adminFiscalDevicesRoutes(fastify: FastifyInstance) {
           companyId,
           deviceId,
           name,
+          status: 'active',
           source: body.source || 'manual',
           kind: body.kind || 'device',
           isPrimary,
@@ -65,16 +127,116 @@ export async function adminFiscalDevicesRoutes(fastify: FastifyInstance) {
           target: [fiscalDevices.companyId, fiscalDevices.deviceId],
           set: {
             name,
+            status: 'active',
             isPrimary,
             lastSeenAt: new Date(),
           },
         })
         .returning();
 
-      return success(reply, inserted, 'Fiscal device registered', 201);
+      return success(
+        reply,
+        {
+          ...inserted,
+          device_id: inserted.deviceId,
+          is_primary: inserted.isPrimary,
+          terminals: [],
+        },
+        'Fiscal device registered',
+        201
+      );
     } catch (err: any) {
       return error(reply, err.message || 'Failed to register fiscal device');
     }
+  });
+
+  // PUT /v1/admin/fiscal-devices/:id - Update fiscal device (status, name, device_id)
+  fastify.put('/v1/admin/fiscal-devices/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const deviceRecordId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const body = (req.body ?? {}) as any;
+    const db = getDatabase();
+
+    const updateData: Record<string, any> = {};
+    if (body.name !== undefined) updateData.name = String(body.name).trim();
+    if (body.deviceId !== undefined || body.device_id !== undefined) {
+      updateData.deviceId = String(body.deviceId || body.device_id).trim();
+    }
+    if (body.status !== undefined && ['active', 'inactive'].includes(body.status)) {
+      updateData.status = body.status;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return validationError(reply, { message: 'Nothing to update' });
+    }
+
+    const [updated] = await db
+      .update(fiscalDevices)
+      .set(updateData)
+      .where(and(eq(fiscalDevices.id, deviceRecordId), eq(fiscalDevices.companyId, companyId)))
+      .returning();
+
+    if (!updated) {
+      return notFound(reply, 'Fiscal device not found');
+    }
+
+    return success(
+      reply,
+      {
+        ...updated,
+        device_id: updated.deviceId,
+        is_primary: updated.isPrimary,
+      },
+      'Fiscal device updated'
+    );
+  });
+
+  // PUT /v1/admin/fiscal-devices/:id/terminals - Replace terminal bindings
+  fastify.put('/v1/admin/fiscal-devices/:id/terminals', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const deviceRecordId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const body = (req.body ?? {}) as any;
+    const db = getDatabase();
+
+    const rawList = Array.isArray(body.terminal_ids)
+      ? body.terminal_ids
+      : Array.isArray(body.terminalIds)
+      ? body.terminalIds
+      : [];
+    const targetIds: number[] = rawList.map((x: any) => parseInt(String(x), 10)).filter(Number.isFinite);
+
+    const [device] = await db
+      .select()
+      .from(fiscalDevices)
+      .where(and(eq(fiscalDevices.id, deviceRecordId), eq(fiscalDevices.companyId, companyId)))
+      .limit(1);
+
+    if (!device) {
+      return notFound(reply, 'Fiscal device not found');
+    }
+
+    // Delete existing terminalFiscalDevices for this device
+    await db
+      .delete(terminalFiscalDevices)
+      .where(eq(terminalFiscalDevices.fiscalDeviceId, deviceRecordId));
+
+    // Insert new bindings
+    if (targetIds.length > 0) {
+      await db
+        .insert(terminalFiscalDevices)
+        .values(
+          targetIds.map((tid: number, idx: number) => ({
+            terminalId: tid,
+            fiscalDeviceId: deviceRecordId,
+            position: idx,
+          }))
+        )
+        .onConflictDoNothing();
+    }
+
+    return success(reply, { assigned: targetIds.length }, 'Terminal assignments updated');
   });
 
   // POST /v1/admin/fiscal-devices/:id/primary - Set device as primary
@@ -99,7 +261,28 @@ export async function adminFiscalDevicesRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'Device not found');
     }
 
-    return success(reply, updated, 'Device marked as primary');
+    return success(
+      reply,
+      {
+        ...updated,
+        device_id: updated.deviceId,
+        is_primary: updated.isPrimary,
+      },
+      'Device marked as primary'
+    );
+  });
+
+  // GET /v1/admin/rycos/status - Check RYCOS integration status
+  fastify.get('/v1/admin/rycos/status', async (_req, reply) => {
+    return success(reply, {
+      configured: false,
+      linked: false,
+      client: null,
+      hub: null,
+      seats: [],
+      purchases: [],
+      portal_error: null,
+    });
   });
 
   // DELETE /v1/admin/fiscal-devices/:id - Delete device

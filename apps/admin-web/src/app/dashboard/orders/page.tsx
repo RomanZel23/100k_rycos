@@ -83,7 +83,26 @@ export default async function OrdersAnalyticsPage({
     adminApiData<Company>('/companies'),
   ])
   const currency = (company?.currency || 'PLN').toUpperCase()
-  const a = data
+  const a: Analytics | null = data
+    ? {
+        range: data.range || range,
+        kpis: data.kpis || {
+          revenue: (data as any).totalTurnover ? parseFloat((data as any).totalTurnover) : 0,
+          orders: (data as any).totalOrders || 0,
+          aov: (data as any).totalOrders ? parseFloat((data as any).totalTurnover || '0') / (data as any).totalOrders : 0,
+          items_sold: 0,
+          revenue_delta_pct: null,
+          orders_delta_pct: null,
+          aov_delta_pct: null,
+          items_delta_pct: null,
+        },
+        daily: Array.isArray(data.daily) ? data.daily : [],
+        monthly: Array.isArray(data.monthly) ? data.monthly : [],
+        top_products: Array.isArray(data.top_products) ? data.top_products : [],
+        hour_heatmap: Array.isArray(data.hour_heatmap) ? data.hour_heatmap : [],
+        by_brand: Array.isArray(data.by_brand) ? data.by_brand : [],
+      }
+    : null
 
   return (
     <div className="mx-auto max-w-6xl">
