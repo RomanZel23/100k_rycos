@@ -252,32 +252,45 @@ CREATE INDEX IF NOT EXISTS "idx_outbox_status_created" ON "outbox_events" ("stat
 `;
 
 export async function ensureDatabaseSchema() {
-  const db = getDatabase();
-  try {
-    const check: any = await db.execute(sql`
-      SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'outbox_events' LIMIT 1
-    `);
+  const raw = getRawClient();
+  if (!raw) return;
 
-    if (check.length === 0) {
-      console.log('⚡ [DB Auto-Init] Core tables not found. Automatically provisioning 100k_rycos schema...');
-      const raw = getRawClient();
-      if (raw) {
+  try {
+    // Acquire PostgreSQL session-level advisory lock so API and Worker never run DDL concurrently
+    await raw.unsafe(`SELECT pg_advisory_lock(100100);`);
+
+    try {
+      const check: any = await raw.unsafe(`
+        SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'outbox_events' LIMIT 1;
+      `);
+
+      if (check.length === 0) {
+        console.log('⚡ [DB Auto-Init] Core tables not found. Provisioning 100k_rycos schema...');
         await raw.unsafe(SCHEMA_DDL);
         console.log('✓ [DB Auto-Init] PostgreSQL schema provisioned (19 tables, indexes & foreign keys)');
       }
-    }
 
-    // Check if initial brand exists, if not seed demo data
-    const brandsCheck: any = await db.execute(sql`
-      SELECT count(*)::int as cnt FROM brands LIMIT 1
-    `);
+      // Check if brands table exists before querying count
+      const brandsTableCheck: any = await raw.unsafe(`
+        SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'brands' LIMIT 1;
+      `);
 
-    if (brandsCheck[0]?.cnt === 0) {
-      console.log('🌱 [DB Auto-Init] Database is empty. Seeding demo menu (Yalla Burger & Pizza)...');
-      await seedDatabase();
-      console.log('✓ [DB Auto-Init] Demo menu seeded successfully');
+      if (brandsTableCheck.length > 0) {
+        const brandsCount: any = await raw.unsafe(`SELECT count(*)::int as cnt FROM brands LIMIT 1;`);
+        if (brandsCount[0]?.cnt === 0) {
+          console.log('🌱 [DB Auto-Init] Database is empty. Seeding demo menu (Yalla Burger & Pizza)...');
+          await seedDatabase();
+          console.log('✓ [DB Auto-Init] Demo menu seeded successfully');
+        }
+      }
+    } finally {
+      await raw.unsafe(`SELECT pg_advisory_unlock(100100);`);
     }
-  } catch (err) {
-    console.error('[DB Auto-Init] Failed to ensure database schema:', err);
+  } catch (err: any) {
+    if (err?.code === '23505' || err?.message?.includes('already exists')) {
+      console.log('ℹ️ [DB Auto-Init] Tables already provisioned by sibling process');
+    } else {
+      console.error('[DB Auto-Init] Failed to ensure database schema:', err);
+    }
   }
 }
