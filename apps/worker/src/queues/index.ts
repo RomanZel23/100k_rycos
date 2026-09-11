@@ -5,6 +5,11 @@ import { env } from '../config/env.js';
 export const redisConnection = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
+  lazyConnect: true,
+});
+
+redisConnection.on('error', (err) => {
+  console.warn('[Worker:Redis Error]', err.message);
 });
 
 export const fiscalQueue = new Queue('fiscalization', {

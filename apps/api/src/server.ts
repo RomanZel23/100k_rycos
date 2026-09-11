@@ -69,6 +69,8 @@ async function bootstrap() {
     await fastify.listen({ port: env.PORT, host: env.HOST });
     console.log(`🚀 [100k_rycos API] Running on http://${env.HOST}:${env.PORT}`);
     console.log(`📖 [100k_rycos API] Swagger docs available at http://${env.HOST}:${env.PORT}/docs`);
+    console.log(`📡 [100k_rycos API] DATABASE target: ${env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')}`);
+    console.log(`📡 [100k_rycos API] REDIS target: ${env.REDIS_URL.replace(/:[^:@]+@/, ':****@')}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

@@ -5,7 +5,10 @@ import { env } from '../config/env.js';
 
 let redis: Redis | null = null;
 try {
-  redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 1 });
+  redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 1, lazyConnect: true });
+  redis.on('error', (err) => {
+    console.warn('[Catalog:Redis]', err.message);
+  });
 } catch {}
 
 const CACHE_TTL_SECONDS = 300; // 5 minutes

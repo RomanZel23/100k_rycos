@@ -22,6 +22,13 @@ export async function setupWebSocket(fastify: FastifyInstance) {
     redisPublisher = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 3 });
     redisSubscriber = new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 3 });
 
+    redisPublisher.on('error', (err) => {
+      console.warn('[WS:Redis Publisher Error]', err.message);
+    });
+    redisSubscriber.on('error', (err) => {
+      console.warn('[WS:Redis Subscriber Error]', err.message);
+    });
+
     await redisPublisher.connect();
     await redisSubscriber.connect();
 
