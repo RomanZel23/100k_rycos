@@ -340,6 +340,64 @@ export async function ensureDatabaseSchema() {
           console.log('✓ [DB Auto-Init] Demo menu seeded successfully');
         }
       }
+
+      // Ensure roman.zeleznik@solutionsbay.pl is seeded as super_admin
+      await raw.unsafe(`
+        INSERT INTO "users" ("id", "company_id", "email", "name", "role", "is_active", "created_at", "updated_at")
+        VALUES ('usr-roman-zeleznik', 1, 'roman.zeleznik@solutionsbay.pl', 'Roman Żeleźnik', 'super_admin', true, NOW(), NOW())
+        ON CONFLICT ("id") DO UPDATE SET
+          "company_id" = 1,
+          "role" = 'super_admin',
+          "name" = 'Roman Żeleźnik',
+          "is_active" = true,
+          "updated_at" = NOW();
+
+        DO $auth$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'auth') THEN
+            INSERT INTO auth.users (
+              instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+              raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+            )
+            VALUES (
+              '00000000-0000-0000-0000-000000000000',
+              'a0000000-0000-0000-0000-000000000001'::uuid,
+              'authenticated',
+              'authenticated',
+              'roman.zeleznik@solutionsbay.pl',
+              crypt('Abc@123456', gen_salt('bf')),
+              NOW(),
+              '{"provider":"email","providers":["email"]}'::jsonb,
+              '{"company_id":1,"role":"super_admin","name":"Roman Żeleźnik"}'::jsonb,
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (email) DO UPDATE SET
+              encrypted_password = crypt('Abc@123456', gen_salt('bf')),
+              raw_user_meta_data = '{"company_id":1,"role":"super_admin","name":"Roman Żeleźnik"}'::jsonb,
+              updated_at = NOW();
+
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
+              INSERT INTO auth.identities (
+                id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
+              )
+              VALUES (
+                'a0000000-0000-0000-0000-000000000001',
+                'a0000000-0000-0000-0000-000000000001'::uuid,
+                '{"sub":"a0000000-0000-0000-0000-000000000001","email":"roman.zeleznik@solutionsbay.pl"}'::jsonb,
+                'email',
+                'roman.zeleznik@solutionsbay.pl',
+                NOW(),
+                NOW(),
+                NOW()
+              )
+              ON CONFLICT (provider, provider_id) DO NOTHING;
+            END IF;
+          END IF;
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
+        END $auth$;
+      `);
     } finally {
       await raw.unsafe(`SELECT pg_advisory_unlock(100100);`);
     }

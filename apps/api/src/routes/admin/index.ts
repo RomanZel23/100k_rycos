@@ -9,9 +9,11 @@ import { adminOrdersRoutes } from './orders.js';
 import { adminUsersRoutes } from './users.js';
 import { adminPaymentGatewaysRoutes } from './paymentGateways.js';
 import { adminMasterRoutes } from './master.js';
+import { adminAuthRoutes } from './auth.js';
 
 export async function adminRoutes(fastify: FastifyInstance) {
   // Register modular admin sub-routes
+  await fastify.register(adminAuthRoutes);
   await fastify.register(adminProductsRoutes);
   await fastify.register(adminCategoriesRoutes);
   await fastify.register(adminAddonsRoutes);

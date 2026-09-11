@@ -10,6 +10,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default('postgresql://postgres:postgres@localhost:5432/postgres'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   SUPABASE_JWT_SECRET: z.string().optional(),
+  SUPABASE_URL: z.string().default(process.env.SUPABASE_URL || 'http://localhost:8000'),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
   // Saferpay Payment Gateway
   SAFERPAY_CUSTOMER_ID: z.string().default('278134'),
