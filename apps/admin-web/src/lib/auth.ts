@@ -1,10 +1,23 @@
 import type { User } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
 import { createClient } from './supabase/server'
 
 export async function currentUser(): Promise<User | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
+  const cookieStore = await cookies()
+  const userCookie = cookieStore.get('rycos_user')?.value
+  if (userCookie) {
+    try {
+      return JSON.parse(userCookie) as User
+    } catch {}
+  }
+
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    return user
+  } catch {
+    return null
+  }
 }
 
 export function roleOf(user: User | null): string {

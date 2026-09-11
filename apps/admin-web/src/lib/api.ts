@@ -1,11 +1,19 @@
+import { cookies } from 'next/headers'
 import { createClient } from './supabase/server'
 
 // Server-side call to admin-api, forwarding the signed-in user's access token as a
 // Bearer (admin-api scopes everything by the token's company_id).
 export async function adminApi(path: string, init: RequestInit = {}): Promise<Response> {
-  const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token
+  const cookieStore = await cookies()
+  let token = cookieStore.get('rycos_token')?.value
+
+  if (!token) {
+    try {
+      const supabase = await createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      token = session?.access_token
+    } catch {}
+  }
 
   // Only declare a JSON content-type when we're actually sending a JSON body.
   // A body-less POST/DELETE (e.g. /primary, /archive) with `Content-Type:

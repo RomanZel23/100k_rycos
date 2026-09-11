@@ -1,14 +1,15 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { Logo } from '@/components/Logo'
 import { NavLink } from '@/components/NavLink'
-import { createClient } from '@/lib/supabase/server'
-import { isManager } from '@/lib/auth'
+import { currentUser, isManager } from '@/lib/auth'
 
 async function signOut() {
   'use server'
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  const cookieStore = await cookies()
+  cookieStore.delete('rycos_token')
+  cookieStore.delete('rycos_user')
   redirect('/login')
 }
 
@@ -30,8 +31,7 @@ const NAV = [
 ]
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await currentUser()
   if (!user) redirect('/login')
   const manager = isManager(user)
   const nav = NAV.filter((item) => !item.manager || manager)
