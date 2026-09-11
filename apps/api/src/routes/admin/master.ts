@@ -30,13 +30,48 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
         count: sql<number>`count(*)::int`,
       }).from(companies).where(sql`${companies.createdAt} >= NOW() - INTERVAL '30 days'`);
 
+      const compRows = await db
+        .select({
+          id: companies.id,
+          name: companies.name,
+          slug: companies.slug,
+          email: companies.email,
+          country: companies.country,
+          currency: companies.currency,
+          isAcceptingOrders: companies.isAcceptingOrders,
+          createdAt: companies.createdAt,
+          ordersCount: sql<number>`(SELECT count(*)::int FROM orders WHERE orders.company_id = ${companies.id})`,
+          totalVolume: sql<string>`coalesce((SELECT sum(total_amount) FROM orders WHERE orders.company_id = ${companies.id}), 0)`,
+        })
+        .from(companies)
+        .orderBy(desc(companies.createdAt));
+
+      const mappedCompanies = compRows.map((c) => ({
+        id: c.id,
+        name: c.name,
+        nip: null,
+        country: c.country,
+        currency: c.currency,
+        status: c.isAcceptingOrders ? 'active' : 'suspended',
+        createdAt: c.createdAt ? c.createdAt.toISOString() : new Date().toISOString(),
+        ordersCount: c.ordersCount || 0,
+        totalVolume: parseFloat(c.totalVolume || '0'),
+      }));
+
       return success(reply, {
+        totalCompanies: totalCompaniesRes?.count || 0,
         total_companies: totalCompaniesRes?.count || 0,
+        activeCompanies: activeCompaniesRes?.count || 0,
         active_companies: activeCompaniesRes?.count || 0,
+        totalOrders: ordersStats?.totalOrders || 0,
         total_orders: ordersStats?.totalOrders || 0,
+        totalVolume: parseFloat(ordersStats?.totalVolume || '0'),
         total_volume: parseFloat(ordersStats?.totalVolume || '0'),
+        signups7d: signups7d?.count || 0,
         signups_7d: signups7d?.count || 0,
+        signups30d: signups30d?.count || 0,
         signups_30d: signups30d?.count || 0,
+        companies: mappedCompanies,
       }, 'Platform overview retrieved');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to load master overview');

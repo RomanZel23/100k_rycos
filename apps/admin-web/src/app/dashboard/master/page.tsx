@@ -23,30 +23,49 @@ interface MasterOverviewData {
 export const revalidate = 0;
 
 export default async function MasterSaasPage() {
-  const data = await adminApiData<MasterOverviewData>('/master/overview');
+  const rawData: any = await adminApiData('/master/overview');
 
-  const fallbackData: MasterOverviewData = {
-    totalCompanies: data?.totalCompanies ?? 1,
-    activeCompanies: data?.activeCompanies ?? 1,
-    totalOrders: data?.totalOrders ?? 0,
-    totalVolume: data?.totalVolume ?? 0,
-    signups7d: data?.signups7d ?? 1,
-    companies: data?.companies ?? [
-      {
-        id: 1,
-        name: 'Główna Restauracja RYCOS (HQ)',
-        nip: '5252899123',
-        country: 'PL',
-        currency: 'PLN',
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        ordersCount: 0,
-        totalVolume: 0,
-      },
-    ],
+  const totalCompanies = Number(rawData?.totalCompanies ?? rawData?.total_companies ?? 1);
+  const activeCompanies = Number(rawData?.activeCompanies ?? rawData?.active_companies ?? 1);
+  const totalOrders = Number(rawData?.totalOrders ?? rawData?.total_orders ?? 0);
+  const totalVolume = Number(rawData?.totalVolume ?? rawData?.total_volume ?? 0);
+  const signups7d = Number(rawData?.signups7d ?? rawData?.signups_7d ?? 0);
+
+  const rawCompanies = Array.isArray(rawData?.companies) ? rawData.companies : [];
+  const companies = rawCompanies.length > 0
+    ? rawCompanies.map((c: any) => ({
+        id: c.id,
+        name: c.name || 'Firma',
+        nip: c.nip || null,
+        country: c.country || 'PL',
+        currency: c.currency || 'PLN',
+        status: c.status || (c.isAcceptingOrders !== false ? 'active' : 'suspended'),
+        createdAt: c.createdAt || c.created_at || new Date().toISOString(),
+        ordersCount: Number(c.ordersCount ?? c.orders_count ?? 0),
+        totalVolume: Number(c.totalVolume ?? c.total_volume ?? 0),
+      }))
+    : [
+        {
+          id: 1,
+          name: 'Główna Restauracja RYCOS (HQ)',
+          nip: '5252899123',
+          country: 'PL',
+          currency: 'PLN',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          ordersCount: 0,
+          totalVolume: 0,
+        },
+      ];
+
+  const overview: MasterOverviewData = {
+    totalCompanies,
+    activeCompanies,
+    totalOrders,
+    totalVolume,
+    signups7d,
+    companies,
   };
-
-  const overview = data || fallbackData;
 
   return (
     <div className="space-y-8">
