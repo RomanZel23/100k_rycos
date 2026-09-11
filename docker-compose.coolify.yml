@@ -81,7 +81,7 @@ services:
       dockerfile: apps/admin-web/Dockerfile
       args:
         - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://57.128.250.200:8000}
-        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy}
         - ADMIN_API_URL=${ADMIN_API_URL:-https://100k-api.rycos.eu/v1/admin}
         - NEXT_PUBLIC_ORDER_BASE_URL=${NEXT_PUBLIC_ORDER_BASE_URL:-https://100k.rycos.eu}
     restart: unless-stopped
@@ -92,15 +92,15 @@ services:
       - PORT=3000
       - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://57.128.250.200:8000}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy}
       - ADMIN_API_URL=${ADMIN_API_URL:-https://100k-api.rycos.eu/v1/admin}
       - NEXT_PUBLIC_ORDER_BASE_URL=${NEXT_PUBLIC_ORDER_BASE_URL:-https://100k.rycos.eu}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
-      interval: 15s
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 10s
     networks:
       - coolify
 
