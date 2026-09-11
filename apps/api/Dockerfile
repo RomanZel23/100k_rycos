@@ -1,7 +1,6 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
-ENV NODE_ENV=development
 
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 

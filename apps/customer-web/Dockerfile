@@ -1,12 +1,11 @@
 FROM node:22-alpine AS builder
 
 WORKDIR /app
-ENV NODE_ENV=development
 
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
-ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_WS_URL
+ARG NEXT_PUBLIC_API_URL=http://localhost:8008
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:8008/v1/ws
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 
