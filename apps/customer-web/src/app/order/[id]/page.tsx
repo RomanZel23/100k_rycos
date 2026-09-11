@@ -33,7 +33,7 @@ export default function OrderTrackingPage() {
       });
 
     // WebSocket live tracker
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/v1/ws';
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8008/v1/ws';
     let ws: WebSocket | null = null;
 
     try {

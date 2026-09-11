@@ -1,6 +1,6 @@
 import { MenuResponse, CreateOrderRequest, OrderDetail, InitiatePaymentResponse } from '@rycos/shared';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8008';
 
 export async function fetchMenu(slug: string): Promise<MenuResponse> {
   const res = await fetch(`${API_BASE}/v1/brands/${slug}/menu`, {
