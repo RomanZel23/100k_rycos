@@ -1,5 +1,4 @@
-import { getDatabase, outboxEvents } from '@rycos/database';
-import { eq, sql } from 'drizzle-orm';
+import { getDatabase, outboxEvents, eq, sql } from '@rycos/database';
 import { fiscalQueue, notificationQueue } from '../queues/index.js';
 
 let isRunning = false;

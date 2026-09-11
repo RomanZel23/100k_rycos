@@ -1,7 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import mqtt from 'mqtt';
-import { getDatabase, orders, orderItems, fiscalReceipts, fiscalDevices } from '@rycos/database';
-import { eq, and } from 'drizzle-orm';
+import { getDatabase, orders, orderItems, fiscalReceipts, fiscalDevices, eq, and } from '@rycos/database';
 import { redisConnection } from '../queues/index.js';
 import { env } from '../config/env.js';
 import { randomUUID } from 'crypto';

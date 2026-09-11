@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { X, Smartphone, CreditCard, Banknote, Loader2, CheckCircle2 } from 'lucide-react';
-import { payWithBlik } from '../lib/api.js';
+import { payWithBlik } from '../lib/api';
 import { useRouter } from 'next/navigation';
 
 interface PaymentModalProps {

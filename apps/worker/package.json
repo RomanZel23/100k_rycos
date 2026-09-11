@@ -15,6 +15,7 @@
     "@rycos/shared": "workspace:*",
     "bullmq": "^5.41.6",
     "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.39.3",
     "ioredis": "^5.5.0",
     "mqtt": "^5.10.4",
     "zod": "^3.24.2"

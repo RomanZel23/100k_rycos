@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CartItem, calculateItemTotal, calculateSubtotal } from '../store/cartStore.js';
+import { CartItem, calculateItemTotal, calculateSubtotal } from '../store/cartStore';
 import { X, Trash2, Plus, Minus, CreditCard, ChevronRight, FileText } from 'lucide-react';
 
 interface CartDrawerProps {

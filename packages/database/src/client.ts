@@ -1,5 +1,6 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { sql } from 'drizzle-orm';
 import * as schema from './schema/index.js';
 
 let client: postgres.Sql | null = null;
@@ -33,7 +34,7 @@ export async function closeDatabase() {
 export async function checkDatabaseHealth(): Promise<boolean> {
   try {
     const db = getDatabase();
-    await db.execute(postgres`SELECT 1`);
+    await db.execute(sql`SELECT 1`);
     return true;
   } catch (err) {
     console.error('[DB Health] Failed to ping database:', err);

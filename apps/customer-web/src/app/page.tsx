@@ -3,15 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
-import { fetchMenu, submitOrder } from '../lib/api.js';
-import { ProductCard } from '../components/ProductCard.js';
-import { AddonModal } from '../components/AddonModal.js';
-import { CartDrawer } from '../components/CartDrawer.js';
-import { PaymentModal } from '../components/PaymentModal.js';
-import { CartItem, calculateSubtotal } from '../store/cartStore.js';
+import { fetchMenu, submitOrder } from '../lib/api';
+import { ProductCard } from '../components/ProductCard';
+import { AddonModal } from '../components/AddonModal';
+import { CartDrawer } from '../components/CartDrawer';
+import { PaymentModal } from '../components/PaymentModal';
+import { CartItem, calculateSubtotal } from '../store/cartStore';
 import { ShoppingBag, MapPin, Loader2, Sparkles } from 'lucide-react';
 
-export default function MenuPage() {
+function MenuContent() {
   const searchParams = useSearchParams();
   const brandSlug = searchParams.get('brand') || 'default';
   const tableLabel = searchParams.get('table') || undefined;
@@ -351,5 +351,19 @@ export default function MenuPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function MenuPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+        </div>
+      }
+    >
+      <MenuContent />
+    </React.Suspense>
   );
 }

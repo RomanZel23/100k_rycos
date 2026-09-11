@@ -1,5 +1,4 @@
-import { getDatabase, orders, orderItems, orderEvents, outboxEvents, idempotencyKeys, products, brands } from '@rycos/database';
-import { eq, and, sql } from 'drizzle-orm';
+import { getDatabase, orders, orderItems, orderEvents, outboxEvents, idempotencyKeys, products, brands, eq, and, sql } from '@rycos/database';
 import { CreateOrderRequest, OrderDetail, OrderStatus } from '@rycos/shared';
 import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
 

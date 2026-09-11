@@ -1,5 +1,4 @@
-import { getDatabase, orders, outboxEvents } from '@rycos/database';
-import { eq } from 'drizzle-orm';
+import { getDatabase, orders, outboxEvents, eq } from '@rycos/database';
 import { InitiatePaymentRequest, InitiatePaymentResponse } from '@rycos/shared';
 import { updateOrderStatus } from './orderEngine.js';
 

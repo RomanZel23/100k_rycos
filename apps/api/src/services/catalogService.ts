@@ -1,7 +1,6 @@
-import { getDatabase, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, contentTranslations, locations } from '@rycos/database';
-import { eq, inArray, and } from 'drizzle-orm';
+import { getDatabase, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, locations, eq, inArray, and } from '@rycos/database';
 import { BrandInfo, MenuResponse, Product, AddonGroup } from '@rycos/shared';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { env } from '../config/env.js';
 
 let redis: Redis | null = null;
@@ -127,7 +126,7 @@ export async function getMenuByBrandId(brandId: number, companyId: number): Prom
       productId: productAddonGroups.productId,
       groupId: addonGroups.id,
       groupName: addonGroups.name,
-      selectionMode: addonGroups.selectionMode as 'single' | 'multiple',
+      selectionMode: addonGroups.selectionMode,
       required: addonGroups.required,
       minSelect: addonGroups.minSelect,
       maxSelect: addonGroups.maxSelect,
@@ -184,7 +183,7 @@ export async function getMenuByBrandId(brandId: number, companyId: number): Prom
     addonGroupsByProduct.get(grp.productId)!.push({
       id: grp.groupId,
       name: grp.groupName,
-      selectionMode: grp.selectionMode,
+      selectionMode: grp.selectionMode as 'single' | 'multiple',
       required: grp.required,
       minSelect: grp.minSelect,
       maxSelect: grp.maxSelect,

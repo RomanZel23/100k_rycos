@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { OrderDetail, OrderStatus } from '@rycos/shared';
-import { fetchOrder } from '../../../lib/api.js';
+import { fetchOrder } from '../../../lib/api';
 import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles } from 'lucide-react';
 
 const STATUS_STEPS: { status: OrderStatus; label: string; icon: any }[] = [

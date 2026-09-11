@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import fastifyWebSocket, { WebSocket } from '@fastify/websocket';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { env } from '../config/env.js';
 import { WSEvent } from '@rycos/shared';
 
@@ -27,7 +27,7 @@ export async function setupWebSocket(fastify: FastifyInstance) {
 
     await redisSubscriber.subscribe(WS_CHANNEL_BROADCAST, WS_CHANNEL_ORDER);
 
-    redisSubscriber.on('message', (channel, rawMessage) => {
+    redisSubscriber.on('message', (channel: string, rawMessage: string) => {
       try {
         const data = JSON.parse(rawMessage);
         if (channel === WS_CHANNEL_BROADCAST) {

@@ -58,7 +58,7 @@ async function bootstrap() {
   await fastify.register(paymentRoutes);
 
   // Error Handler
-  fastify.setErrorHandler((error, _request, reply) => {
+  fastify.setErrorHandler((error: any, _request, reply) => {
     fastify.log.error(error);
     reply.status(error.statusCode || 500).send({
       error: error.message || 'Internal Server Error',
