@@ -1,0 +1,27 @@
+{
+  "name": "@rycos/worker",
+  "version": "1.0.0",
+  "description": "Background Queue and Fiscalization Worker for 100k_rycos",
+  "main": "./dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@rycos/database": "workspace:*",
+    "@rycos/shared": "workspace:*",
+    "bullmq": "^5.41.6",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.5.0",
+    "mqtt": "^5.10.4",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

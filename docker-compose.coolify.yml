@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      - HOST=0.0.0.0
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - RYCOS_MQTT_HOST=${RYCOS_MQTT_HOST:-rycos.eu}
+      - RYCOS_MQTT_PORT=${RYCOS_MQTT_PORT:-8883}
+      - RYCOS_MQTT_USERNAME=${RYCOS_MQTT_USERNAME}
+      - RYCOS_MQTT_PASSWORD=${RYCOS_MQTT_PASSWORD}
+      - RYCOS_DEFAULT_DISPLAY_ID=${RYCOS_DEFAULT_DISPLAY_ID}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - coolify
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - RYCOS_MQTT_HOST=${RYCOS_MQTT_HOST:-rycos.eu}
+      - RYCOS_MQTT_PORT=${RYCOS_MQTT_PORT:-8883}
+      - RYCOS_MQTT_USERNAME=${RYCOS_MQTT_USERNAME}
+      - RYCOS_MQTT_PASSWORD=${RYCOS_MQTT_PASSWORD}
+      - RYCOS_DEFAULT_DISPLAY_ID=${RYCOS_DEFAULT_DISPLAY_ID}
+    networks:
+      - coolify
+
+  customer-web:
+    build:
+      context: .
+      dockerfile: apps/customer-web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    external: true
