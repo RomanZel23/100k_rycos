@@ -1,6 +1,6 @@
 import { pgTable, serial, uuid, varchar, text, boolean, timestamp, jsonb, integer, uniqueIndex } from 'drizzle-orm/pg-core';
-import { companies } from './companies.js';
-import { orders } from './orders.js';
+import { companies } from './companies';
+import { orders } from './orders';
 
 export const rycosClients = pgTable('rycos_clients', {
   companyId: integer('company_id').primaryKey().references(() => companies.id, { onDelete: 'cascade' }),

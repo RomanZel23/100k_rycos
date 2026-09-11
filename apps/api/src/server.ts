@@ -9,6 +9,7 @@ import { healthRoutes } from './routes/health.js';
 import { catalogRoutes } from './routes/catalog.js';
 import { orderRoutes } from './routes/orders.js';
 import { paymentRoutes } from './routes/payments.js';
+import { ensureDatabaseSchema } from '@rycos/database';
 
 async function bootstrap() {
   const fastify = Fastify({
@@ -64,6 +65,9 @@ async function bootstrap() {
       error: error.message || 'Internal Server Error',
     });
   });
+
+  // Ensure PostgreSQL schema exists and seed demo data if fresh
+  await ensureDatabaseSchema();
 
   try {
     await fastify.listen({ port: env.PORT, host: env.HOST });

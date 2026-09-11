@@ -1,6 +1,6 @@
 import { getDatabase, companies, locations, brands, categories, products, addonGroups, addonOptions, productAddonGroups, brandProducts, fiscalDevices, closeDatabase } from './index.js';
 
-async function seed() {
+export async function seedDatabase(shouldClose = false) {
   console.log('🌱 Starting database seed for 100k_rycos...');
   const db = getDatabase();
 
@@ -195,10 +195,14 @@ async function seed() {
   ]);
 
   console.log('🎉 Seed completed successfully!');
-  await closeDatabase();
+  if (shouldClose) {
+    await closeDatabase();
+  }
 }
 
-seed().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
-});
+if (process.argv[1]?.endsWith('seed.ts') || process.argv[1]?.endsWith('seed.js')) {
+  seedDatabase(true).catch((err) => {
+    console.error('Seed failed:', err);
+    process.exit(1);
+  });
+}

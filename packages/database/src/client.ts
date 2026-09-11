@@ -23,6 +23,13 @@ export function getDatabase(connectionString?: string) {
   return dbInstance;
 }
 
+export function getRawClient() {
+  if (!client) {
+    getDatabase();
+  }
+  return client;
+}
+
 export async function closeDatabase() {
   if (client) {
     await client.end();
