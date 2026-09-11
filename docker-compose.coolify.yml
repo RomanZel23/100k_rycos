@@ -28,6 +28,8 @@ services:
       start_period: 10s
     networks:
       - coolify
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   worker:
     build:
@@ -45,6 +47,8 @@ services:
       - RYCOS_DEFAULT_DISPLAY_ID=${RYCOS_DEFAULT_DISPLAY_ID}
     networks:
       - coolify
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   customer-web:
     build:
