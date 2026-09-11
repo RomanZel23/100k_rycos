@@ -52,6 +52,11 @@ async function bootstrap() {
   // Realtime WebSockets
   await setupWebSocket(fastify);
 
+  // Root redirect to Swagger UI
+  fastify.get('/', async (_req, reply) => {
+    return reply.redirect('/docs');
+  });
+
   // Register Modular Routes
   await fastify.register(healthRoutes);
   await fastify.register(catalogRoutes);
