@@ -75,6 +75,35 @@ services:
     networks:
       - coolify
 
+  admin-web:
+    build:
+      context: .
+      dockerfile: apps/admin-web/Dockerfile
+      args:
+        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://57.128.250.200:8000}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        - ADMIN_API_URL=${ADMIN_API_URL:-https://100k-api.rycos.eu/v1/admin}
+        - NEXT_PUBLIC_ORDER_BASE_URL=${NEXT_PUBLIC_ORDER_BASE_URL:-https://100k.rycos.eu}
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_HOST_PORT:-9505}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://57.128.250.200:8000}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - ADMIN_API_URL=${ADMIN_API_URL:-https://100k-api.rycos.eu/v1/admin}
+      - NEXT_PUBLIC_ORDER_BASE_URL=${NEXT_PUBLIC_ORDER_BASE_URL:-https://100k.rycos.eu}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - coolify
+
 networks:
   coolify:
     external: true
