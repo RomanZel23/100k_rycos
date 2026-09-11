@@ -1,7 +1,16 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin } from 'lucide-react';
+import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell } from 'lucide-react';
+
+interface ServiceCallNotification {
+  id: string;
+  tableLabel?: string | null;
+  parkingSpot?: string | null;
+  callType: string;
+  notes?: string | null;
+  timestamp: string;
+}
 
 interface KdsOrderItem {
   id: string;
@@ -29,6 +38,7 @@ const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8008/v1/ws';
 
 export default function KitchenDisplayPage() {
   const [orders, setOrders] = useState<KdsOrder[]>([]);
+  const [serviceCalls, setServiceCalls] = useState<ServiceCallNotification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -68,6 +78,32 @@ export default function KitchenDisplayPage() {
 
       osc.start();
       osc.stop(ctx.currentTime + 0.6);
+    } catch {}
+  };
+
+  // Web Audio Chime on service call
+  const playServiceCallChime = () => {
+    if (!soundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      const playBeep = (freq: number, delay: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.25);
+      };
+
+      playBeep(784, 0);
+      playBeep(1046.5, 0.2);
     } catch {}
   };
 
@@ -120,6 +156,19 @@ export default function KitchenDisplayPage() {
               loadOrders();
             } else if (data.type === 'order.status_changed') {
               loadOrders();
+            } else if (data.type === 'service_call') {
+              playServiceCallChime();
+              setServiceCalls((prev) => [
+                {
+                  id: Math.random().toString(),
+                  tableLabel: data.tableLabel,
+                  parkingSpot: data.parkingSpot,
+                  callType: data.callType,
+                  notes: data.notes,
+                  timestamp: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+                },
+                ...prev,
+              ]);
             }
           } catch {}
         };
@@ -222,6 +271,44 @@ export default function KitchenDisplayPage() {
           </div>
         </div>
       </header>
+
+      {/* Service Calls Bar */}
+      {serviceCalls.length > 0 && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-6 py-2.5 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase tracking-wider">
+            <Bell size={16} className="animate-bounce text-amber-400" />
+            <span>Wezwania stolika ({serviceCalls.length}):</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {serviceCalls.map((call) => (
+              <div
+                key={call.id}
+                className="flex items-center gap-2 bg-slate-900 border border-amber-500/50 text-white px-3 py-1 rounded-xl shadow-md text-xs"
+              >
+                <span className="font-black text-amber-400">
+                  {call.tableLabel ? `Stolik ${call.tableLabel}` : call.parkingSpot ? `Parking ${call.parkingSpot}` : 'Stolik'}
+                </span>
+                <span className="text-slate-200 font-medium">
+                  {call.callType === 'bill'
+                    ? '🧾 Prośba o rachunek'
+                    : call.callType === 'waiter'
+                    ? '🙋 Podejdź do stolika'
+                    : call.callType === 'cutlery'
+                    ? '🍴 Sztućce / serwetki'
+                    : call.notes || 'Wezwanie'}
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">({call.timestamp})</span>
+                <button
+                  onClick={() => setServiceCalls((prev) => prev.filter((c) => c.id !== call.id))}
+                  className="ml-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-bold bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded transition-colors"
+                >
+                  ✓ Załatwione
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Kanban Board */}
       <main className="flex-1 p-6 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">

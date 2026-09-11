@@ -28,6 +28,7 @@ export interface Translations {
   nipOptional: string;
   nipPlaceholder: string;
   tipPrompt: string;
+  callWaiter: string;
 }
 
 export const i18n: Record<Language, Translations> = {
@@ -59,6 +60,7 @@ export const i18n: Record<Language, Translations> = {
     nipOptional: 'Chcę fakturę na firmę (NIP)',
     nipPlaceholder: 'Wpisz NIP firmy',
     tipPrompt: 'Doceniasz pracę kuchni? Zostaw drobny napiwek:',
+    callWaiter: 'Wezwij obsługę',
   },
   en: {
     cart: 'Cart',
@@ -88,6 +90,7 @@ export const i18n: Record<Language, Translations> = {
     nipOptional: 'Company invoice (Tax ID / VAT)',
     nipPlaceholder: 'Enter Tax ID',
     tipPrompt: 'Enjoyed the food? Leave a small tip for the team:',
+    callWaiter: 'Call Waiter',
   },
   de: {
     cart: 'Warenkorb',
@@ -117,5 +120,6 @@ export const i18n: Record<Language, Translations> = {
     nipOptional: 'Rechnung für Unternehmen (USt-IdNr.)',
     nipPlaceholder: 'USt-IdNr. eingeben',
     tipPrompt: 'Zufrieden mit dem Service? Ein kleines Trinkgeld dalassen:',
+    callWaiter: 'Kellner rufen',
   },
 };

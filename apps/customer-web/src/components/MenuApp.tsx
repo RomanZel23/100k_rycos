@@ -9,8 +9,9 @@ import { AddonModal } from './AddonModal';
 import { CartDrawer } from './CartDrawer';
 import { PaymentModal } from './PaymentModal';
 import { CartItem, calculateSubtotal } from '../store/cartStore';
-import { ShoppingBag, MapPin, Loader2, Globe } from 'lucide-react';
+import { ShoppingBag, MapPin, Loader2, Globe, Bell } from 'lucide-react';
 import { i18n, Language } from '../lib/i18n';
+import { ServiceCallModal } from './ServiceCallModal';
 
 interface MenuAppProps {
   initialBrandSlug?: string;
@@ -40,6 +41,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [isServiceCallOpen, setIsServiceCallOpen] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
 
@@ -186,15 +188,27 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
               </h1>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
-              <MapPin size={13} className="text-brand-500" />
-              <span>
-                {tableLabel
-                  ? `${t.table}: ${tableLabel}`
-                  : parkingSpot
-                  ? `${t.parking}: ${parkingSpot}`
-                  : menu?.brand.locationName || 'Obsługa przy barze'}
-              </span>
+            <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+              <div className="flex items-center gap-1">
+                <MapPin size={13} className="text-brand-500" />
+                <span>
+                  {tableLabel
+                    ? `${t.table}: ${tableLabel}`
+                    : parkingSpot
+                    ? `${t.parking}: ${parkingSpot}`
+                    : menu?.brand.locationName || 'Obsługa przy barze'}
+                </span>
+              </div>
+              {(tableLabel || parkingSpot) && (
+                <button
+                  onClick={() => setIsServiceCallOpen(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full transition-colors shadow-2xs"
+                  title={t.callWaiter}
+                >
+                  <Bell size={11} className="animate-pulse text-amber-600" />
+                  <span>{t.callWaiter}</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -317,6 +331,16 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           totalAmount={subtotal + tipAmount}
         />
       )}
+
+      {/* Service Call Modal */}
+      <ServiceCallModal
+        isOpen={isServiceCallOpen}
+        onClose={() => setIsServiceCallOpen(false)}
+        brandId={menu?.brand.id}
+        tableLabel={tableLabel}
+        parkingSpot={parkingSpot}
+        lang={lang}
+      />
     </div>
   );
 }

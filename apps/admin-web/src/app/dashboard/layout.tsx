@@ -24,6 +24,7 @@ const NAV = [
   { href: '/dashboard/payment-gateways', label: 'Payment gateway', manager: true },
   { href: '/dashboard/qr-print', label: 'QR Print', manager: true },
   { href: '/dashboard/users', label: 'Users', manager: true },
+  { href: '/dashboard/master', label: 'Platform SaaS (Master)', manager: true },
   { href: '/dashboard/billing', label: 'Billing', manager: true },
   { href: '/dashboard/settings', label: 'Settings', manager: true },
 ]
@@ -46,19 +47,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <NavLink key={item.href} href={item.href}>{item.label}</NavLink>
           ))}
 
-          {/* SSO handoff to the Flutter vendor app (POS / orders / floor ops).
-              Same login, carried over automatically. Opens in a new tab. */}
-          {process.env.NEXT_PUBLIC_VENDOR_APP_URL && (
+          {/* Quick launch for Live POS & KDS */}
+          <div className="pt-2 border-t border-neutral-100 mt-2 space-y-1">
             <a
-              href="/dashboard/vendor"
+              href={`${process.env.NEXT_PUBLIC_CUSTOMER_URL || 'https://100k.rycos.eu'}/pos`}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 flex items-center justify-between rounded-lg border border-brand bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+              className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors"
             >
-              <span>POS app</span>
-              <span aria-hidden className="text-brand-600">↗</span>
+              <span>Terminal POS (Kelner)</span>
+              <span aria-hidden className="text-amber-600">↗</span>
             </a>
-          )}
+            <a
+              href={`${process.env.NEXT_PUBLIC_CUSTOMER_URL || 'https://100k.rycos.eu'}/kds`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between rounded-lg bg-neutral-900 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 transition-colors"
+            >
+              <span>Kuchnia Live (KDS)</span>
+              <span aria-hidden className="text-amber-400">↗</span>
+            </a>
+          </div>
         </nav>
         <div className="border-t border-neutral-200 p-3">
           <p className="truncate px-3 pb-2 text-xs text-neutral-400">{user.email}</p>

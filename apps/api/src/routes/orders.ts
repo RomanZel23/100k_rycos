@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { CreateOrderRequestSchema, UpdateOrderStatusRequestSchema } from '@rycos/shared';
 import { createOrder, getOrderById, updateOrderStatus } from '../services/orderEngine.js';
+import { broadcastToStaff } from '../plugins/websocket.js';
 
 export async function orderRoutes(fastify: FastifyInstance) {
   // POST /v1/orders - Place a new order
@@ -55,5 +56,43 @@ export async function orderRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return reply.code(400).send({ error: err.message || 'Failed to update order status' });
     }
+  });
+
+  // POST /v1/orders/service-call - Customer calls waiter or requests bill
+  fastify.post('/v1/orders/service-call', async (req, reply) => {
+    const body = (req.body ?? {}) as {
+      companyId?: number;
+      brandId?: number;
+      tableLabel?: string;
+      parkingSpot?: string;
+      serviceType?: 'call_waiter' | 'request_bill' | 'custom';
+      note?: string;
+    };
+
+    if (!body.tableLabel && !body.parkingSpot) {
+      return reply.code(400).send({ error: 'tableLabel or parkingSpot is required' });
+    }
+
+    const companyId = body.companyId || 1;
+    const event = {
+      type: 'service_call' as const,
+      data: {
+        companyId,
+        brandId: body.brandId,
+        tableLabel: body.tableLabel,
+        parkingSpot: body.parkingSpot,
+        serviceType: body.serviceType || 'call_waiter',
+        note: body.note,
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    await broadcastToStaff(companyId, event as any);
+
+    return reply.send({
+      success: true,
+      message: 'Service request sent to staff',
+      data: event.data,
+    });
   });
 }

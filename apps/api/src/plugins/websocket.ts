@@ -53,15 +53,9 @@ export async function setupWebSocket(fastify: FastifyInstance) {
   }
 
   // Route 1: Staff / Kitchen KDS / POS WebSocket
-  fastify.get('/v1/ws/staff', { websocket: true }, (socket, req) => {
-    const query = req.query as { companyId?: string; terminalId?: string };
-    const companyId = parseInt(query.companyId || '0', 10);
-
-    if (!companyId) {
-      socket.send(JSON.stringify({ error: 'Missing companyId' }));
-      socket.close();
-      return;
-    }
+  const handleStaffWs = (socket: WebSocket, req: any) => {
+    const query = (req.query ?? {}) as { companyId?: string; terminalId?: string };
+    const companyId = parseInt(query.companyId || '1', 10);
 
     if (!companySockets.has(companyId)) {
       companySockets.set(companyId, new Set());
@@ -77,7 +71,10 @@ export async function setupWebSocket(fastify: FastifyInstance) {
     });
 
     socket.send(JSON.stringify({ type: 'connected', role: 'staff', companyId }));
-  });
+  };
+
+  fastify.get('/v1/ws', { websocket: true }, handleStaffWs);
+  fastify.get('/v1/ws/staff', { websocket: true }, handleStaffWs);
 
   // Route 2: Customer Live Order Tracker WebSocket
   fastify.get('/v1/ws/orders/:orderId', { websocket: true }, (socket, req) => {
