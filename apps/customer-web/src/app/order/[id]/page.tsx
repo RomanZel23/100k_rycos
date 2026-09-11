@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import React, { useEffect, useState, Suspense } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import { OrderDetail, OrderStatus } from '@rycos/shared';
 import { fetchOrder } from '../../../lib/api';
-import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles } from 'lucide-react';
+import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle } from 'lucide-react';
+import { PaymentModal } from '../../../components/PaymentModal';
 
 const STATUS_STEPS: { status: OrderStatus; label: string; icon: any }[] = [
   { status: 'paid', label: 'Opłacone', icon: CheckCircle2 },
@@ -13,12 +14,15 @@ const STATUS_STEPS: { status: OrderStatus; label: string; icon: any }[] = [
   { status: 'completed', label: 'Odebrane', icon: CheckCircle2 },
 ];
 
-export default function OrderTrackingPage() {
+function OrderTrackingContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orderId = params.id as string;
+  const paymentErrorParam = searchParams.get('payment_error');
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 
   // Initial Fetch & Live WebSocket connection
   useEffect(() => {
@@ -93,6 +97,7 @@ export default function OrderTrackingPage() {
   }
 
   const isReady = order.status === 'ready_to_collect';
+  const isPending = order.status === 'pending_payment';
 
   return (
     <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col p-4 space-y-4">
@@ -127,6 +132,36 @@ export default function OrderTrackingPage() {
         )}
       </div>
 
+      {/* Payment Error Alert */}
+      {paymentErrorParam && isPending && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
+          <AlertCircle size={18} className="shrink-0" />
+          <span>Płatność w banku nie została sfinalizowana. Możesz ponowić próbę poniżej.</span>
+        </div>
+      )}
+
+      {/* Pending Payment CTA Banner */}
+      {isPending && (
+        <div className="bg-amber-500 text-white p-5 rounded-3xl shadow-lg shadow-amber-500/20 space-y-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <Clock size={24} className="text-white shrink-0" />
+            <div>
+              <h3 className="font-extrabold text-base">Oczekiwanie na płatność</h3>
+              <p className="text-xs text-white/90">
+                To zamówienie nie zostało jeszcze opłacone. Aby kuchnia rozpoczęła przygotowanie, dokończ płatność.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsPaymentOpen(true)}
+            className="w-full py-3.5 bg-white text-slate-900 font-extrabold rounded-2xl shadow-md hover:bg-slate-50 active:scale-[0.98] transition-all text-sm flex items-center justify-center gap-2"
+          >
+            <CreditCard size={18} className="text-brand-500" />
+            <span>Opłać zamówienie ({order.totalAmount.toFixed(2)} zł)</span>
+          </button>
+        </div>
+      )}
+
       {/* Progress Stepper */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
         <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
@@ -147,7 +182,7 @@ export default function OrderTrackingPage() {
               (order.status === 'paid' && idx === 0) ||
               (order.status === 'in_progress' && idx === 1) ||
               (order.status === 'ready_to_collect' && idx === 2) ||
-              (order.status === 'completed' && idx === 3);
+              (order.status === 'completed' && idx <= 3);
 
             const Icon = step.icon;
 
@@ -239,10 +274,33 @@ export default function OrderTrackingPage() {
         </div>
 
         <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-extrabold text-slate-900">
-          <span>Razem zapłacono:</span>
+          <span>Razem:</span>
           <span>{order.totalAmount.toFixed(2)} zł</span>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={isPaymentOpen}
+        onClose={() => setIsPaymentOpen(false)}
+        orderId={order.id}
+        totalAmount={order.totalAmount}
+      />
     </div>
+  );
+}
+
+export default function OrderTrackingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-3">
+          <Loader2 size={36} className="animate-spin text-brand-500" />
+          <span className="text-sm font-bold text-slate-600">Ładowanie...</span>
+        </div>
+      }
+    >
+      <OrderTrackingContent />
+    </Suspense>
   );
 }

@@ -11,6 +11,15 @@ const envSchema = z.object({
   REDIS_URL: z.string().default('redis://localhost:6379'),
   SUPABASE_JWT_SECRET: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
+  // Saferpay Payment Gateway
+  SAFERPAY_CUSTOMER_ID: z.string().default('278134'),
+  SAFERPAY_TERMINAL_ID: z.string().default('17770989'),
+  SAFERPAY_API_USERNAME: z.string().default('API_278134_98615439'),
+  SAFERPAY_API_PASSWORD: z.string().default('RomanTest100krycos'),
+  SAFERPAY_TEST_MODE: z.coerce.boolean().default(true),
+  // Public URLs for redirects and notifications
+  PUBLIC_API_URL: z.string().default('https://100k-api.rycos.eu'),
+  PUBLIC_CUSTOMER_URL: z.string().default('https://100k.rycos.eu'),
 });
 
 const parsed = envSchema.safeParse(process.env);

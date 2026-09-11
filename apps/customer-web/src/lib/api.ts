@@ -48,13 +48,21 @@ export async function fetchOrder(orderId: string): Promise<OrderDetail> {
 }
 
 export async function payWithBlik(orderId: string, blikCode: string): Promise<InitiatePaymentResponse> {
+  return initiatePayment(orderId, 'blik', blikCode);
+}
+
+export async function initiatePayment(
+  orderId: string,
+  method: 'blik' | 'apple_pay' | 'google_pay' | 'card' | 'cash',
+  blikCode?: string
+): Promise<InitiatePaymentResponse> {
   const res = await fetch(`${API_BASE}/v1/payments/initiate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       orderId,
-      method: 'blik',
-      blikCode,
+      method,
+      blikCode: blikCode && blikCode.length === 6 ? blikCode : undefined,
     }),
   });
 
