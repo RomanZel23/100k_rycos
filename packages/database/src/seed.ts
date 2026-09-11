@@ -1,4 +1,4 @@
-import { getDatabase, companies, locations, brands, categories, products, addonGroups, addonOptions, productAddonGroups, brandProducts, fiscalDevices, closeDatabase } from './index.js';
+import { getDatabase, companies, locations, brands, categories, products, addonGroups, addonOptions, productAddonGroups, brandProducts, fiscalDevices, contentTranslations, closeDatabase } from './index.js';
 
 export async function seedDatabase(shouldClose = false) {
   console.log('🌱 Starting database seed for 100k_rycos...');
@@ -194,7 +194,45 @@ export async function seedDatabase(shouldClose = false) {
     { brandId: brand.id, productId: p4.id },
   ]);
 
-  console.log('🎉 Seed completed successfully!');
+  // Seed Multilingual Translations (EN & DE)
+  const translationsData = [
+    // Categories EN
+    { entityType: 'categories', entityId: catBurgers.id, language: 'en', attributeName: 'name', value: 'Craft Burgers' },
+    { entityType: 'categories', entityId: catPizza.id, language: 'en', attributeName: 'name', value: 'Artisan Pizza' },
+    { entityType: 'categories', entityId: catDrinks.id, language: 'en', attributeName: 'name', value: 'Cold Drinks' },
+    // Categories DE
+    { entityType: 'categories', entityId: catBurgers.id, language: 'de', attributeName: 'name', value: 'Craft Burger' },
+    { entityType: 'categories', entityId: catPizza.id, language: 'de', attributeName: 'name', value: 'Steinofenpizza' },
+    { entityType: 'categories', entityId: catDrinks.id, language: 'de', attributeName: 'name', value: 'Erfrischungsgetränke' },
+    // Products EN
+    { entityType: 'products', entityId: p1.id, language: 'en', attributeName: 'name', value: 'Classic Smash Burger' },
+    { entityType: 'products', entityId: p1.id, language: 'en', attributeName: 'description', value: '100% Polish beef, cheddar cheese, pickles, red onion, house secret sauce.' },
+    { entityType: 'products', entityId: p2.id, language: 'en', attributeName: 'name', value: 'Double Bacon BBQ' },
+    { entityType: 'products', entityId: p2.id, language: 'en', attributeName: 'description', value: 'Double beef, crispy smoked bacon, aged cheddar, smoky barbecue sauce.' },
+    { entityType: 'products', entityId: p3.id, language: 'en', attributeName: 'name', value: 'Pizza Margherita DOC' },
+    { entityType: 'products', entityId: p3.id, language: 'en', attributeName: 'description', value: 'San Marzano tomato sauce, fior di latte mozzarella, fresh basil, extra virgin olive oil.' },
+    { entityType: 'products', entityId: p4.id, language: 'en', attributeName: 'name', value: 'Craft Lemonade' },
+    { entityType: 'products', entityId: p4.id, language: 'en', attributeName: 'description', value: 'Fresh lemon, fresh mint leaves, hint of agave.' },
+    // Products DE
+    { entityType: 'products', entityId: p1.id, language: 'de', attributeName: 'name', value: 'Klassischer Smash Burger' },
+    { entityType: 'products', entityId: p1.id, language: 'de', attributeName: 'description', value: '100% polnisches Rindfleisch, Cheddarkäse, Essiggurken, rote Zwiebeln, Spezialsauce.' },
+    { entityType: 'products', entityId: p2.id, language: 'de', attributeName: 'name', value: 'Doppel-Bacon BBQ Burger' },
+    { entityType: 'products', entityId: p2.id, language: 'de', attributeName: 'description', value: 'Doppeltes Rindfleisch, knuspriger Speck, gereifter Cheddar, rauchige BBQ-Sauce.' },
+    { entityType: 'products', entityId: p3.id, language: 'de', attributeName: 'name', value: 'Pizza Margherita DOC' },
+    { entityType: 'products', entityId: p3.id, language: 'de', attributeName: 'description', value: 'San Marzano Tomatensauce, Fior di Latte Mozzarella, frisches Basilikum, Olivenöl.' },
+    { entityType: 'products', entityId: p4.id, language: 'de', attributeName: 'name', value: 'Hausgemachte Limonade' },
+    { entityType: 'products', entityId: p4.id, language: 'de', attributeName: 'description', value: 'Frische Zitrone, Minze, ein Hauch von Agavendicksaft.' },
+    // Addons EN
+    { entityType: 'addon_groups', entityId: groupSauce.id, language: 'en', attributeName: 'name', value: 'Choose Sauce' },
+    { entityType: 'addon_groups', entityId: groupExtras.id, language: 'en', attributeName: 'name', value: 'Burger Addons' },
+    // Addons DE
+    { entityType: 'addon_groups', entityId: groupSauce.id, language: 'de', attributeName: 'name', value: 'Sauce wählen' },
+    { entityType: 'addon_groups', entityId: groupExtras.id, language: 'de', attributeName: 'name', value: 'Burger-Extras' },
+  ];
+
+  await db.insert(contentTranslations).values(translationsData).onConflictDoNothing();
+
+  console.log('🎉 Seed completed successfully (with EN and DE translations)!');
   if (shouldClose) {
     await closeDatabase();
   }

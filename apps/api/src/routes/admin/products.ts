@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getDatabase, products, categories, eq, and, desc } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
+import { uploadImageToS3 } from '../../lib/s3.js';
 
 export async function adminProductsRoutes(fastify: FastifyInstance) {
   // Pre-handler for all admin product routes
@@ -26,6 +27,7 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         imageUrl: products.imageUrl,
         isAvailable: products.isAvailable,
         isAgeRestricted: products.isAgeRestricted,
+        stockQuantity: products.stockQuantity,
         prepTimeMinutes: products.prepTimeMinutes,
         barcode: products.barcode,
         productOrder: products.productOrder,
@@ -37,7 +39,15 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       .where(eq(products.companyId, companyId))
       .orderBy(desc(products.id));
 
-    return success(reply, rows, 'Products retrieved');
+    const mapped = rows.map((r) => ({
+      ...r,
+      is_available: r.isAvailable,
+      stock_quantity: r.stockQuantity,
+      image_url: r.imageUrl,
+      category_name: r.categoryName,
+    }));
+
+    return success(reply, mapped, 'Products retrieved');
   });
 
   // GET /v1/admin/products/:id - Single product details
@@ -166,5 +176,104 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     }
 
     return success(reply, { id: productId }, 'Product deleted');
+  });
+
+  // PUT /v1/admin/products/:id/stock - Quick stock + availability update
+  fastify.put('/v1/admin/products/:id/stock', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const productId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+    const body = (req.body ?? {}) as any;
+
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+
+    if (body.is_available !== undefined) updateData.isAvailable = Boolean(body.is_available);
+    if (body.isAvailable !== undefined) updateData.isAvailable = Boolean(body.isAvailable);
+
+    const rawStock = body.stock_quantity !== undefined ? body.stock_quantity : body.stockQuantity;
+    if (rawStock !== undefined) {
+      updateData.stockQuantity = rawStock === null || rawStock === '' ? null : parseInt(String(rawStock), 10);
+    }
+
+    try {
+      const [updated] = await db
+        .update(products)
+        .set(updateData)
+        .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
+        .returning();
+
+      if (!updated) {
+        return notFound(reply, 'Product not found');
+      }
+
+      return success(reply, {
+        ...updated,
+        is_available: updated.isAvailable,
+        stock_quantity: updated.stockQuantity,
+      }, 'Stock updated');
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to update stock');
+    }
+  });
+
+  // POST /v1/admin/products/:id/image - Upload product image to OVH S3
+  fastify.post('/v1/admin/products/:id/image', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const productId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+
+    const file = await req.file();
+    if (!file) {
+      return validationError(reply, { image: 'No image file uploaded' });
+    }
+
+    try {
+      const buffer = await file.toBuffer();
+      const imageUrl = await uploadImageToS3(buffer, file.mimetype, file.filename);
+
+      const [updated] = await db
+        .update(products)
+        .set({ imageUrl, updatedAt: new Date() })
+        .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
+        .returning();
+
+      if (!updated) {
+        return notFound(reply, 'Product not found');
+      }
+
+      return success(reply, {
+        id: updated.id,
+        imageUrl: updated.imageUrl,
+        image_url: updated.imageUrl,
+      }, 'Image uploaded successfully');
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to upload image to S3');
+    }
+  });
+
+  // DELETE /v1/admin/products/:id/image - Remove product image
+  fastify.delete('/v1/admin/products/:id/image', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const productId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+
+    try {
+      const [updated] = await db
+        .update(products)
+        .set({ imageUrl: null, updatedAt: new Date() })
+        .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
+        .returning();
+
+      if (!updated) {
+        return notFound(reply, 'Product not found');
+      }
+
+      return success(reply, { id: updated.id, imageUrl: null }, 'Image removed');
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to remove image');
+    }
   });
 }

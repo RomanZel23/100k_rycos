@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import multipart from '@fastify/multipart';
 import { env } from './config/env.js';
 import { setupWebSocket } from './plugins/websocket.js';
 import { healthRoutes } from './routes/health.js';
@@ -26,6 +27,12 @@ async function bootstrap() {
 
   await fastify.register(helmet, {
     contentSecurityPolicy: false, // Allow Swagger UI
+  });
+
+  await fastify.register(multipart, {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB
+    },
   });
 
   // OpenAPI Documentation at /docs

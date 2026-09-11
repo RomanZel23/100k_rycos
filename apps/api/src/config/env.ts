@@ -20,6 +20,12 @@ const envSchema = z.object({
   // Public URLs for redirects and notifications
   PUBLIC_API_URL: z.string().default('https://100k-api.rycos.eu'),
   PUBLIC_CUSTOMER_URL: z.string().default('https://100k.rycos.eu'),
+  // OVH S3 Object Storage (Images)
+  S3_ENDPOINT: z.string().default(process.env.S3_ENDPOINT || 'https://s3.waw.io.cloud.ovh.net/'),
+  S3_REGION: z.string().default(process.env.S3_REGION || 'waw'),
+  S3_BUCKET: z.string().default(process.env.S3_BUCKET || 'yalla-images'),
+  S3_ACCESS_KEY_ID: z.string().default(process.env.S3_ACCESS_KEY_ID || '96dca1604aed428090afc6ea349c966c'),
+  S3_SECRET_ACCESS_KEY: z.string().default(process.env.S3_SECRET_ACCESS_KEY || 'eaa64fc5d7184b9bab9f91c65b1aba58'),
 });
 
 const parsed = envSchema.safeParse(process.env);

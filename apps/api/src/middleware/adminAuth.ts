@@ -97,3 +97,7 @@ export async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply)
 export function getCompanyId(req: FastifyRequest): number {
   return req.user?.company_id || 1;
 }
+
+export function getAuthUser(req: FastifyRequest): AuthUser | null {
+  return req.user || resolveUser(req);
+}

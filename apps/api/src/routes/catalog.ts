@@ -24,7 +24,8 @@ export async function catalogRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: 'Brand not found' });
     }
 
-    const menu = await getMenuByBrandId(brand.id, brand.companyId);
+    const query = (req.query ?? {}) as { lang?: string };
+    const menu = await getMenuByBrandId(brand.id, brand.companyId, query.lang || 'pl');
 
     if (!menu) {
       return reply.code(404).send({ error: 'Menu not available' });

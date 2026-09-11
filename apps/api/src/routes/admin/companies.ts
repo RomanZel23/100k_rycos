@@ -64,7 +64,14 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
       .where(eq(brands.companyId, companyId))
       .orderBy(desc(brands.id));
 
-    return success(reply, rows, 'Brands retrieved');
+    const mapped = rows.map((r) => ({
+      ...r,
+      qr_slug: r.slug,
+      menu_layout: 'standard',
+      product_count: 0,
+    }));
+
+    return success(reply, mapped, 'Brands retrieved');
   });
 
   // POST /v1/admin/brands - Create brand
@@ -73,10 +80,16 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     const companyId = getCompanyId(req);
     const body = req.body as any;
 
-    if (!body.name || !body.slug) {
+    const brandName = body.name ? String(body.name).trim() : '';
+    let brandSlug = body.slug ? String(body.slug).trim().toLowerCase() : '';
+    if (!brandSlug && brandName) {
+      brandSlug = brandName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    if (!brandName || !brandSlug) {
       return validationError(reply, {
-        name: !body.name ? 'name is required' : '',
-        slug: !body.slug ? 'slug is required' : '',
+        name: !brandName ? 'name is required' : '',
+        slug: !brandSlug ? 'slug is required' : '',
       });
     }
 
@@ -85,8 +98,8 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
         .insert(brands)
         .values({
           companyId,
-          name: String(body.name).trim(),
-          slug: String(body.slug).trim().toLowerCase(),
+          name: brandName,
+          slug: brandSlug,
           logoUrl: body.logoUrl || null,
           bannerUrl: body.bannerUrl || null,
           locationId: body.locationId ? parseInt(String(body.locationId), 10) : null,
@@ -94,7 +107,10 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
         })
         .returning();
 
-      return success(reply, inserted, 'Brand created', 201);
+      return success(reply, {
+        ...inserted,
+        qr_slug: inserted.slug,
+      }, 'Brand created', 201);
     } catch (err: any) {
       return error(reply, err.message || 'Failed to create brand');
     }

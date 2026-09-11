@@ -21,6 +21,7 @@ export const products = pgTable('products', {
   imageUrl: text('image_url'),
   isAvailable: boolean('is_available').default(true).notNull(),
   isAgeRestricted: boolean('is_age_restricted').default(false).notNull(),
+  stockQuantity: integer('stock_quantity'),
   prepTimeMinutes: integer('prep_time_minutes'),
   barcode: varchar('barcode', { length: 64 }),
   productOrder: integer('product_order').default(0).notNull(),

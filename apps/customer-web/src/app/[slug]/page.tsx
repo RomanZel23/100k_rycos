@@ -1,10 +1,15 @@
 'use client';
 
 import React from 'react';
-import { MenuApp } from '../components/MenuApp';
+import { useParams } from 'next/navigation';
+import { MenuApp } from '../../components/MenuApp';
 import { Loader2 } from 'lucide-react';
 
-export default function RootMenuPage() {
+export default function BrandDynamicMenuPage() {
+  const params = useParams();
+  const rawSlug = params?.slug;
+  const slug = typeof rawSlug === 'string' ? rawSlug : Array.isArray(rawSlug) ? rawSlug[0] : 'default';
+
   return (
     <React.Suspense
       fallback={
@@ -14,7 +19,7 @@ export default function RootMenuPage() {
         </div>
       }
     >
-      <MenuApp />
+      <MenuApp initialBrandSlug={slug} />
     </React.Suspense>
   );
 }

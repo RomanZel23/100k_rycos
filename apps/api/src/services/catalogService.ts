@@ -1,4 +1,4 @@
-import { getDatabase, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, locations, eq, inArray, and } from '@rycos/database';
+import { getDatabase, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, contentTranslations, locations, eq, inArray, and } from '@rycos/database';
 import { BrandInfo, MenuResponse, Product, AddonGroup } from '@rycos/shared';
 import { Redis } from 'ioredis';
 import { env } from '../config/env.js';
@@ -49,8 +49,9 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
   };
 }
 
-export async function getMenuByBrandId(brandId: number, companyId: number): Promise<MenuResponse | null> {
-  const cacheKey = `menu:brand:${brandId}`;
+export async function getMenuByBrandId(brandId: number, companyId: number, lang: string = 'pl'): Promise<MenuResponse | null> {
+  const normalizedLang = (lang || 'pl').toLowerCase();
+  const cacheKey = `menu:brand:${brandId}:${normalizedLang}`;
 
   // 1. Try Redis Cache
   if (redis && redis.status === 'ready') {
@@ -61,6 +62,23 @@ export async function getMenuByBrandId(brandId: number, companyId: number): Prom
   }
 
   const db = getDatabase();
+
+  // Load translations if non-Polish
+  const translationsMap = new Map<string, string>();
+  if (normalizedLang !== 'pl') {
+    try {
+      const translationRows = await db
+        .select()
+        .from(contentTranslations)
+        .where(eq(contentTranslations.language, normalizedLang));
+
+      for (const t of translationRows) {
+        translationsMap.set(`${t.entityType}:${t.entityId}:${t.attributeName}`, t.value);
+      }
+    } catch (err: any) {
+      console.warn('[Translations] Error querying translations:', err.message);
+    }
+  }
 
   // 2. Fetch Brand Info
   const brandRows = await db
@@ -170,9 +188,10 @@ export async function getMenuByBrandId(brandId: number, companyId: number): Prom
   const optionsByGroup = new Map<number, any[]>();
   for (const opt of optionRows) {
     if (!optionsByGroup.has(opt.groupId)) optionsByGroup.set(opt.groupId, []);
+    const translatedOptName = translationsMap.get(`addon_options:${opt.id}:name`) || opt.name;
     optionsByGroup.get(opt.groupId)!.push({
       id: opt.id,
-      name: opt.name,
+      name: translatedOptName,
       priceDelta: parseFloat(opt.priceDelta),
       isAvailable: opt.isAvailable,
       position: opt.position,
@@ -183,9 +202,10 @@ export async function getMenuByBrandId(brandId: number, companyId: number): Prom
   const addonGroupsByProduct = new Map<number, AddonGroup[]>();
   for (const grp of productAddonGroupRows) {
     if (!addonGroupsByProduct.has(grp.productId)) addonGroupsByProduct.set(grp.productId, []);
+    const translatedGrpName = translationsMap.get(`addon_groups:${grp.groupId}:name`) || grp.groupName;
     addonGroupsByProduct.get(grp.productId)!.push({
       id: grp.groupId,
-      name: grp.groupName,
+      name: translatedGrpName,
       selectionMode: grp.selectionMode as 'single' | 'multiple',
       required: grp.required,
       minSelect: grp.minSelect,
@@ -197,31 +217,35 @@ export async function getMenuByBrandId(brandId: number, companyId: number): Prom
   }
 
   // 7. Assemble Products
-  const mappedProducts: Product[] = productRows.map((p) => ({
-    id: p.id,
-    companyId: p.companyId,
-    categoryId: p.categoryId,
-    name: p.name,
-    description: p.description,
-    price: parseFloat(p.price),
-    taxRate: p.taxRate,
-    ptuCode: p.ptuCode as any,
-    imageUrl: p.imageUrl,
-    isAvailable: p.isAvailable,
-    isAgeRestricted: p.isAgeRestricted,
-    prepTimeMinutes: p.prepTimeMinutes,
-    barcode: p.barcode,
-    productOrder: p.productOrder,
-    addonGroups: addonGroupsByProduct.get(p.id) || [],
-    translations: {},
-  }));
+  const mappedProducts: Product[] = productRows.map((p) => {
+    const translatedName = translationsMap.get(`products:${p.id}:name`) || p.name;
+    const translatedDesc = translationsMap.get(`products:${p.id}:description`) || p.description;
+    return {
+      id: p.id,
+      companyId: p.companyId,
+      categoryId: p.categoryId,
+      name: translatedName,
+      description: translatedDesc,
+      price: parseFloat(p.price),
+      taxRate: p.taxRate,
+      ptuCode: p.ptuCode as any,
+      imageUrl: p.imageUrl,
+      isAvailable: p.isAvailable,
+      isAgeRestricted: p.isAgeRestricted,
+      prepTimeMinutes: p.prepTimeMinutes,
+      barcode: p.barcode,
+      productOrder: p.productOrder,
+      addonGroups: addonGroupsByProduct.get(p.id) || [],
+      translations: {},
+    };
+  });
 
   const response: MenuResponse = {
     brand: brandInfo,
     categories: categoryRows.map((c) => ({
       id: c.id,
       companyId: c.companyId,
-      name: c.name,
+      name: translationsMap.get(`categories:${c.id}:name`) || c.name,
       position: c.position,
       translations: {},
     })),

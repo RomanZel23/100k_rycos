@@ -2,9 +2,10 @@ import { MenuResponse, CreateOrderRequest, OrderDetail, InitiatePaymentResponse 
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8008';
 
-export async function fetchMenu(slug: string): Promise<MenuResponse> {
-  const res = await fetch(`${API_BASE}/v1/brands/${slug}/menu`, {
-    next: { revalidate: 60 }, // Cache on edge/Next.js for 60 seconds
+export async function fetchMenu(slug: string, lang: string = 'pl'): Promise<MenuResponse> {
+  const query = lang ? `?lang=${encodeURIComponent(lang)}` : '';
+  const res = await fetch(`${API_BASE}/v1/brands/${slug}/menu${query}`, {
+    cache: 'no-store',
   });
 
   if (!res.ok) {

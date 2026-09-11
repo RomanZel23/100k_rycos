@@ -238,6 +238,34 @@ CREATE TABLE IF NOT EXISTS "outbox_events" (
 	"processed_at" timestamp
 );
 
+CREATE TABLE IF NOT EXISTS "users" (
+	"id" varchar(64) PRIMARY KEY NOT NULL,
+	"company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+	"email" varchar(255) NOT NULL,
+	"name" varchar(128),
+	"role" varchar(32) DEFAULT 'staff' NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "company_payment_gateways" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+	"gateway_name" varchar(64) DEFAULT 'SaferPay' NOT NULL,
+	"type" varchar(32) DEFAULT 'card_blik' NOT NULL,
+	"public_key" varchar(255),
+	"private_key" text,
+	"customer_id" varchar(64),
+	"terminal_id" varchar(64),
+	"is_test" boolean DEFAULT true NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+
+ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
+
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_brand_product" ON "brand_products" ("brand_id", "product_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_entity_translation" ON "content_translations" ("entity_type", "entity_id", "language", "attribute_name");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_product_addon_group" ON "product_addon_groups" ("product_id", "group_id");
@@ -267,7 +295,36 @@ export async function ensureDatabaseSchema() {
       if (check.length === 0) {
         console.log('⚡ [DB Auto-Init] Core tables not found. Provisioning 100k_rycos schema...');
         await raw.unsafe(SCHEMA_DDL);
-        console.log('✓ [DB Auto-Init] PostgreSQL schema provisioned (19 tables, indexes & foreign keys)');
+        console.log('✓ [DB Auto-Init] PostgreSQL schema provisioned (21 tables, indexes & foreign keys)');
+      } else {
+        // Idempotent migration for existing installations
+        await raw.unsafe(`
+          CREATE TABLE IF NOT EXISTS "users" (
+            "id" varchar(64) PRIMARY KEY NOT NULL,
+            "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+            "email" varchar(255) NOT NULL,
+            "name" varchar(128),
+            "role" varchar(32) DEFAULT 'staff' NOT NULL,
+            "is_active" boolean DEFAULT true NOT NULL,
+            "created_at" timestamp DEFAULT now() NOT NULL,
+            "updated_at" timestamp DEFAULT now() NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS "company_payment_gateways" (
+            "id" serial PRIMARY KEY NOT NULL,
+            "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+            "gateway_name" varchar(64) DEFAULT 'SaferPay' NOT NULL,
+            "type" varchar(32) DEFAULT 'card_blik' NOT NULL,
+            "public_key" varchar(255),
+            "private_key" text,
+            "customer_id" varchar(64),
+            "terminal_id" varchar(64),
+            "is_test" boolean DEFAULT true NOT NULL,
+            "is_active" boolean DEFAULT true NOT NULL,
+            "created_at" timestamp DEFAULT now() NOT NULL,
+            "updated_at" timestamp DEFAULT now() NOT NULL
+          );
+          ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
+        `);
       }
 
       // Check if brands table exists before querying count

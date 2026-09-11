@@ -1,7 +1,7 @@
-import { getDatabase, orders, eq } from '@rycos/database';
+import { getDatabase, orders, companyPaymentGateways, eq, and } from '@rycos/database';
 import { InitiatePaymentRequest, InitiatePaymentResponse } from '@rycos/shared';
 import { updateOrderStatus } from './orderEngine.js';
-import { initializePaymentPage, assertPaymentPage, captureTransaction } from './saferpayClient.js';
+import { initializePaymentPage, assertPaymentPage, captureTransaction, SaferpayCredentials } from './saferpayClient.js';
 import { getRedis } from '../config/redis.js';
 import { env } from '../config/env.js';
 
@@ -45,6 +45,32 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
     };
   }
 
+  // Sprawdź dedykowane poświadczenia Saferpay dla firmy w bazie
+  let customCreds: SaferpayCredentials | undefined;
+  try {
+    const [gateway] = await db
+      .select()
+      .from(companyPaymentGateways)
+      .where(and(
+        eq(companyPaymentGateways.companyId, order.companyId),
+        eq(companyPaymentGateways.gatewayName, 'SaferPay'),
+        eq(companyPaymentGateways.isActive, true)
+      ))
+      .limit(1);
+
+    if (gateway && gateway.customerId && gateway.publicKey && gateway.privateKey) {
+      customCreds = {
+        customerId: gateway.customerId,
+        terminalId: gateway.terminalId || env.SAFERPAY_TERMINAL_ID,
+        username: gateway.publicKey,
+        password: gateway.privateKey,
+        testMode: gateway.isTest,
+      };
+    }
+  } catch (err: any) {
+    console.warn('[PaymentGateway] Could not check custom gateway:', err.message);
+  }
+
   // Płatność elektroniczna (BLIK, Karta, Apple Pay, Google Pay) przez Saferpay
   const amountGrosze = Math.round(Number(order.totalAmount) * 100);
   const returnUrl =
@@ -57,6 +83,7 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
     currency: order.currency || 'PLN',
     method: input.method,
     returnUrl,
+    credentials: customCreds,
   });
 
   if (!initResult.success || !initResult.token || !initResult.redirectUrl) {
