@@ -10,30 +10,106 @@ interface FiscalJobData {
   companyId: number;
 }
 
-let mqttClient: mqtt.MqttClient | null = null;
+const PAYMENT_METHOD_MAP: Record<string, string> = {
+  cash: 'Cash',
+  card: 'Card',
+  google_pay: 'Mobile',
+  apple_pay: 'Mobile',
+  blik: 'Transfer',
+};
 
-function getMqttClient(): mqtt.MqttClient {
-  if (mqttClient && mqttClient.connected) return mqttClient;
+function mapPaymentMethod(method?: string | null): string {
+  if (!method) return 'Transfer';
+  return PAYMENT_METHOD_MAP[method.toLowerCase()] || 'Transfer';
+}
 
-  mqttClient = mqtt.connect({
-    host: env.RYCOS_MQTT_HOST,
-    port: env.RYCOS_MQTT_PORT,
-    protocol: 'mqtts',
-    username: env.RYCOS_MQTT_USERNAME,
-    password: env.RYCOS_MQTT_PASSWORD,
-    reconnectPeriod: 5000,
-    connectTimeout: 10000,
+/**
+ * Execute command on physical or virtual RYCOS device via MQTT with correlation.
+ */
+function sendRycosCommand(
+  displayId: string,
+  action: string,
+  method: string,
+  payload: any,
+  timeoutMs = 15000
+): Promise<any> {
+  const commandTopic = `rycos/${displayId}/command`;
+  const responseTopic = `rycos/${displayId}/response`;
+  const commandId = randomUUID();
+
+  return new Promise((resolve, reject) => {
+    const client = mqtt.connect({
+      host: env.RYCOS_MQTT_HOST,
+      port: env.RYCOS_MQTT_PORT,
+      protocol: 'mqtts',
+      username: env.RYCOS_MQTT_USERNAME,
+      password: env.RYCOS_MQTT_PASSWORD,
+      clientId: `worker-fiscal-${randomUUID().slice(0, 8)}`,
+      clean: true,
+      connectTimeout: 10000,
+      reconnectPeriod: 0,
+    });
+
+    let settled = false;
+    let timer: NodeJS.Timeout | null = null;
+
+    function cleanup(err?: Error | null, result?: any) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      client.end(true);
+      if (err) reject(err);
+      else resolve(result);
+    }
+
+    timer = setTimeout(() => {
+      cleanup(new Error(`RYCOS device ${displayId} timed out after ${timeoutMs}ms for ${action}`));
+    }, timeoutMs);
+
+    client.on('error', (err) => {
+      cleanup(new Error(`MQTT connection error: ${err.message}`));
+    });
+
+    client.on('connect', () => {
+      client.subscribe(responseTopic, { qos: 1 }, (subErr) => {
+        if (subErr) {
+          return cleanup(new Error(`MQTT subscribe to ${responseTopic} failed: ${subErr.message}`));
+        }
+
+        const command = JSON.stringify({
+          id: commandId,
+          t_sent: Date.now(),
+          action,
+          method,
+          payload,
+        });
+
+        client.publish(commandTopic, command, { qos: 1 }, (pubErr) => {
+          if (pubErr) {
+            return cleanup(new Error(`MQTT publish to ${commandTopic} failed: ${pubErr.message}`));
+          }
+          console.log(`[Fiscal Worker] → Sent ${method} ${action} (id: ${commandId}) to ${displayId}`);
+        });
+      });
+    });
+
+    client.on('message', (topic, message) => {
+      if (topic !== responseTopic) return;
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.id !== commandId) return; // ignore other messages
+
+        console.log(`[Fiscal Worker] ← Received response (id: ${commandId}, status: ${data.status})`);
+        if (data.status >= 200 && data.status < 300) {
+          cleanup(null, data.result);
+        } else {
+          cleanup(new Error(`RYCOS error (status ${data.status}): ${JSON.stringify(data.result)}`));
+        }
+      } catch (e: any) {
+        cleanup(new Error(`Invalid JSON in response from ${displayId}: ${e.message}`));
+      }
+    });
   });
-
-  mqttClient.on('connect', () => {
-    console.log('[Fiscal Worker] Connected to RYCOS MQTT broker');
-  });
-
-  mqttClient.on('error', (err) => {
-    console.error('[Fiscal Worker] MQTT error:', err.message);
-  });
-
-  return mqttClient;
 }
 
 export function startFiscalWorker() {
@@ -74,66 +150,89 @@ export function startFiscalWorker() {
         .limit(1);
 
       const displayId = primaryDevice?.deviceId || env.RYCOS_DEFAULT_DISPLAY_ID;
-      const requestId = `REQ_${order.orderNumber}_${Date.now()}`;
+      const requestId = `REQ-${order.orderNumber}-${Date.now()}`;
 
-      // 3. Prepare RYCOS Payload
-      const fiscalItems = items.map((item) => ({
-        nameItem: item.name.substring(0, 40),
-        ptuCode: item.ptuCode,
-        priceItem: Math.round(parseFloat(item.unitPrice) * 100), // grosze
-        qty: item.quantity,
-        typeItem: 'GENERAL',
-        units: 'szt',
-      }));
+      // 3. Build Fiscal Items & Calculate Totals
+      // Every item price must be in grosze/cents and match the payment sum exactly
+      const fiscalItems: any[] = [];
 
-      const totalAmountGrosze = Math.round(parseFloat(order.totalAmount) * 100);
+      for (const item of items) {
+        const addons = (item.addonsJson as any[]) || [];
+        const addonsTotalGrosze = addons.reduce(
+          (sum, a) => sum + Math.round((Number(a?.priceDelta) || 0) * 100),
+          0
+        );
+        const itemUnitGrosze = Math.round(parseFloat(item.unitPrice) * 100);
+        const baseUnitGrosze = itemUnitGrosze - addonsTotalGrosze;
+
+        fiscalItems.push({
+          nameItem: item.name.substring(0, 40),
+          ptuCode: item.ptuCode || 'b',
+          priceItem: baseUnitGrosze,
+          qty: item.quantity,
+          typeItem: 'GENERAL',
+          units: 'szt',
+        });
+
+        // Split addons as separate lines on fiscal receipt
+        for (const addon of addons) {
+          const deltaGrosze = Math.round((Number(addon?.priceDelta) || 0) * 100);
+          if (deltaGrosze <= 0) continue;
+
+          fiscalItems.push({
+            nameItem: `+ ${addon.name || 'Dodatek'}`.substring(0, 40),
+            ptuCode: item.ptuCode || 'b',
+            priceItem: deltaGrosze,
+            qty: item.quantity,
+            typeItem: 'GENERAL',
+            units: 'szt',
+          });
+        }
+      }
+
+      const itemsTotalGrosze = fiscalItems.reduce(
+        (sum, i) => sum + i.priceItem * i.qty,
+        0
+      );
+      const paymentAmountGrosze = itemsTotalGrosze;
 
       const payload = {
         header: {
-          externalrefFR: String(requestId).substring(0, 40),
-          currency: order.currency,
+          externalrefFR: String(requestId).replace(/_/g, '-').substring(0, 40),
+          currency: (order.currency || 'PLN').toUpperCase(),
           customerNIP: order.customerNip || undefined,
         },
         items: fiscalItems,
         payment: [
           {
-            paymentMethod: order.paymentMethod === 'cash' ? 'Cash' : 'Card',
-            amount: totalAmountGrosze,
-            currency: order.currency,
+            paymentMethod: mapPaymentMethod(order.paymentMethod),
+            amount: paymentAmountGrosze,
+            currency: (order.currency || 'PLN').toUpperCase(),
           },
         ],
         output: {
-          autoPrint: false, // E-receipt default; paper print on staff demand
+          autoPrint: false, // E-receipt default (QR / PDF on customer phone)
           showQrScreen: false,
           returnQrCodeBase64: false,
         },
       };
 
-      // 4. Issue Fiscal Command over MQTT
-      const client = getMqttClient();
-      const commandTopic = `rycos/${displayId}/command`;
-      const responseTopic = `rycos/${displayId}/response`;
+      console.log(`[Fiscal Worker] Issuing fiscal receipt via RYCOS for Order #${order.orderNumber} to device ${displayId}...`);
 
-      console.log(`[Fiscal Worker] Publishing fiscal request to ${commandTopic}`);
+      // 4. Issue Fiscal Command over MQTT to RYCOS
+      let result: any;
+      try {
+        result = await sendRycosCommand(displayId, '/fiscal/issue', 'POST', payload, 15000);
+      } catch (err: any) {
+        console.error(`[Fiscal Worker] Failed communicating with RYCOS device ${displayId}:`, err.message);
+        throw err;
+      }
 
-      const result = await new Promise<{ receiptNumber: string; jpkId: string; pdfUrl?: string }>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          // If simulator or timeout, generate deterministic receipt for safety in test environments
-          console.warn(`[Fiscal Worker] MQTT timeout for ${orderId}, using simulated receipt`);
-          resolve({
-            receiptNumber: `PAR_${order.orderNumber}_${Math.floor(Math.random() * 10000)}`,
-            jpkId: randomUUID(),
-            pdfUrl: `https://receipts.rycos.eu/receipts/${order.orderNumber}.pdf`,
-          });
-        }, 8000);
+      const receiptNumber = String(result?.receiptNumber || result?.number || `PAR_${order.orderNumber}`);
+      const jpkId = String(result?.jpkId || '');
+      const pdfUrl = result?.pdfReceiptUrl || result?.pdfUrl || null;
 
-        client.publish(commandTopic, JSON.stringify({ requestId, ...payload }), { qos: 1 }, (err) => {
-          if (err) {
-            clearTimeout(timeout);
-            reject(err);
-          }
-        });
-      });
+      console.log(`[Fiscal Worker] ✓ RYCOS Success! Receipt #${receiptNumber}, JPK: ${jpkId}, PDF: ${pdfUrl}`);
 
       // 5. Store Fiscal Receipt Record in PostgreSQL
       await db.insert(fiscalReceipts).values({
@@ -141,12 +240,12 @@ export function startFiscalWorker() {
         companyId,
         displayId,
         requestId,
-        receiptNumber: result.receiptNumber,
-        jpkId: result.jpkId,
-        grossAmountGrosze: totalAmountGrosze,
+        receiptNumber,
+        jpkId,
+        grossAmountGrosze: paymentAmountGrosze,
         currency: order.currency,
         customerNip: order.customerNip,
-        pdfReceiptUrl: result.pdfUrl,
+        pdfReceiptUrl: pdfUrl,
         rawResult: result,
       });
 
@@ -156,8 +255,8 @@ export function startFiscalWorker() {
         .set({
           fiscalStatus: 'issued',
           fiscalDeviceId: displayId,
-          fiscalReceiptNumber: result.receiptNumber,
-          fiscalPdfUrl: result.pdfUrl,
+          fiscalReceiptNumber: receiptNumber,
+          fiscalPdfUrl: pdfUrl,
           updatedAt: new Date(),
         })
         .where(eq(orders.id, orderId));
@@ -174,14 +273,14 @@ export function startFiscalWorker() {
             payload: {
               orderId,
               orderNumber: order.orderNumber,
-              receiptNumber: result.receiptNumber,
-              pdfUrl: result.pdfUrl,
+              receiptNumber,
+              pdfUrl,
             },
           },
         })
       );
 
-      console.log(`[Fiscal Worker] ✓ Successfully fiscalized order ${orderId}, receipt #${result.receiptNumber}`);
+      console.log(`[Fiscal Worker] ✓ Order ${orderId} successfully fiscalized & broadcasted`);
     },
     {
       connection: redisConnection,

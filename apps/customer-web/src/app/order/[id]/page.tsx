@@ -7,11 +7,11 @@ import { fetchOrder } from '../../../lib/api';
 import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle } from 'lucide-react';
 import { PaymentModal } from '../../../components/PaymentModal';
 
-const STATUS_STEPS: { status: OrderStatus; label: string; icon: any }[] = [
-  { status: 'paid', label: 'Opłacone', icon: CheckCircle2 },
-  { status: 'in_progress', label: 'W przygotowaniu', icon: UtensilsCrossed },
-  { status: 'ready_to_collect', label: 'Gotowe do odbioru!', icon: BellRing },
-  { status: 'completed', label: 'Odebrane', icon: CheckCircle2 },
+const STATUS_STEPS: { status: OrderStatus; label: string; sublabel: string; icon: any }[] = [
+  { status: 'paid', label: 'Opłacone', sublabel: 'Płatność potwierdzona', icon: CheckCircle2 },
+  { status: 'in_progress', label: 'W przygotowaniu', sublabel: 'Dania przygotowywane w kuchni', icon: UtensilsCrossed },
+  { status: 'ready_to_collect', label: 'Gotowe do odbioru!', sublabel: 'Czeka na odbiór przy ladzie', icon: BellRing },
+  { status: 'completed', label: 'Odebrane', sublabel: 'Zamówienie zrealizowane', icon: CheckCircle2 },
 ];
 
 function OrderTrackingContent() {
@@ -99,6 +99,23 @@ function OrderTrackingContent() {
   const isReady = order.status === 'ready_to_collect';
   const isPending = order.status === 'pending_payment';
 
+  const getBannerSubtitle = () => {
+    switch (order.status) {
+      case 'pending_payment':
+        return 'Oczekiwanie na opłacenie zamówienia';
+      case 'paid':
+        return 'Płatność potwierdzona • Przekazano do kuchni';
+      case 'in_progress':
+        return 'Kuchnia przygotowuje Twoje dania';
+      case 'ready_to_collect':
+        return 'Zamówienie jest GOTOWE do odbioru!';
+      case 'completed':
+        return 'Zamówienie odebrane • Dziękujemy!';
+      default:
+        return 'Pokaż ten PIN lub numer zamówienia przy odbiorze';
+    }
+  };
+
   return (
     <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col p-4 space-y-4">
       {/* Top Banner */}
@@ -127,7 +144,7 @@ function OrderTrackingContent() {
           </p>
         ) : (
           <p className="text-xs text-white/80 mt-3">
-            Pokaż ten PIN lub numer zamówienia przy odbiorze
+            {getBannerSubtitle()}
           </p>
         )}
       </div>
@@ -172,17 +189,32 @@ function OrderTrackingContent() {
           <div className="absolute left-[23px] top-4 bottom-4 w-0.5 bg-slate-100" />
 
           {STATUS_STEPS.map((step, idx) => {
-            const isCompleted =
-              (order.status === 'paid' && idx === 0) ||
-              (order.status === 'in_progress' && idx <= 1) ||
-              (order.status === 'ready_to_collect' && idx <= 2) ||
-              (order.status === 'completed' && idx <= 3);
+            // Step completion logic
+            const isPaidOrBeyond = ['paid', 'in_progress', 'ready_to_collect', 'completed'].includes(order.status);
+            const isInProgressOrBeyond = ['in_progress', 'ready_to_collect', 'completed'].includes(order.status);
+            const isReadyOrBeyond = ['ready_to_collect', 'completed'].includes(order.status);
+            const isDone = order.status === 'completed';
 
-            const isCurrent =
-              (order.status === 'paid' && idx === 0) ||
-              (order.status === 'in_progress' && idx === 1) ||
-              (order.status === 'ready_to_collect' && idx === 2) ||
-              (order.status === 'completed' && idx <= 3);
+            let isCompleted = false;
+            let isCurrent = false;
+
+            if (idx === 0) {
+              // Opłacone
+              isCompleted = isPaidOrBeyond;
+              isCurrent = false; // once paid, it's completed, not stuck on in progress
+            } else if (idx === 1) {
+              // W przygotowaniu
+              isCompleted = isInProgressOrBeyond;
+              isCurrent = order.status === 'paid' || order.status === 'in_progress';
+            } else if (idx === 2) {
+              // Gotowe do odbioru
+              isCompleted = isReadyOrBeyond;
+              isCurrent = order.status === 'ready_to_collect';
+            } else if (idx === 3) {
+              // Odebrane
+              isCompleted = isDone;
+              isCurrent = isDone;
+            }
 
             const Icon = step.icon;
 
@@ -192,6 +224,8 @@ function OrderTrackingContent() {
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                     isCompleted
                       ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                      : isCurrent
+                      ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20 animate-pulse'
                       : 'bg-slate-100 text-slate-400'
                   }`}
                 >
@@ -211,8 +245,16 @@ function OrderTrackingContent() {
                     {step.label}
                   </h4>
                   {isCurrent && (
-                    <span className="text-[11px] text-emerald-600 font-bold block animate-pulse">
-                      ● W trakcie...
+                    <span className="text-[11px] text-brand-600 font-bold block">
+                      {order.status === 'paid' && '● Oczekuje na realizację w kuchni...'}
+                      {order.status === 'in_progress' && '● Dania są przygotowywane w kuchni...'}
+                      {order.status === 'ready_to_collect' && '● Zapraszamy po odbiór do punktu wydawania!'}
+                      {order.status === 'completed' && '● Dziękujemy i zapraszamy ponownie!'}
+                    </span>
+                  )}
+                  {!isCurrent && isCompleted && (
+                    <span className="text-[11px] text-slate-500 block">
+                      {step.sublabel}
                     </span>
                   )}
                 </div>
@@ -230,9 +272,9 @@ function OrderTrackingContent() {
               <Receipt size={20} />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-500 block">E-Paragon Fiskalny</span>
+              <span className="text-xs font-bold text-slate-500 block">E-Paragon Fiskalny (RYCOS)</span>
               <span className="text-sm font-mono font-bold text-slate-900">
-                {order.fiscalReceiptNumber}
+                Nr: {order.fiscalReceiptNumber}
               </span>
             </div>
           </div>
@@ -242,10 +284,10 @@ function OrderTrackingContent() {
               href={order.fiscalPdfUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 text-xs font-bold transition-all"
+              className="p-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm"
             >
               <Download size={14} />
-              <span>PDF</span>
+              <span>Pobierz PDF</span>
             </a>
           )}
         </div>
@@ -253,7 +295,7 @@ function OrderTrackingContent() {
 
       {/* Order Summary Details */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
-        <h3 className="font-extrabold text-slate-900 text-sm">Podsumowanie pozycji</h3>
+        <h3 className="font-extrabold text-slate-900 text-sm">Podsumowanie zamówienia</h3>
 
         <div className="space-y-2 divide-y divide-slate-100 text-xs">
           {order.items.map((it, idx) => (
