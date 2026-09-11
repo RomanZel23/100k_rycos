@@ -1,4 +1,4 @@
-import { getDatabase, orders, orderItems, orderEvents, outboxEvents, idempotencyKeys, products, brands, eq, and, sql } from '@rycos/database';
+import { getDatabase, orders, orderItems, orderEvents, outboxEvents, idempotencyKeys, products, brands, eq, and, inArray, sql } from '@rycos/database';
 import { CreateOrderRequest, OrderDetail, OrderStatus } from '@rycos/shared';
 import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
 
@@ -37,7 +37,7 @@ export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeade
   const dbProducts = await db
     .select()
     .from(products)
-    .where(and(eq(products.companyId, companyId), sql`${products.id} = ANY(${productIds})`));
+    .where(and(eq(products.companyId, companyId), inArray(products.id, productIds)));
 
   const productMap = new Map(dbProducts.map((p) => [p.id, p]));
 

@@ -1,4 +1,4 @@
-import { getDatabase, outboxEvents, eq, sql } from '@rycos/database';
+import { getDatabase, outboxEvents, eq, inArray, sql } from '@rycos/database';
 import { fiscalQueue, notificationQueue } from '../queues/index.js';
 
 let isRunning = false;
@@ -24,9 +24,10 @@ export async function dispatchOutboxBatch() {
       if (rows.length === 0) return [];
 
       const ids = rows.map((r: any) => r.id);
-      await tx.execute(
-        sql`UPDATE outbox_events SET status = 'processing' WHERE id = ANY(${ids})`
-      );
+      await tx
+        .update(outboxEvents)
+        .set({ status: 'processing' })
+        .where(inArray(outboxEvents.id, ids));
 
       return rows;
     });
