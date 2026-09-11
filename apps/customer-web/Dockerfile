@@ -4,8 +4,8 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
-ARG NEXT_PUBLIC_API_URL=http://localhost:8008
-ARG NEXT_PUBLIC_WS_URL=ws://localhost:8008/v1/ws
+ARG NEXT_PUBLIC_API_URL=https://100k-api.rycos.eu
+ARG NEXT_PUBLIC_WS_URL=wss://100k-api.rycos.eu/v1/ws
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 
@@ -22,6 +22,7 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 
 COPY --from=builder /app/apps/customer-web/public ./apps/customer-web/public
 COPY --from=builder /app/apps/customer-web/.next/standalone ./
