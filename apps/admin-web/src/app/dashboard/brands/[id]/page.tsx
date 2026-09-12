@@ -28,10 +28,10 @@ const LAYOUT_HELP =
 
 // Customer ordering domain by company business type (extend as new verticals launch).
 const ORDER_BASES: Record<string, string> = {
-  product: 'https://restaurants.yallaorder.ai', // restaurants / F&B / retail
+  product: 'https://100k.rycos.eu', // restaurants / F&B / retail
 }
 const orderBase = (businessType?: string) =>
-  ORDER_BASES[businessType ?? ''] || process.env.NEXT_PUBLIC_ORDER_BASE_URL || 'https://restaurants.yallaorder.ai'
+  ORDER_BASES[businessType ?? ''] || process.env.NEXT_PUBLIC_ORDER_BASE_URL || 'https://100k.rycos.eu'
 
 function parseColors(style: string | null): { active: string; bg: string } {
   try {

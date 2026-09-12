@@ -1,7 +1,6 @@
 import type { Config } from 'tailwindcss'
 
-// Brand palette mirrors yalla-website (orange #FF8800) so the panel stays visually
-// consistent with the marketing site.
+// Brand palette for 100k-RYCOS (orange #FF8800)
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {

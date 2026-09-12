@@ -49,7 +49,7 @@ export function resolveUser(req: FastifyRequest): AuthUser | null {
     if (env.NODE_ENV !== 'production') {
       return {
         id: 'default-admin',
-        email: 'admin@yallaorder.ai',
+        email: 'admin@100k-rycos.eu',
         name: 'Demo Admin',
         company_id: 1,
         role: 'super_admin',

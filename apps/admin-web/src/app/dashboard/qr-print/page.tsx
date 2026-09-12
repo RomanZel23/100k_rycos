@@ -8,8 +8,8 @@ interface Brand { id: number; name: string | null; qr_slug: string }
 interface Location { id: number; name: string }
 interface Terminal { id: number; terminal_id: string; name: string; status: string; location_id: number | null }
 
-const ORDER_BASES: Record<string, string> = { product: 'https://restaurants.yallaorder.ai' }
-const orderBase = (t?: string) => ORDER_BASES[t ?? ''] || process.env.NEXT_PUBLIC_ORDER_BASE_URL || 'https://restaurants.yallaorder.ai'
+const ORDER_BASES: Record<string, string> = { product: 'https://100k.rycos.eu' }
+const orderBase = (t?: string) => ORDER_BASES[t ?? ''] || process.env.NEXT_PUBLIC_ORDER_BASE_URL || 'https://100k.rycos.eu'
 
 // Cap on a single batch so one request can't generate thousands of QR codes.
 const BATCH_MAX = 100

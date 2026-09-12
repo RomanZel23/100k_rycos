@@ -8,9 +8,9 @@ export async function seedDatabase(shouldClose = false) {
   const [company] = await db
     .insert(companies)
     .values({
-      name: 'Yalla Food Group',
-      slug: 'yalla-food-group',
-      email: 'kontakt@yallaorder.ai',
+      name: '100k-RYCOS Food Group',
+      slug: '100k-rycos-group',
+      email: 'kontakt@100k-rycos.eu',
       country: 'PL',
       currency: 'PLN',
       isAcceptingOrders: true,
@@ -36,8 +36,8 @@ export async function seedDatabase(shouldClose = false) {
     .values({
       companyId: company.id,
       locationId: location.id,
-      name: 'Yalla Burger & Pizza',
-      slug: 'yalla-burger',
+      name: '100k-RYCOS Burger & Pizza',
+      slug: '100k-rycos',
       isActive: true,
     })
     .returning();

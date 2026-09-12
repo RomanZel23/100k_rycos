@@ -62,7 +62,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           brand: {
             id: 1,
             companyId: 1,
-            name: 'Yalla Burger & Pizza',
+            name: '100k-RYCOS Burger & Pizza',
             slug: brandSlug,
             logoUrl: null,
             bannerUrl: null,

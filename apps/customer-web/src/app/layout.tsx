@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'YallaOrder - Skanuj, Zamawiaj, Odbieraj',
+  title: '100k-RYCOS - Skanuj, Zamawiaj, Odbieraj',
   description: 'Błyskawiczne zamawianie jedzenia przez kod QR przy stoliku i na parkingu',
   manifest: '/manifest.json',
 };

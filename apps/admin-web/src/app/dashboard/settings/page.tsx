@@ -139,7 +139,7 @@ export default async function SettingsPage() {
         {gateway ? (
           <div className="text-sm text-neutral-600">
             <p><span className="text-neutral-400">Provider:</span> {gateway.gateway_name || gateway.type || '—'}</p>
-            <p className="text-xs text-neutral-400">Gateway credentials are managed by YallaOrder. Contact support to change them.</p>
+            <p className="text-xs text-neutral-400">Gateway credentials are managed by 100k-RYCOS. Contact support to change them.</p>
           </div>
         ) : (
           <p className="text-sm text-neutral-400">No payment gateway configured.</p>

@@ -26,7 +26,7 @@ export function roleOf(user: User | null): string {
 
 // Mirrors admin-api's isManager: role is source of truth; role-less legacy users
 // without a location_id are treated as managers during the migration.
-// platform_admin (YallaOrder internal staff) always counts as a manager.
+// platform_admin (100k-RYCOS internal staff) always counts as a manager.
 export function isManager(user: User | null): boolean {
   const r = roleOf(user)
   if (r === 'super_admin' || r === 'admin' || r === 'platform_admin') return true

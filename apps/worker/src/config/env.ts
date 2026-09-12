@@ -9,7 +9,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().default('redis://localhost:6379'),
   RYCOS_MQTT_HOST: z.string().default('rycos.eu'),
   RYCOS_MQTT_PORT: z.coerce.number().default(8883),
-  RYCOS_MQTT_USERNAME: z.string().default('rycos_yallaorder'),
+  RYCOS_MQTT_USERNAME: z.string().default('rycos_portal'),
   RYCOS_MQTT_PASSWORD: z.string().default('Rycos$ala#'),
   RYCOS_DEFAULT_DISPLAY_ID: z.string().default('SBT-NMLL2M'),
 });

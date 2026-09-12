@@ -354,17 +354,26 @@ export async function ensureDatabaseSchema() {
       if (brandsTableCheck.length > 0) {
         const brandsCount: any = await raw.unsafe(`SELECT count(*)::int as cnt FROM brands LIMIT 1;`);
         if (brandsCount[0]?.cnt === 0) {
-          console.log('🌱 [DB Auto-Init] Database is empty. Seeding demo menu (Yalla Burger & Pizza)...');
+          console.log('🌱 [DB Auto-Init] Database is empty. Seeding demo menu (100k-RYCOS Burger & Pizza)...');
           await seedDatabase();
           console.log('✓ [DB Auto-Init] Demo menu seeded successfully');
         }
 
-        // Ensure brand_products links all products to existing brands
+        // Migrate any legacy Yalla names to 100k-RYCOS and ensure slugs
         await raw.unsafe(`
+          UPDATE companies SET name = '100k-RYCOS Food Group' WHERE name ILIKE '%yalla%';
+          UPDATE brands SET name = '100k-RYCOS Burger & Pizza' WHERE name ILIKE '%yalla%';
+
           INSERT INTO brands (company_id, location_id, name, slug, is_active)
           SELECT b.company_id, b.location_id, b.name, 'default', true
           FROM brands b
           WHERE b.id = 1 AND NOT EXISTS (SELECT 1 FROM brands WHERE slug = 'default')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO brands (company_id, location_id, name, slug, is_active)
+          SELECT b.company_id, b.location_id, b.name, '100k-rycos', true
+          FROM brands b
+          WHERE b.id = 1 AND NOT EXISTS (SELECT 1 FROM brands WHERE slug = '100k-rycos')
           ON CONFLICT DO NOTHING;
 
           INSERT INTO brand_products (brand_id, product_id)

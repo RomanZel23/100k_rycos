@@ -11,8 +11,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   // pos_receipt_upside_down deliberately NOT here — moved to a per-device
   // local toggle (Counter app → hamburger menu → User Settings), since it's
   // a property of which way a specific tablet is physically oriented at the
-  // counter, not a company-wide policy. See vendor-yallaorder-ai's
-  // lib/providers/local_settings_provider.dart.
+  // counter, not a company-wide policy.
 }
 
 export const BUSINESS_TYPES = [

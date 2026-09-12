@@ -32,7 +32,7 @@ export default async function LoginPage({
         </form>
 
         <p className="mt-6 text-center text-sm text-neutral-500">
-          New to YallaOrder?{' '}
+          New to 100k-RYCOS?{' '}
           <Link href="/signup" className="font-semibold text-brand hover:underline">Create an account</Link>
         </p>
       </div>

@@ -93,7 +93,7 @@ export default function PosPage() {
           brand: {
             id: 1,
             companyId: 1,
-            name: 'Yalla POS · Waiter Terminal',
+            name: '100k-RYCOS POS · Waiter Terminal',
             slug: 'default',
             logoUrl: null,
             bannerUrl: null,

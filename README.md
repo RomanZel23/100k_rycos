@@ -87,7 +87,7 @@ cd ../..
 pnpm dev
 ```
 - **Core API & Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Customer Web (PWA):** [http://localhost:3000?brand=yalla-burger&table=12](http://localhost:3000?brand=yalla-burger&table=12)
+- **Customer Web (PWA):** [http://localhost:3000?brand=100k-rycos&table=12](http://localhost:3000?brand=100k-rycos&table=12)
 - **Worker:** Działa w tle, nasłuchując na kolejki BullMQ i tabelę `outbox_events`.
 
 ---
