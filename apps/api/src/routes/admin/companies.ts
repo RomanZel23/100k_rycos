@@ -27,6 +27,8 @@ async function ensureBrandColumns() {
 export async function adminCompaniesRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
 
+  const inMemoryCompanyProfiles: Record<number, Record<string, any>> = {};
+
   const getCompanyHandler = async (req: any, reply: any) => {
     const db = getDatabase();
     const companyId = getCompanyId(req);
@@ -41,10 +43,16 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'Company not found');
     }
 
+    const compProfile = inMemoryCompanyProfiles[companyId] ?? {};
     return success(reply, {
       ...company,
       is_accepting_orders: company.isAcceptingOrders,
-      business_type: 'product',
+      business_type: compProfile.business_type || 'product',
+      address: compProfile.address || '',
+      phone: compProfile.phone || '',
+      default_language: compProfile.default_language || 'pl',
+      terms_and_conditions: compProfile.terms_and_conditions || null,
+      privacy_policy: compProfile.privacy_policy || null,
     });
   };
 
@@ -57,6 +65,14 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     const db = getDatabase();
     const companyId = getCompanyId(req);
     const body = req.body as any;
+
+    inMemoryCompanyProfiles[companyId] ??= {};
+    if (body.default_language !== undefined) inMemoryCompanyProfiles[companyId].default_language = String(body.default_language).trim().toLowerCase();
+    if (body.address !== undefined) inMemoryCompanyProfiles[companyId].address = String(body.address).trim();
+    if (body.phone !== undefined) inMemoryCompanyProfiles[companyId].phone = String(body.phone).trim();
+    if (body.business_type !== undefined) inMemoryCompanyProfiles[companyId].business_type = String(body.business_type).trim();
+    if (body.terms_and_conditions !== undefined) inMemoryCompanyProfiles[companyId].terms_and_conditions = String(body.terms_and_conditions);
+    if (body.privacy_policy !== undefined) inMemoryCompanyProfiles[companyId].privacy_policy = String(body.privacy_policy);
 
     const updateData: any = {
       updatedAt: new Date(),
@@ -77,10 +93,16 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
         .where(eq(companies.id, companyId))
         .returning();
 
+      const compProfile = inMemoryCompanyProfiles[companyId] ?? {};
       return success(reply, {
         ...updated,
         is_accepting_orders: updated.isAcceptingOrders,
-        business_type: 'product',
+        business_type: compProfile.business_type || 'product',
+        address: compProfile.address || '',
+        phone: compProfile.phone || '',
+        default_language: compProfile.default_language || 'pl',
+        terms_and_conditions: compProfile.terms_and_conditions || null,
+        privacy_policy: compProfile.privacy_policy || null,
       }, 'Company updated');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update company');
@@ -154,15 +176,33 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     }, 'Setting updated');
   });
 
+  const inMemoryCompanyLanguages: Record<number, string[]> = {};
+
+  const ALL_SUPPORTED_LANGUAGES = [
+    { code: 'pl', name: 'Polish', native_name: 'Polski' },
+    { code: 'en', name: 'English', native_name: 'English' },
+    { code: 'de', name: 'German', native_name: 'Deutsch' },
+  ];
+
+  // GET /v1/admin/languages - All available languages
+  fastify.get('/v1/admin/languages', async (_req, reply) => {
+    return success(reply, ALL_SUPPORTED_LANGUAGES);
+  });
+
   // GET /v1/admin/companies/languages
-  fastify.get('/v1/admin/companies/languages', async (_req, reply) => {
-    return success(reply, ['pl', 'en', 'de']);
+  fastify.get('/v1/admin/companies/languages', async (req, reply) => {
+    const companyId = getCompanyId(req);
+    const active = inMemoryCompanyLanguages[companyId] || ['pl', 'en', 'de'];
+    return success(reply, active.map((code: string) => ({ language_code: code })));
   });
 
   // PUT /v1/admin/companies/languages
   fastify.put('/v1/admin/companies/languages', async (req, reply) => {
+    const companyId = getCompanyId(req);
     const body = (req.body ?? {}) as any;
-    return success(reply, body.codes ?? ['pl', 'en', 'de'], 'Languages saved');
+    const codes: string[] = Array.isArray(body.codes) ? body.codes : ['pl', 'en', 'de'];
+    inMemoryCompanyLanguages[companyId] = codes;
+    return success(reply, codes.map((code: string) => ({ language_code: code })), 'Languages saved');
   });
 
   // GET /v1/admin/brands - List brands for company

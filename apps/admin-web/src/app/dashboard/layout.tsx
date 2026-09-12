@@ -1,9 +1,11 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { Logo } from '@/components/Logo'
 import { NavLink } from '@/components/NavLink'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { currentUser, isManager } from '@/lib/auth'
+import { getTranslation } from '@/lib/i18n'
+import { getAdminLocale } from '@/lib/i18n-server'
 
 async function signOut() {
   'use server'
@@ -15,65 +17,75 @@ async function signOut() {
 
 // `manager: true` items are hidden from staff (operational users).
 const NAV = [
-  { href: '/dashboard', label: 'Overview', manager: false },
-  { href: '/dashboard/orders', label: 'Orders', manager: true },
-  { href: '/dashboard/products', label: 'Products', manager: true },
-  { href: '/dashboard/brands', label: 'Brands', manager: true },
-  { href: '/dashboard/locations', label: 'Locations', manager: true },
-  { href: '/dashboard/terminals', label: 'POS terminals', manager: true },
-  { href: '/dashboard/fiscal-devices', label: 'Fiscal devices', manager: true },
-  { href: '/dashboard/payment-gateways', label: 'Payment gateway', manager: true },
-  { href: '/dashboard/qr-print', label: 'QR Print', manager: true },
-  { href: '/dashboard/users', label: 'Users', manager: true },
-  { href: '/dashboard/master', label: 'Platform SaaS (Master)', manager: true },
-  { href: '/dashboard/billing', label: 'Billing', manager: true },
-  { href: '/dashboard/settings', label: 'Settings', manager: true },
+  { href: '/dashboard', key: 'nav.overview', defaultLabel: 'Overview', manager: false },
+  { href: '/dashboard/orders', key: 'nav.orders', defaultLabel: 'Orders', manager: true },
+  { href: '/dashboard/products', key: 'nav.products', defaultLabel: 'Products', manager: true },
+  { href: '/dashboard/brands', key: 'nav.brands', defaultLabel: 'Brands', manager: true },
+  { href: '/dashboard/locations', key: 'nav.locations', defaultLabel: 'Locations', manager: true },
+  { href: '/dashboard/terminals', key: 'nav.terminals', defaultLabel: 'POS terminals', manager: true },
+  { href: '/dashboard/fiscal-devices', key: 'nav.fiscal', defaultLabel: 'Fiscal devices', manager: true },
+  { href: '/dashboard/payment-gateways', key: 'nav.gateways', defaultLabel: 'Payment gateway', manager: true },
+  { href: '/dashboard/qr-print', key: 'nav.qr', defaultLabel: 'QR Print', manager: true },
+  { href: '/dashboard/users', key: 'nav.users', defaultLabel: 'Users', manager: true },
+  { href: '/dashboard/master', key: 'nav.master', defaultLabel: 'Platform SaaS (Master)', manager: true },
+  { href: '/dashboard/billing', key: 'nav.billing', defaultLabel: 'Billing', manager: true },
+  { href: '/dashboard/settings', key: 'nav.settings', defaultLabel: 'Settings', manager: true },
 ]
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser()
   if (!user) redirect('/login')
   const manager = isManager(user)
+  const locale = await getAdminLocale()
   const nav = NAV.filter((item) => !item.manager || manager)
 
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-60 flex-col border-r border-neutral-200 bg-white">
-        <div className="border-b border-neutral-200 px-5 py-4">
-          <Logo className="text-xl" />
+      <aside className="flex w-64 flex-col border-r border-neutral-200 bg-white shadow-xs">
+        <div className="border-b border-neutral-100 px-5 py-4">
+          <Logo />
         </div>
-        <nav className="flex-1 space-y-1 p-3">
+
+        {/* Language Switcher bar */}
+        <div className="px-3 pt-3">
+          <LanguageSwitcher currentLocale={locale} />
+        </div>
+
+        <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
           {nav.map((item) => (
-            <NavLink key={item.href} href={item.href}>{item.label}</NavLink>
+            <NavLink key={item.href} href={item.href}>
+              {getTranslation(locale, item.key, item.defaultLabel)}
+            </NavLink>
           ))}
 
           {/* Quick launch for Live POS & KDS */}
-          <div className="pt-2 border-t border-neutral-100 mt-2 space-y-1">
+          <div className="pt-3 border-t border-neutral-100 mt-3 space-y-1.5">
             <a
               href={`${process.env.NEXT_PUBLIC_CUSTOMER_URL || 'https://100k.rycos.eu'}/pos`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors"
+              className="flex items-center justify-between rounded-lg bg-techbay-blue px-3 py-2 text-xs font-bold text-white hover:bg-techbay-blue-dark transition-colors shadow-xs"
             >
-              <span>Terminal POS (Kelner)</span>
-              <span aria-hidden className="text-amber-600">↗</span>
+              <span>{getTranslation(locale, 'nav.pos_live', 'Terminal POS (Kelner)')}</span>
+              <span aria-hidden className="text-techbay-lightblue">↗</span>
             </a>
             <a
               href={`${process.env.NEXT_PUBLIC_CUSTOMER_URL || 'https://100k.rycos.eu'}/kds`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-lg bg-neutral-900 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 transition-colors"
+              className="flex items-center justify-between rounded-lg bg-neutral-900 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 transition-colors shadow-xs"
             >
-              <span>Kuchnia Live (KDS)</span>
-              <span aria-hidden className="text-amber-400">↗</span>
+              <span>{getTranslation(locale, 'nav.kds_live', 'Kuchnia Live (KDS)')}</span>
+              <span aria-hidden className="text-brand">↗</span>
             </a>
           </div>
         </nav>
-        <div className="border-t border-neutral-200 p-3">
-          <p className="truncate px-3 pb-2 text-xs text-neutral-400">{user.email}</p>
+
+        <div className="border-t border-neutral-100 p-3 bg-neutral-50/50">
+          <p className="truncate px-3 pb-2 text-xs font-medium text-neutral-400">{user.email}</p>
           <form action={signOut}>
-            <button className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-neutral-600 hover:bg-neutral-100">
-              Sign out
+            <button className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-neutral-600 hover:bg-neutral-100 hover:text-brand transition">
+              {getTranslation(locale, 'nav.sign_out', 'Sign out')}
             </button>
           </form>
         </div>

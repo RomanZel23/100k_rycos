@@ -24,8 +24,8 @@ export function NavLink({ href, children }: NavLinkProps) {
       aria-current={active ? 'page' : undefined}
       className={`block rounded-lg px-3 py-2 text-sm font-medium transition ${
         active
-          ? 'bg-brand-50 text-brand-700 border-l-2 border-brand'
-          : 'text-neutral-700 hover:bg-brand-50 hover:text-brand-700'
+          ? 'bg-brand-50 text-techbay-blue font-semibold border-l-4 border-brand shadow-xs'
+          : 'text-neutral-600 hover:bg-neutral-100 hover:text-techbay-blue'
       }`}
     >
       {children}
