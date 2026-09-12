@@ -84,7 +84,7 @@ export default async function EditProductPage({ params, searchParams }: {
           </div>
           <div>
             <label className="label" htmlFor="tax">Tax %</label>
-            <input id="tax" name="tax" type="number" defaultValue={product.tax ?? ''} className="input" />
+            <input id="tax" name="tax" type="number" defaultValue={product.tax ?? (product as any).taxRate ?? ''} className="input" />
           </div>
         </div>
         <div>
@@ -97,7 +97,7 @@ export default async function EditProductPage({ params, searchParams }: {
         </div>
         <div>
           <label className="label" htmlFor="prep_time">Prep time (min)</label>
-          <input id="prep_time" name="prep_time" type="number" defaultValue={product.prep_time ?? ''} className="input" />
+          <input id="prep_time" name="prep_time" type="number" defaultValue={product.prep_time ?? (product as any).prepTimeMinutes ?? ''} className="input" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -110,8 +110,20 @@ export default async function EditProductPage({ params, searchParams }: {
           </div>
         </div>
         <div className="flex flex-wrap gap-4 pt-1 text-sm">
-          <label className="flex items-center gap-2"><input type="checkbox" name="is_available" defaultChecked={product.is_available} /> Available</label>
-          <label className="flex items-center gap-2"><input type="checkbox" name="is_age_restricted" defaultChecked={product.is_age_restricted} /> 18+ (age-restricted)</label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="is_available"
+              defaultChecked={product.is_available !== false && (product as any).isAvailable !== false}
+            /> Available
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="is_age_restricted"
+              defaultChecked={Boolean(product.is_age_restricted ?? (product as any).isAgeRestricted)}
+            /> 18+ (age-restricted)
+          </label>
         </div>
         {/* Translations — one tab per enabled (non-default) language. Empty
             fields fall back to the default-language name/description above.

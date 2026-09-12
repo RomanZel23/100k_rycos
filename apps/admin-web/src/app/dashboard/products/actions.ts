@@ -34,17 +34,27 @@ function productBody(f: FormData) {
     return v === '' ? undefined : Number(v)
   }
   const translations = parseTranslations(f)
+  const taxVal = num('tax')
+  const prepVal = num('prep_time')
+  const isAvailable = f.get('is_available') === 'on'
+  const isAgeRestricted = f.get('is_age_restricted') === 'on'
+
   const body: Record<string, unknown> = {
     name: String(f.get('name') || '').trim(),
     description: String(f.get('description') || '').trim() || undefined,
     price: num('price'),
     // Hashtag categories (find-or-create handled by admin-api).
     category_names: f.getAll('category_name').map(String).map((s) => s.trim()).filter(Boolean),
-    tax: num('tax'),
-    prep_time: num('prep_time'),
+    tax: taxVal,
+    taxRate: taxVal,
+    tax_rate: taxVal,
+    prep_time: prepVal,
+    prepTimeMinutes: prepVal,
     // has_addons / is_delivered hidden for now — not sent, so existing DB values are preserved.
-    is_available: f.get('is_available') === 'on',
-    is_age_restricted: f.get('is_age_restricted') === 'on',
+    is_available: isAvailable,
+    isAvailable: isAvailable,
+    is_age_restricted: isAgeRestricted,
+    isAgeRestricted: isAgeRestricted,
     barcode: String(f.get('barcode') || '').trim() || undefined,
     sku: String(f.get('sku') || '').trim() || undefined,
   }

@@ -42,9 +42,13 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     const mapped = rows.map((r) => ({
       ...r,
       is_available: r.isAvailable,
+      is_age_restricted: r.isAgeRestricted,
       stock_quantity: r.stockQuantity,
       image_url: r.imageUrl,
       category_name: r.categoryName,
+      tax: r.taxRate,
+      tax_rate: r.taxRate,
+      prep_time: r.prepTimeMinutes,
     }));
 
     return success(reply, mapped, 'Products retrieved');
@@ -71,10 +75,15 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       ...row,
       image_url: row.imageUrl,
       is_available: row.isAvailable,
+      is_age_restricted: row.isAgeRestricted,
+      isAgeRestricted: row.isAgeRestricted,
       stock_quantity: row.stockQuantity,
       category_id: row.categoryId,
       prep_time: row.prepTimeMinutes,
+      prepTimeMinutes: row.prepTimeMinutes,
       tax: row.taxRate,
+      tax_rate: row.taxRate,
+      taxRate: row.taxRate,
       sku: row.barcode,
     });
   });
@@ -93,30 +102,44 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     }
 
     const price = typeof body.price === 'number' ? body.price.toFixed(2) : String(body.price);
-    const taxRate = body.taxRate ? parseInt(String(body.taxRate), 10) : 23;
+    const rawTax = body.taxRate ?? body.tax ?? body.tax_rate;
+    const taxRate = rawTax !== undefined && rawTax !== null && rawTax !== '' ? parseInt(String(rawTax), 10) : 23;
     const ptuCode = taxRate === 8 ? 'b' : taxRate === 5 ? 'c' : taxRate === 0 ? 'd' : 'a';
+    const isAvailable = body.isAvailable !== undefined ? Boolean(body.isAvailable) : body.is_available !== undefined ? Boolean(body.is_available) : true;
+    const isAgeRestricted = body.isAgeRestricted !== undefined ? Boolean(body.isAgeRestricted) : body.is_age_restricted !== undefined ? Boolean(body.is_age_restricted) : false;
+    const rawPrep = body.prepTimeMinutes ?? body.prep_time ?? body.prepTime;
+    const prepTimeMinutes = rawPrep !== undefined && rawPrep !== null && rawPrep !== '' ? parseInt(String(rawPrep), 10) : 10;
+    const categoryId = body.categoryId ?? body.category_id ? parseInt(String(body.categoryId ?? body.category_id), 10) : null;
+    const barcode = body.barcode ?? body.sku ?? null;
 
     try {
       const [inserted] = await db
         .insert(products)
         .values({
           companyId,
-          categoryId: body.categoryId ? parseInt(String(body.categoryId), 10) : null,
+          categoryId,
           name: String(body.name).trim(),
           description: body.description ? String(body.description).trim() : null,
           price,
           taxRate,
           ptuCode,
-          imageUrl: body.imageUrl || null,
-          isAvailable: body.isAvailable !== false,
-          isAgeRestricted: body.isAgeRestricted === true,
-          prepTimeMinutes: body.prepTimeMinutes ? parseInt(String(body.prepTimeMinutes), 10) : 10,
-          barcode: body.barcode || null,
+          imageUrl: body.imageUrl || body.image_url || null,
+          isAvailable,
+          isAgeRestricted,
+          prepTimeMinutes,
+          barcode,
           productOrder: body.productOrder ? parseInt(String(body.productOrder), 10) : 0,
         })
         .returning();
 
-      return success(reply, inserted, 'Product created', 201);
+      return success(reply, {
+        ...inserted,
+        image_url: inserted.imageUrl,
+        is_available: inserted.isAvailable,
+        is_age_restricted: inserted.isAgeRestricted,
+        tax: inserted.taxRate,
+        prep_time: inserted.prepTimeMinutes,
+      }, 'Product created', 201);
     } catch (err: any) {
       console.error('[Admin:Products] Insert failed:', err);
       return error(reply, err.message || 'Failed to create product');
@@ -138,18 +161,35 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     if (body.name !== undefined) updateData.name = String(body.name).trim();
     if (body.description !== undefined) updateData.description = body.description ? String(body.description).trim() : null;
     if (body.price !== undefined) updateData.price = typeof body.price === 'number' ? body.price.toFixed(2) : String(body.price);
-    if (body.categoryId !== undefined) updateData.categoryId = body.categoryId ? parseInt(String(body.categoryId), 10) : null;
-    if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
-    if (body.isAvailable !== undefined) updateData.isAvailable = Boolean(body.isAvailable);
-    if (body.isAgeRestricted !== undefined) updateData.isAgeRestricted = Boolean(body.isAgeRestricted);
-    if (body.taxRate !== undefined) {
-      const tr = parseInt(String(body.taxRate), 10);
+    if (body.categoryId !== undefined || body.category_id !== undefined) {
+      const cid = body.categoryId ?? body.category_id;
+      updateData.categoryId = cid ? parseInt(String(cid), 10) : null;
+    }
+    if (body.imageUrl !== undefined || body.image_url !== undefined) {
+      updateData.imageUrl = body.imageUrl ?? body.image_url;
+    }
+    if (body.isAvailable !== undefined || body.is_available !== undefined) {
+      updateData.isAvailable = Boolean(body.isAvailable ?? body.is_available);
+    }
+    if (body.isAgeRestricted !== undefined || body.is_age_restricted !== undefined) {
+      updateData.isAgeRestricted = Boolean(body.isAgeRestricted ?? body.is_age_restricted);
+    }
+    const rawTax = body.taxRate ?? body.tax ?? body.tax_rate;
+    if (rawTax !== undefined && rawTax !== null && rawTax !== '') {
+      const tr = parseInt(String(rawTax), 10);
       updateData.taxRate = tr;
       updateData.ptuCode = tr === 8 ? 'b' : tr === 5 ? 'c' : tr === 0 ? 'd' : 'a';
     }
-    if (body.prepTimeMinutes !== undefined) updateData.prepTimeMinutes = parseInt(String(body.prepTimeMinutes), 10);
-    if (body.barcode !== undefined) updateData.barcode = body.barcode;
-    if (body.productOrder !== undefined) updateData.productOrder = parseInt(String(body.productOrder), 10);
+    const rawPrep = body.prepTimeMinutes ?? body.prep_time ?? body.prepTime;
+    if (rawPrep !== undefined && rawPrep !== null && rawPrep !== '') {
+      updateData.prepTimeMinutes = parseInt(String(rawPrep), 10);
+    }
+    if (body.barcode !== undefined || body.sku !== undefined) {
+      updateData.barcode = body.barcode ?? body.sku;
+    }
+    if (body.productOrder !== undefined || body.product_order !== undefined) {
+      updateData.productOrder = parseInt(String(body.productOrder ?? body.product_order), 10);
+    }
 
     try {
       const [updated] = await db
@@ -162,7 +202,14 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         return notFound(reply, 'Product not found');
       }
 
-      return success(reply, updated, 'Product updated');
+      return success(reply, {
+        ...updated,
+        image_url: updated.imageUrl,
+        is_available: updated.isAvailable,
+        is_age_restricted: updated.isAgeRestricted,
+        tax: updated.taxRate,
+        prep_time: updated.prepTimeMinutes,
+      }, 'Product updated');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update product');
     }
