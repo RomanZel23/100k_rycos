@@ -57,7 +57,7 @@ export const i18n: Record<Language, Translations> = {
     optional: 'Opcjonalnie',
     required: 'Wymagane',
     orderSummary: 'Podsumowanie zamówienia',
-    nipOptional: 'Chcę fakturę na firmę (NIP)',
+    nipOptional: 'Chcę paragon z NIP',
     nipPlaceholder: 'Wpisz NIP firmy',
     tipPrompt: 'Doceniasz pracę kuchni? Zostaw drobny napiwek:',
     callWaiter: 'Wezwij obsługę',

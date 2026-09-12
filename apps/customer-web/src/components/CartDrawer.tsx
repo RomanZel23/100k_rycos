@@ -146,7 +146,7 @@ export function CartDrawer({
                   className="flex items-center gap-2 text-xs font-bold text-slate-700"
                 >
                   <FileText size={15} className="text-brand-500" />
-                  <span>Chcę fakturę na firmę (NIP)</span>
+                  <span>Chcę paragon z NIP</span>
                 </button>
 
                 {showNipInput && (
