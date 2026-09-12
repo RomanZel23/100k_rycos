@@ -32,11 +32,28 @@ export async function updateBrand(formData: FormData): Promise<void> {
     const v = formData.get(f)
     if (v !== null) body[f] = String(v)
   }
+  if (formData.has('is_active')) {
+    body.is_active = formData.get('is_active') === 'on' || formData.get('is_active') === 'true'
+  }
   const res = await adminApi(`/brands/${id}`, { method: 'PUT', body: JSON.stringify(body) })
   if (!res.ok) await failTo(`/dashboard/brands/${id}`, res, 'Failed to save brand details')
   revalidatePath('/dashboard/brands')
   revalidatePath(`/dashboard/brands/${id}`)
   redirect(`/dashboard/brands/${id}?notice=` + encodeURIComponent('Details saved'))
+}
+
+export async function toggleBrandStatus(formData: FormData): Promise<void> {
+  const id = String(formData.get('id') || '')
+  const currentActive = formData.get('is_active') === 'true' || formData.get('is_active') === '1'
+  const newActive = !currentActive
+  const res = await adminApi(`/brands/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_active: newActive }),
+  })
+  if (!res.ok) await failTo('/dashboard/brands', res, 'Failed to update brand status')
+  revalidatePath('/dashboard/brands')
+  revalidatePath(`/dashboard/brands/${id}`)
+  redirect('/dashboard/brands?notice=' + encodeURIComponent(`Marka została ${newActive ? 'aktywowana' : 'dezaktywowana'}`))
 }
 
 export async function assignProducts(formData: FormData): Promise<void> {

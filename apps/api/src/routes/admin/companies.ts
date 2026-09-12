@@ -192,6 +192,8 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
     const mapped = rows.map((r) => ({
       ...r,
+      is_active: r.isActive !== false,
+      isActive: r.isActive !== false,
       qr_slug: r.slug,
       menu_layout: (r as any).menuLayout || 'list',
       language: (r as any).language || 'pl',
@@ -227,6 +229,8 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
     return success(reply, {
       ...brand,
+      is_active: brand.isActive !== false,
+      isActive: brand.isActive !== false,
       qr_slug: brand.slug,
       menu_layout: (brand as any).menuLayout || 'list',
       language: (brand as any).language || 'pl',
@@ -403,6 +407,9 @@ function generateShortSlug(length = 5): string {
     } else if (body.style !== undefined) {
       updateData.style = typeof body.style === 'string' ? body.style : JSON.stringify(body.style);
     }
+    if (body.is_active !== undefined || body.isActive !== undefined) {
+      updateData.isActive = Boolean(body.is_active ?? body.isActive);
+    }
 
     const [updated] = await db
       .update(brands)
@@ -418,6 +425,8 @@ function generateShortSlug(length = 5): string {
 
     return success(reply, {
       ...updated,
+      is_active: updated.isActive !== false,
+      isActive: updated.isActive !== false,
       qr_slug: updated.slug,
       menu_layout: updated.menuLayout,
       language: updated.language,
@@ -480,6 +489,8 @@ function generateShortSlug(length = 5): string {
     if (!deleted) {
       return notFound(reply, 'Brand not found');
     }
+
+    invalidateBrandMenuCache(brandId).catch(() => {});
 
     return success(reply, { id: brandId }, 'Brand deleted');
   });

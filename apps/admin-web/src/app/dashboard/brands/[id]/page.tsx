@@ -8,12 +8,14 @@ import { BrandMenuPicker, type PickerProduct } from '@/components/BrandMenuPicke
 import { BrandImageUploader } from '@/components/BrandImageUploader'
 import { BrandColorPicker } from '@/components/BrandColorPicker'
 import { Banner } from '@/components/Banner'
+import { DeleteBrandButton } from '@/components/DeleteBrandButton'
 import { updateBrand, assignProducts, deleteBrand } from '../actions'
 
 interface Brand {
   id: number; name: string | null; qr_slug: string
   menu_layout: string; language: string; currency: string
   style: string | null
+  is_active: boolean
   product_ids: number[]; images: { header: string | null; logo: string | null; footer: string | null }
 }
 
@@ -129,6 +131,20 @@ export default async function EditBrandPage({
           <Select name="language" label="Język menu" options={LANGS} value={brand.language} />
           <Select name="currency" label="Waluta" options={CURRENCIES} value={brand.currency} />
         </div>
+
+        <div className="pt-3 border-t border-neutral-100 flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="is_active"
+            name="is_active"
+            defaultChecked={brand.is_active !== false}
+            className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand cursor-pointer"
+          />
+          <label htmlFor="is_active" className="text-sm font-semibold text-neutral-800 cursor-pointer">
+            Marka aktywna (klienci mogą składać zamówienia przez kod QR)
+          </label>
+        </div>
+
         <div className="pt-3 border-t border-neutral-100">
           <BrandColorPicker initialActiveColor={colors.active} initialBgColor={colors.bg} />
         </div>
@@ -175,10 +191,24 @@ export default async function EditBrandPage({
         <button className="btn-brand mt-3 sm:w-auto sm:px-6">Save menu</button>
       </form>
 
-      <form action={deleteBrand} className="text-right">
-        <input type="hidden" name="id" value={brand.id} />
-        <button className="text-sm font-medium text-red-600 hover:underline">Delete brand</button>
-      </form>
+      {/* Strefa niebezpieczna / Danger zone */}
+      <div className="card border border-red-200 bg-red-50/40 p-5 rounded-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-red-900">Strefa niebezpieczna — usuwanie marki</h3>
+            <p className="text-xs text-red-700 mt-0.5">
+              Usunięcie marki spowoduje trwałe odpięcie jej kodu QR i menu. Tej operacji nie można cofnąć.
+            </p>
+          </div>
+          <DeleteBrandButton
+            action={deleteBrand}
+            brandId={brand.id}
+            brandName={brand.name}
+            label="Usuń markę"
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all shrink-0 shadow-sm"
+          />
+        </div>
+      </div>
     </div>
   )
 }
