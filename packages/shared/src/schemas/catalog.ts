@@ -62,6 +62,7 @@ export const BrandInfoSchema = z.object({
   slug: z.string().min(1),
   logoUrl: z.string().nullable().default(null),
   bannerUrl: z.string().nullable().default(null),
+  footerUrl: z.string().nullable().optional().default(null),
   currency: z.string().default('PLN'),
   isAcceptingOrders: z.boolean().default(true),
   locationId: z.number().nullable().default(null),

@@ -66,6 +66,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             slug: brandSlug,
             logoUrl: null,
             bannerUrl: null,
+            footerUrl: null,
             currency: 'PLN',
             isAcceptingOrders: true,
             locationId: 1,
@@ -178,68 +179,87 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
   return (
     <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col">
-      {/* Brand Banner */}
+      {/* Brand Hero Banner */}
       {menu?.brand.bannerUrl && (
-        <div className="w-full h-32 overflow-hidden bg-slate-900 shrink-0">
+        <div className="relative w-full h-44 sm:h-52 bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center">
+          {/* Ambient blurred backdrop: harmonizes all edges with the image colors */}
+          <div
+            className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-50 pointer-events-none"
+            style={{ backgroundImage: `url(${menu.brand.bannerUrl})` }}
+          />
+          {/* Contrast tint */}
+          <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+          {/* Main banner image */}
           <img
             src={menu.brand.bannerUrl}
             alt={menu.brand.name}
             crossOrigin="anonymous"
-            className="w-full h-full object-cover"
+            className="relative w-full h-full object-cover object-center z-10"
           />
+          {/* Soft gradient fade at bottom */}
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-10 pointer-events-none" />
         </div>
       )}
 
-      {/* Brand Header */}
-      <header className="bg-white px-5 pt-5 pb-4 border-b border-slate-100 sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center justify-between">
+      {/* Brand Info Card */}
+      <div
+        className={`${
+          menu?.brand.bannerUrl
+            ? 'relative z-20 -mt-7 sm:-mt-9 mx-3 sm:mx-4 rounded-3xl bg-white p-4 sm:p-5 shadow-lg shadow-slate-200/50 border border-slate-100'
+            : 'bg-white px-5 pt-5 pb-4 border-b border-slate-100 shadow-2xs'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            {menu?.brand.logoUrl && (
-              <img
-                src={menu.brand.logoUrl}
-                alt={menu.brand.name}
-                crossOrigin="anonymous"
-                className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-xs shrink-0"
-              />
-            )}
-            <div>
+            {menu?.brand.logoUrl ? (
+              <div
+                className={`${
+                  menu?.brand.bannerUrl
+                    ? 'w-20 h-20 sm:w-22 sm:h-22 -mt-12 sm:-mt-14 rounded-2xl border-4 border-white shadow-md bg-white p-1.5 flex items-center justify-center shrink-0 overflow-hidden'
+                    : 'w-14 h-14 rounded-2xl border border-slate-200 shadow-xs bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden'
+                }`}
+              >
+                <img
+                  src={menu.brand.logoUrl}
+                  alt={menu.brand.name}
+                  crossOrigin="anonymous"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            ) : menu?.brand.bannerUrl ? (
+              <div className="w-16 h-16 -mt-12 rounded-2xl border-4 border-white shadow-md bg-slate-900 text-white font-black text-xl flex items-center justify-center shrink-0">
+                {menu?.brand.name?.charAt(0) || '🍽️'}
+              </div>
+            ) : null}
+
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="font-extrabold text-xl text-slate-900 tracking-tight">
+                <h1 className="font-extrabold text-xl sm:text-2xl text-slate-900 tracking-tight truncate">
                   {menu?.brand.name}
                 </h1>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Otwarte" />
               </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-              <div className="flex items-center gap-1">
-                <MapPin size={13} className="text-brand-500" />
-                <span>
-                  {tableLabel
-                    ? `${t.table}: ${tableLabel}`
-                    : parkingSpot
-                    ? `${t.parking}: ${parkingSpot}`
-                    : menu?.brand.locationName || 'Obsługa przy barze'}
-                </span>
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                <div className="flex items-center gap-1">
+                  <MapPin size={13} className="text-brand-500 shrink-0" />
+                  <span className="truncate">
+                    {tableLabel
+                      ? `${t.table}: ${tableLabel}`
+                      : parkingSpot
+                      ? `${t.parking}: ${parkingSpot}`
+                      : menu?.brand.locationName || 'Obsługa przy barze'}
+                  </span>
+                </div>
               </div>
-              {(tableLabel || parkingSpot) && (
-                <button
-                  onClick={() => setIsServiceCallOpen(true)}
-                  className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full transition-colors shadow-2xs"
-                  title={t.callWaiter}
-                >
-                  <Bell size={11} className="animate-pulse text-amber-600" />
-                  <span>{t.callWaiter}</span>
-                </button>
-              )}
             </div>
           </div>
-        </div>
 
-          {/* Language Switcher */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+          {/* Right actions: Language Switcher */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
             <button
               onClick={() => setLang('pl')}
               className={`px-2 py-1 rounded-lg transition-all ${
-                lang === 'pl' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                lang === 'pl' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
               }`}
               title="Polski"
             >
@@ -248,7 +268,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             <button
               onClick={() => setLang('en')}
               className={`px-2 py-1 rounded-lg transition-all ${
-                lang === 'en' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                lang === 'en' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
               }`}
               title="English"
             >
@@ -257,7 +277,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             <button
               onClick={() => setLang('de')}
               className={`px-2 py-1 rounded-lg transition-all ${
-                lang === 'de' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                lang === 'de' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
               }`}
               title="Deutsch"
             >
@@ -266,9 +286,26 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           </div>
         </div>
 
-        {/* Category Tabs */}
-        {menu && menu.categories.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pt-4 no-scrollbar">
+        {/* Service Call / Status row */}
+        {(tableLabel || parkingSpot) && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-xs text-slate-400 font-medium">Potrzebujesz pomocy obsługi?</span>
+            <button
+              onClick={() => setIsServiceCallOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1 rounded-full transition-colors shadow-2xs"
+              title={t.callWaiter}
+            >
+              <Bell size={12} className="animate-pulse text-amber-600" />
+              <span>{t.callWaiter}</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Sticky Category Tabs Navigation */}
+      {menu && menu.categories.length > 0 && (
+        <nav className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md px-4 py-2.5 border-b border-slate-200/70 shadow-2xs mt-2">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar py-0.5">
             {menu.categories.map((cat) => (
               <button
                 key={cat.id}
@@ -276,15 +313,15 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                 className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
                   activeCategory === cat.id
                     ? 'bg-slate-900 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60 shadow-2xs'
                 }`}
               >
                 {cat.name}
               </button>
             ))}
           </div>
-        )}
-      </header>
+        </nav>
+      )}
 
       {/* Products Feed */}
       <main className="p-4 flex-1 space-y-3">
@@ -301,6 +338,26 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             />
           ))
         )}
+
+        {/* Brand Footer Graphic / Sponsor Banner */}
+        {menu?.brand.footerUrl && (
+          <div className="mt-8 mb-4">
+            <div className="w-full rounded-2xl overflow-hidden border border-slate-200/80 bg-white shadow-2xs p-3 flex items-center justify-center">
+              <img
+                src={menu.brand.footerUrl}
+                alt={`${menu.brand.name} stopka`}
+                crossOrigin="anonymous"
+                className="w-full h-auto max-h-48 object-contain"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Footer Brand Credit */}
+        <footer className="text-center pt-8 pb-16 text-xs text-slate-400">
+          <p className="font-semibold text-slate-500">100k-RYCOS Ordering</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">Szybkie i bezpieczne zamawianie przy stoliku i barze</p>
+        </footer>
       </main>
 
       {/* Floating Cart Button (Sticky Bottom) */}

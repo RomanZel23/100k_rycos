@@ -126,21 +126,21 @@ export default async function EditBrandPage({
             brandId={brand.id}
             type="header"
             label="Header / Baner"
-            aspectHint="Baner na samej górze menu"
+            aspectHint="Poziomy baner na górze menu (np. 16:9 lub 3:1, min. 1200x500 px)"
             currentUrl={brandImages.header}
           />
           <BrandImageUploader
             brandId={brand.id}
             type="logo"
             label="Logo"
-            aspectHint="Kwadratowe logo marki (1:1)"
+            aspectHint="Kwadratowe logo marki (1:1, np. 500x500 px)"
             currentUrl={brandImages.logo}
           />
           <BrandImageUploader
             brandId={brand.id}
             type="footer"
             label="Stopka (Footer)"
-            aspectHint="Baner na dole menu"
+            aspectHint="Pozioma grafika na dole menu (np. sponsorzy, 1200x300 px)"
             currentUrl={brandImages.footer}
           />
         </div>

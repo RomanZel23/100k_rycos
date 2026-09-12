@@ -97,6 +97,7 @@ export default function PosPage() {
             slug: 'default',
             logoUrl: null,
             bannerUrl: null,
+            footerUrl: null,
             currency: 'PLN',
             isAcceptingOrders: true,
             locationId: 1,
