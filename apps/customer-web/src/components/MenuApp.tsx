@@ -181,18 +181,13 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
     <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col">
       {/* Brand Hero Banner */}
       {menu?.brand.bannerUrl && (
-        <div className="relative w-full h-44 sm:h-52 bg-white overflow-hidden shrink-0 flex items-center justify-center">
-          {/* Ambient blurred backdrop: harmonizes all edges with the image colors without dark tint */}
-          <div
-            className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-30 pointer-events-none"
-            style={{ backgroundImage: `url(${menu.brand.bannerUrl})` }}
-          />
-          {/* Main banner image: object-contain preserves full graphics, logos and text without cropping */}
+        <div className="relative w-full h-48 sm:h-56 bg-white overflow-hidden shrink-0 flex items-center justify-center pb-8 sm:pb-10 pt-3 px-4 border-b border-slate-100">
+          {/* Main banner image: clean object-contain without ghost blur, padded from bottom so card does not clip text */}
           <img
             src={menu.brand.bannerUrl}
             alt={menu.brand.name}
             crossOrigin="anonymous"
-            className="relative w-full h-full object-contain object-center z-10 p-2"
+            className="w-full h-full object-contain object-center"
           />
         </div>
       )}
