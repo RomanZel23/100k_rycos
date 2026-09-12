@@ -17,8 +17,26 @@ interface Brand {
   product_ids: number[]; images: { header: string | null; logo: string | null; footer: string | null }
 }
 
-const LANGS = ['en', 'pl', 'ar', 'fr', 'de', 'sv']
-const CURRENCIES = ['usd', 'eur', 'pln', 'sar', 'aed', 'sek', 'qar']
+const LANGS = [
+  { value: 'pl', label: 'Polski (pl)' },
+  { value: 'en', label: 'English (en)' },
+  { value: 'de', label: 'Deutsch (de)' },
+  { value: 'fr', label: 'Français (fr)' },
+  { value: 'ar', label: 'العربية (ar)' },
+  { value: 'sv', label: 'Svenska (sv)' },
+]
+
+const CURRENCIES = [
+  { value: 'PLN', label: 'PLN (zł)' },
+  { value: 'EUR', label: 'EUR (€)' },
+  { value: 'USD', label: 'USD ($)' },
+  { value: 'GBP', label: 'GBP (£)' },
+  { value: 'CHF', label: 'CHF' },
+  { value: 'SAR', label: 'SAR' },
+  { value: 'AED', label: 'AED' },
+  { value: 'SEK', label: 'SEK' },
+  { value: 'QAR', label: 'QAR' },
+]
 const ALL_LAYOUTS = ['boxed', 'list', 'circled', 'cards', 'scanner', 'lines', 'free', 'parking', 'freeCards', 'freeGrid']
 // Allowed menu layouts per business type (TODO: move to a business_type_defaults
 // table once onboarding uses it). Unlisted types fall back to all layouts.
@@ -173,12 +191,35 @@ function Field({ name, label, defaultValue }: { name: string; label: string; def
     </div>
   )
 }
-function Select({ name, label, options, value }: { name: string; label: string; options: string[]; value: string }) {
+function Select({
+  name,
+  label,
+  options,
+  value,
+}: {
+  name: string
+  label: string
+  options: (string | { value: string; label: string })[]
+  value?: string | null
+}) {
+  const normVal = String(value ?? '').trim().toLowerCase()
+  const matched = options.find((o) => {
+    const val = typeof o === 'string' ? o : o.value
+    return val.toLowerCase() === normVal
+  })
+  const defaultValue = matched
+    ? (typeof matched === 'string' ? matched : matched.value)
+    : (typeof options[0] === 'string' ? options[0] : options[0]?.value)
+
   return (
     <div>
       <label className="label" htmlFor={name}>{label}</label>
-      <select id={name} name={name} defaultValue={value} className="input">
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      <select id={name} name={name} defaultValue={defaultValue} className="input">
+        {options.map((o) => {
+          const val = typeof o === 'string' ? o : o.value
+          const lbl = typeof o === 'string' ? o : o.label
+          return <option key={val} value={val}>{lbl}</option>
+        })}
       </select>
     </div>
   )
