@@ -6,7 +6,8 @@ import { NoAccess } from '@/components/NoAccess'
 import { Banner } from '@/components/Banner'
 import { CategoryTags } from '@/components/CategoryTags'
 import { ProductTranslationsTabs } from '@/components/ProductTranslationsTabs'
-import { updateProduct, uploadImage, deleteProduct } from '../actions'
+import { ProductImageUploader } from '@/components/ProductImageUploader'
+import { updateProduct, deleteProduct } from '../actions'
 
 interface Category { id: number; name: string }
 interface Product {
@@ -66,20 +67,8 @@ export default async function EditProductPage({ params, searchParams }: {
       {error && <Banner kind="error" className="mt-4">{error}</Banner>}
       {notice && <Banner kind="success" className="mt-4">{notice}</Banner>}
 
-      {/* Image */}
-      <div className="card mt-6">
-        <h2 className="text-base font-semibold">Image</h2>
-        <div className="mt-3 flex items-center gap-4">
-          {product.image_url
-            ? <img src={product.image_url} alt="" className="h-20 w-20 rounded object-cover" />
-            : <div className="flex h-20 w-20 items-center justify-center rounded bg-neutral-100 text-xs text-neutral-400">none</div>}
-          <form action={uploadImage} className="flex items-center gap-2">
-            <input type="hidden" name="id" value={product.id} />
-            <input type="file" name="image" accept="image/*" required className="text-sm" />
-            <button className="btn-brand sm:w-auto sm:px-4">Upload</button>
-          </form>
-        </div>
-      </div>
+      {/* Image Uploader (OVH S3) */}
+      <ProductImageUploader productId={product.id} currentImageUrl={product.image_url} />
 
       {/* Fields */}
       <form action={updateProduct} className="card mt-6 space-y-3">
