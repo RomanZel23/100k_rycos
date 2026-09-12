@@ -120,7 +120,7 @@ export function ProductImageUploader({ productId, currentImageUrl }: ProductImag
   return (
     <div className="card mt-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Zdjęcie produktu (OVH S3)</h2>
+        <h2 className="text-base font-semibold">Zdjęcie produktu (Supabase Storage)</h2>
         {imageUrl && !previewUrl && (
           <button
             type="button"
@@ -200,7 +200,7 @@ export function ProductImageUploader({ productId, currentImageUrl }: ProductImag
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span>Wgrywanie na OVH S3...</span>
+                    <span>Wgrywanie do magazynu...</span>
                   </>
                 ) : (
                   <>
@@ -214,7 +214,7 @@ export function ProductImageUploader({ productId, currentImageUrl }: ProductImag
             )}
           </div>
           <p className="text-[11px] text-neutral-400">
-            Obsługiwane formaty: JPG, PNG, WEBP, GIF. Maksymalnie 15MB. Obraz zostanie automatycznie zapisany w chmurze OVH Object Storage.
+            Obsługiwane formaty: JPG, PNG, WEBP, GIF. Maksymalnie 15MB. Obraz zostanie automatycznie zapisany w lokalnym magazynie Supabase Storage.
           </p>
         </form>
       </div>

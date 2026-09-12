@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getDatabase, products, categories, eq, and, desc } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
-import { uploadImageToS3 } from '../../lib/s3.js';
+import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
 
 export async function adminProductsRoutes(fastify: FastifyInstance) {
   // Pre-handler for all admin product routes
@@ -217,7 +217,7 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // POST /v1/admin/products/:id/image - Upload product image to OVH S3
+  // POST /v1/admin/products/:id/image - Upload product image to Supabase Storage
   fastify.post('/v1/admin/products/:id/image', async (req, reply) => {
     const { id } = req.params as { id: string };
     const productId = parseInt(id, 10);
@@ -231,7 +231,7 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
 
     try {
       const buffer = await file.toBuffer();
-      const imageUrl = await uploadImageToS3(buffer, file.mimetype, file.filename);
+      const imageUrl = await uploadImageToSupabase(buffer, file.mimetype, file.filename);
 
       const [updated] = await db
         .update(products)
@@ -249,7 +249,7 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         image_url: updated.imageUrl,
       }, 'Image uploaded successfully');
     } catch (err: any) {
-      return error(reply, err.message || 'Failed to upload image to S3');
+      return error(reply, err.message || 'Failed to upload image to Supabase Storage');
     }
   });
 
@@ -261,15 +261,25 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     const db = getDatabase();
 
     try {
+      const [existing] = await db
+        .select({ imageUrl: products.imageUrl })
+        .from(products)
+        .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
+        .limit(1);
+
+      if (!existing) {
+        return notFound(reply, 'Product not found');
+      }
+
+      if (existing.imageUrl) {
+        await deleteImageFromSupabase(existing.imageUrl).catch(() => {});
+      }
+
       const [updated] = await db
         .update(products)
         .set({ imageUrl: null, updatedAt: new Date() })
         .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
         .returning();
-
-      if (!updated) {
-        return notFound(reply, 'Product not found');
-      }
 
       return success(reply, { id: updated.id, imageUrl: null }, 'Image removed');
     } catch (err: any) {

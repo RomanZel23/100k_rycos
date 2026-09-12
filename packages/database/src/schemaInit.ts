@@ -440,6 +440,17 @@ export async function ensureDatabaseSchema() {
         EXCEPTION WHEN OTHERS THEN
           NULL;
         END $auth$;
+
+        DO $storage$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'buckets') THEN
+            INSERT INTO storage.buckets (id, name, public)
+            VALUES ('products', 'products', true)
+            ON CONFLICT (id) DO UPDATE SET public = true;
+          END IF;
+        EXCEPTION WHEN OTHERS THEN
+          NULL;
+        END $storage$;
       `);
     } finally {
       await raw.unsafe(`SELECT pg_advisory_unlock(100100);`);

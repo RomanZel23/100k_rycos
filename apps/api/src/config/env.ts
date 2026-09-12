@@ -10,8 +10,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default('postgresql://postgres:postgres@localhost:5432/postgres'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   SUPABASE_JWT_SECRET: z.string().optional(),
-  SUPABASE_URL: z.string().default(process.env.SUPABASE_URL || 'http://localhost:8000'),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_URL: z.string().default(process.env.SUPABASE_URL || 'http://host.docker.internal:8000'),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().default(
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vc2FpcXR2YnVrZmJpZ3JucmlwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTAxMTY1NCwiZXhwIjoyMDg2NTg3NjU0fQ.gESbCk2e8hE6lR0kHrDVfVDaHY8p1--g5_oEIUNB-tg'
+  ),
+  SUPABASE_STORAGE_BUCKET: z.string().default(process.env.SUPABASE_STORAGE_BUCKET || 'products'),
   CORS_ORIGIN: z.string().default('*'),
   // Saferpay Payment Gateway
   SAFERPAY_CUSTOMER_ID: z.string().default('278134'),
@@ -22,12 +26,12 @@ const envSchema = z.object({
   // Public URLs for redirects and notifications
   PUBLIC_API_URL: z.string().default('https://100k-api.rycos.eu'),
   PUBLIC_CUSTOMER_URL: z.string().default('https://100k.rycos.eu'),
-  // OVH S3 Object Storage (Images)
-  S3_ENDPOINT: z.string().default(process.env.S3_ENDPOINT || 'https://s3.waw.io.cloud.ovh.net/'),
-  S3_REGION: z.string().default(process.env.S3_REGION || 'waw'),
-  S3_BUCKET: z.string().default(process.env.S3_BUCKET || 'yalla-images'),
-  S3_ACCESS_KEY_ID: z.string().default(process.env.S3_ACCESS_KEY_ID || '96dca1604aed428090afc6ea349c966c'),
-  S3_SECRET_ACCESS_KEY: z.string().default(process.env.S3_SECRET_ACCESS_KEY || 'eaa64fc5d7184b9bab9f91c65b1aba58'),
+  // Deprecated OVH S3 Object Storage (Images now use local Supabase Storage)
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

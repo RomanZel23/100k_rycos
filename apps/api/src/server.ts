@@ -11,6 +11,7 @@ import { catalogRoutes } from './routes/catalog.js';
 import { orderRoutes } from './routes/orders.js';
 import { paymentRoutes } from './routes/payments.js';
 import { adminRoutes } from './routes/admin/index.js';
+import { storageRoutes } from './routes/storage.js';
 import { ensureDatabaseSchema } from '@rycos/database';
 
 async function bootstrap() {
@@ -71,6 +72,7 @@ async function bootstrap() {
   await fastify.register(orderRoutes);
   await fastify.register(paymentRoutes);
   await fastify.register(adminRoutes);
+  await fastify.register(storageRoutes);
 
   // Error Handler
   fastify.setErrorHandler((error: any, _request, reply) => {

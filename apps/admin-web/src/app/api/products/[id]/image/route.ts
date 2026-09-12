@@ -31,7 +31,7 @@ export async function POST(
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       return NextResponse.json(
-        { error: err.message || 'Błąd podczas wgrywania zdjęcia do magazynu S3' },
+        { error: err.message || 'Błąd podczas wgrywania zdjęcia do magazynu Supabase' },
         { status: res.status }
       )
     }

@@ -67,7 +67,7 @@ export default async function EditProductPage({ params, searchParams }: {
       {error && <Banner kind="error" className="mt-4">{error}</Banner>}
       {notice && <Banner kind="success" className="mt-4">{notice}</Banner>}
 
-      {/* Image Uploader (OVH S3) */}
+      {/* Image Uploader (Supabase Storage) */}
       <ProductImageUploader productId={product.id} currentImageUrl={product.image_url} />
 
       {/* Fields */}
