@@ -24,6 +24,7 @@ export async function adminPaymentGatewaysRoutes(fastify: FastifyInstance) {
       type: r.type,
       public_key: r.publicKey,
       private_key_set: Boolean(r.privateKey),
+      is_test: r.isTest,
       additional_data: {
         customer_id: r.customerId,
         terminal_id: r.terminalId,
@@ -46,7 +47,8 @@ export async function adminPaymentGatewaysRoutes(fastify: FastifyInstance) {
     const privateKey = body.private_key || body.privateKey;
     const customerId = body.customer_id || body.customerId;
     const terminalId = body.terminal_id || body.terminalId;
-    const isTest = body.is_test !== undefined ? Boolean(body.is_test) : true;
+    const rawIsTest = body.is_test !== undefined ? body.is_test : body.isTest;
+    const isTest = rawIsTest !== undefined ? Boolean(rawIsTest) : true;
     const id = body.id ? parseInt(String(body.id), 10) : undefined;
 
     try {
@@ -54,8 +56,8 @@ export async function adminPaymentGatewaysRoutes(fastify: FastifyInstance) {
         // Update existing
         const updateData: Record<string, any> = {
           updatedAt: new Date(),
-          isTest,
         };
+        if (rawIsTest !== undefined) updateData.isTest = isTest;
         if (publicKey !== undefined) updateData.publicKey = publicKey;
         if (privateKey) updateData.privateKey = privateKey;
         if (customerId !== undefined) updateData.customerId = String(customerId);
@@ -80,8 +82,8 @@ export async function adminPaymentGatewaysRoutes(fastify: FastifyInstance) {
       if (existing) {
         const updateData: Record<string, any> = {
           updatedAt: new Date(),
-          isTest,
         };
+        if (rawIsTest !== undefined) updateData.isTest = isTest;
         if (publicKey !== undefined) updateData.publicKey = publicKey;
         if (privateKey) updateData.privateKey = privateKey;
         if (customerId !== undefined) updateData.customerId = String(customerId);
@@ -115,6 +117,46 @@ export async function adminPaymentGatewaysRoutes(fastify: FastifyInstance) {
       return success(reply, inserted, 'Payment gateway configured', 201);
     } catch (err: any) {
       return error(reply, err.message || 'Failed to save payment gateway');
+    }
+  });
+
+  // PUT /v1/admin/payment-gateways/:id - Update payment processor
+  fastify.put('/v1/admin/payment-gateways/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const gatewayId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+    const body = (req.body ?? {}) as any;
+
+    const publicKey = body.public_key || body.publicKey;
+    const privateKey = body.private_key || body.privateKey;
+    const customerId = body.customer_id || body.customerId;
+    const terminalId = body.terminal_id || body.terminalId;
+    const rawIsTest = body.is_test !== undefined ? body.is_test : body.isTest;
+
+    const updateData: Record<string, any> = {
+      updatedAt: new Date(),
+    };
+    if (rawIsTest !== undefined) updateData.isTest = Boolean(rawIsTest);
+    if (publicKey !== undefined) updateData.publicKey = publicKey;
+    if (privateKey) updateData.privateKey = privateKey;
+    if (customerId !== undefined) updateData.customerId = String(customerId);
+    if (terminalId !== undefined) updateData.terminalId = String(terminalId);
+
+    try {
+      const [updated] = await db
+        .update(companyPaymentGateways)
+        .set(updateData)
+        .where(and(eq(companyPaymentGateways.id, gatewayId), eq(companyPaymentGateways.companyId, companyId)))
+        .returning();
+
+      if (!updated) {
+        return notFound(reply, 'Payment gateway not found');
+      }
+
+      return success(reply, updated, 'Payment gateway updated');
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to update payment gateway');
     }
   });
 

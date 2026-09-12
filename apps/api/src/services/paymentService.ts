@@ -5,6 +5,34 @@ import { initializePaymentPage, assertPaymentPage, captureTransaction, SaferpayC
 import { getRedis } from '../config/redis.js';
 import { env } from '../config/env.js';
 
+async function getSaferpayCredentialsForCompany(companyId: number): Promise<SaferpayCredentials | undefined> {
+  const db = getDatabase();
+  try {
+    const [gateway] = await db
+      .select()
+      .from(companyPaymentGateways)
+      .where(and(
+        eq(companyPaymentGateways.companyId, companyId),
+        eq(companyPaymentGateways.gatewayName, 'SaferPay'),
+        eq(companyPaymentGateways.isActive, true)
+      ))
+      .limit(1);
+
+    if (gateway && gateway.customerId && gateway.publicKey && gateway.privateKey) {
+      return {
+        customerId: gateway.customerId,
+        terminalId: gateway.terminalId || env.SAFERPAY_TERMINAL_ID,
+        username: gateway.publicKey,
+        password: gateway.privateKey,
+        testMode: gateway.isTest ?? true,
+      };
+    }
+  } catch (err: any) {
+    console.warn('[PaymentGateway] Could not check custom gateway for company:', companyId, err.message);
+  }
+  return undefined;
+}
+
 export async function processPayment(input: InitiatePaymentRequest): Promise<InitiatePaymentResponse> {
   const db = getDatabase();
 
@@ -46,30 +74,7 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
   }
 
   // Sprawdź dedykowane poświadczenia Saferpay dla firmy w bazie
-  let customCreds: SaferpayCredentials | undefined;
-  try {
-    const [gateway] = await db
-      .select()
-      .from(companyPaymentGateways)
-      .where(and(
-        eq(companyPaymentGateways.companyId, order.companyId),
-        eq(companyPaymentGateways.gatewayName, 'SaferPay'),
-        eq(companyPaymentGateways.isActive, true)
-      ))
-      .limit(1);
-
-    if (gateway && gateway.customerId && gateway.publicKey && gateway.privateKey) {
-      customCreds = {
-        customerId: gateway.customerId,
-        terminalId: gateway.terminalId || env.SAFERPAY_TERMINAL_ID,
-        username: gateway.publicKey,
-        password: gateway.privateKey,
-        testMode: gateway.isTest,
-      };
-    }
-  } catch (err: any) {
-    console.warn('[PaymentGateway] Could not check custom gateway:', err.message);
-  }
+  const customCreds = await getSaferpayCredentialsForCompany(order.companyId);
 
   // Płatność elektroniczna (BLIK, Karta, Apple Pay, Google Pay) przez Saferpay
   const amountGrosze = Math.round(Number(order.totalAmount) * 100);
@@ -138,8 +143,17 @@ export async function finalizeSaferpayPayment(orderId: string): Promise<{ succes
   const session = JSON.parse(rawSession);
   const token = session.token;
 
+  // Pobierz zamówienie, aby poznać firmę i pobrać jej poświadczenia bramki
+  const [order] = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  const customCreds = order ? await getSaferpayCredentialsForCompany(order.companyId) : undefined;
+
   // Sprawdź autoryzację w Saferpay
-  const assertResult = await assertPaymentPage(token);
+  const assertResult = await assertPaymentPage(token, customCreds);
   if (!assertResult.success || !assertResult.transactionId) {
     console.error(`[PaymentService] Assert nie powiódł się dla ${orderId}:`, assertResult.error);
     return { success: false, error: assertResult.error || 'Brak autoryzacji płatności' };
@@ -147,7 +161,7 @@ export async function finalizeSaferpayPayment(orderId: string): Promise<{ succes
 
   // Jeśli status to AUTHORIZED, wykonaj Capture
   if (assertResult.status === 'AUTHORIZED') {
-    const captureResult = await captureTransaction(assertResult.transactionId);
+    const captureResult = await captureTransaction(assertResult.transactionId, customCreds);
     if (!captureResult.success) {
       console.error(`[PaymentService] Capture nie powiódł się dla ${orderId}:`, captureResult.error);
       return { success: false, error: captureResult.error || 'Błąd rozliczenia transakcji' };

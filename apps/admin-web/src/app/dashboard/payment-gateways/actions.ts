@@ -17,6 +17,7 @@ function buildBody(formData: FormData): Record<string, unknown> {
     private_key: String(formData.get('private_key') || ''),
     customer_id: String(formData.get('customer_id') || '').trim(),
     terminal_id: String(formData.get('terminal_id') || '').trim(),
+    is_test: formData.get('is_test') === 'on' || formData.get('is_test') === 'true',
   }
 }
 
