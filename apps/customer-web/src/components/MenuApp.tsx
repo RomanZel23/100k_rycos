@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder } from '../lib/api';
@@ -9,9 +10,11 @@ import { AddonModal } from './AddonModal';
 import { CartDrawer } from './CartDrawer';
 import { PaymentModal } from './PaymentModal';
 import { CartItem, calculateSubtotal } from '../store/cartStore';
-import { ShoppingBag, MapPin, Loader2, Globe, Bell } from 'lucide-react';
+import { ShoppingBag, MapPin, Loader2, Globe, Bell, Clock } from 'lucide-react';
 import { i18n, Language } from '../lib/i18n';
 import { ServiceCallModal } from './ServiceCallModal';
+import { OrderHistoryModal } from './OrderHistoryModal';
+import { getStoredOrders, saveStoredOrder, StoredOrder } from '../store/orderStorage';
 
 interface MenuAppProps {
   initialBrandSlug?: string;
@@ -42,8 +45,27 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isServiceCallOpen, setIsServiceCallOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [hasActiveOrders, setHasActiveOrders] = useState(false);
+  const [activeBannerOrder, setActiveBannerOrder] = useState<StoredOrder | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
+
+  // Monitor stored orders for active status badge & banner
+  useEffect(() => {
+    const checkActiveOrders = () => {
+      const stored = getStoredOrders();
+      const active = stored.find((o) =>
+        ['in_progress', 'ready_to_collect', 'paid'].includes(o.status)
+      );
+      setHasActiveOrders(!!active);
+      setActiveBannerOrder(active || null);
+    };
+
+    checkActiveOrders();
+    window.addEventListener('rycos_order_history_updated', checkActiveOrders);
+    return () => window.removeEventListener('rycos_order_history_updated', checkActiveOrders);
+  }, []);
 
   // Fetch Menu on Load or when brand/lang changes
   useEffect(() => {
@@ -200,6 +222,24 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
       const placedOrder = await submitOrder(orderPayload);
       setPlacedOrderId(placedOrder.id);
+
+      // Save order to customer local history
+      saveStoredOrder({
+        id: placedOrder.id,
+        brandId: menu.brand.id,
+        brandName: menu.brand.name,
+        orderNumber: String(placedOrder.orderNumber ? `#${placedOrder.orderNumber}` : `#${placedOrder.id.slice(0, 6)}`),
+        orderDate: new Date().toISOString(),
+        status: placedOrder.status || 'pending_payment',
+        totalAmount: placedOrder.totalAmount,
+        currency: placedOrder.currency || menu.brand.currency || 'PLN',
+        itemsSummary: cartItems.map((i) => `${i.quantity}x ${i.product.name}`).join(', '),
+        itemsCount: cartItems.reduce((sum, i) => sum + i.quantity, 0),
+        collectionPin: placedOrder.collectionPin,
+        tableLabel: tableLabel || null,
+        parkingSpot: parkingSpot || null,
+      });
+
       setIsCartOpen(false);
       setIsPaymentOpen(true);
     } catch (err: any) {
@@ -291,35 +331,48 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             </div>
           </div>
 
-          {/* Right actions: Language Switcher */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
+          {/* Right actions: History Button & Language Switcher */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
-              onClick={() => setLang('pl')}
-              className={`px-2 py-1 rounded-lg transition-all ${
-                lang === 'pl' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
-              }`}
-              title="Polski"
+              onClick={() => setIsHistoryOpen(true)}
+              className="relative p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
+              title={t.orderHistory}
             >
-              PL
+              <Clock size={16} />
+              {hasActiveOrders && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse" />
+              )}
             </button>
-            <button
-              onClick={() => setLang('en')}
-              className={`px-2 py-1 rounded-lg transition-all ${
-                lang === 'en' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
-              }`}
-              title="English"
-            >
-              EN
-            </button>
-            <button
-              onClick={() => setLang('de')}
-              className={`px-2 py-1 rounded-lg transition-all ${
-                lang === 'de' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
-              }`}
-              title="Deutsch"
-            >
-              DE
-            </button>
+
+            <div className="flex items-center gap-0.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
+              <button
+                onClick={() => setLang('pl')}
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  lang === 'pl' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Polski"
+              >
+                PL
+              </button>
+              <button
+                onClick={() => setLang('en')}
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  lang === 'en' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="English"
+              >
+                EN
+              </button>
+              <button
+                onClick={() => setLang('de')}
+                className={`px-2 py-1 rounded-lg transition-all ${
+                  lang === 'de' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Deutsch"
+              >
+                DE
+              </button>
+            </div>
           </div>
         </div>
 
@@ -338,6 +391,31 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           </div>
         )}
       </div>
+
+      {/* Active Order Live Banner */}
+      {activeBannerOrder && (
+        <div className="mx-3 sm:mx-4 mt-2.5 p-3 rounded-2xl bg-slate-900 text-white shadow-md flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <div className="text-xs truncate">
+              <span className="font-extrabold">{activeBannerOrder.orderNumber}: </span>
+              <span className="text-slate-300">
+                {activeBannerOrder.status === 'ready_to_collect'
+                  ? `Gotowe do odbioru! PIN: ${activeBannerOrder.collectionPin || ''}`
+                  : activeBannerOrder.status === 'paid'
+                  ? 'Opłacone · Oczekiwanie na kuchnię'
+                  : 'W przygotowaniu w kuchni'}
+              </span>
+            </div>
+          </div>
+          <Link
+            href={`/order/${activeBannerOrder.id}`}
+            className="shrink-0 px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-brand-text text-xs font-black transition-all active:scale-95 shadow-xs"
+          >
+            Śledź &rarr;
+          </Link>
+        </div>
+      )}
 
       {/* Sticky Category Tabs Navigation */}
       {menu && menu.categories.length > 0 && (
@@ -455,6 +533,13 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         brandId={menu?.brand.id}
         tableLabel={tableLabel}
         parkingSpot={parkingSpot}
+        lang={lang}
+      />
+
+      {/* Order History Modal */}
+      <OrderHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
         lang={lang}
       />
     </div>

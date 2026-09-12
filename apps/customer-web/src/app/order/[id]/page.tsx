@@ -7,6 +7,7 @@ import { fetchOrder, getApiBaseUrl } from '../../../lib/api';
 import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode } from 'lucide-react';
 import QRCode from 'qrcode';
 import { PaymentModal } from '../../../components/PaymentModal';
+import { saveStoredOrder, updateStoredOrderStatus } from '../../../store/orderStorage';
 
 const STATUS_STEPS: { status: OrderStatus; label: string; sublabel: string; icon: any }[] = [
   { status: 'paid', label: 'Opłacone', sublabel: 'Płatność potwierdzona', icon: CheckCircle2 },
@@ -50,6 +51,23 @@ function OrderTrackingContent() {
       .then((data) => {
         setOrder(data);
         setLoading(false);
+
+        // Save order to local storage
+        saveStoredOrder({
+          id: data.id,
+          brandId: data.brandId,
+          brandName: data.brandName,
+          orderNumber: String(data.orderNumber ? `#${data.orderNumber}` : `#${data.id.slice(0, 6)}`),
+          orderDate: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString(),
+          status: data.status,
+          totalAmount: data.totalAmount,
+          currency: data.currency || 'PLN',
+          itemsSummary: data.items?.map((i) => `${i.quantity}x ${i.name}`).join(', ') || '',
+          itemsCount: data.items?.reduce((sum, i) => sum + i.quantity, 0) || 0,
+          collectionPin: data.collectionPin,
+          tableLabel: data.tableLabel,
+          parkingSpot: data.parkingSpot,
+        });
       })
       .catch((err) => {
         console.error(err);
@@ -68,7 +86,9 @@ function OrderTrackingContent() {
         try {
           const message = JSON.parse(event.data);
           if (message.type === 'order.status_updated') {
-            setOrder((prev) => (prev ? { ...prev, status: message.payload.status } : null));
+            const nextStatus = message.payload.status;
+            setOrder((prev) => (prev ? { ...prev, status: nextStatus } : null));
+            updateStoredOrderStatus(orderId, nextStatus);
           } else if (message.type === 'order.fiscalized') {
             setOrder((prev) =>
               prev

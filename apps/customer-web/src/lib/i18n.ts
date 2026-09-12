@@ -29,6 +29,7 @@ export interface Translations {
   nipPlaceholder: string;
   tipPrompt: string;
   callWaiter: string;
+  orderHistory: string;
 }
 
 export const i18n: Record<Language, Translations> = {
@@ -61,6 +62,7 @@ export const i18n: Record<Language, Translations> = {
     nipPlaceholder: 'Wpisz NIP firmy',
     tipPrompt: 'Doceniasz pracę kuchni? Zostaw drobny napiwek:',
     callWaiter: 'Wezwij obsługę',
+    orderHistory: 'Moje zamówienia',
   },
   en: {
     cart: 'Cart',
@@ -91,6 +93,7 @@ export const i18n: Record<Language, Translations> = {
     nipPlaceholder: 'Enter Tax ID',
     tipPrompt: 'Enjoyed the food? Leave a small tip for the team:',
     callWaiter: 'Call Waiter',
+    orderHistory: 'My Orders',
   },
   de: {
     cart: 'Warenkorb',
@@ -121,5 +124,6 @@ export const i18n: Record<Language, Translations> = {
     nipPlaceholder: 'USt-IdNr. eingeben',
     tipPrompt: 'Zufrieden mit dem Service? Ein kleines Trinkgeld dalassen:',
     callWaiter: 'Kellner rufen',
+    orderHistory: 'Meine Bestellungen',
   },
 };
