@@ -88,6 +88,95 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // POST /v1/admin/terminals/claim - Device claims/pairs a terminal using setup code or terminal_id
+  fastify.post('/v1/admin/terminals/claim', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    const body = (req.body ?? {}) as any;
+    const code = String(body.code || body.terminalId || body.terminal_id || '').trim().toUpperCase();
+
+    if (!code) {
+      return validationError(reply, { code: 'Setup code or terminal_id is required' });
+    }
+
+    const [term] = await db
+      .select()
+      .from(terminals)
+      .where(and(eq(terminals.terminalId, code), eq(terminals.companyId, companyId)))
+      .limit(1);
+
+    if (!term) {
+      const [other] = await db
+        .select({ id: terminals.id })
+        .from(terminals)
+        .where(eq(terminals.terminalId, code))
+        .limit(1);
+
+      if (other) {
+        return error(reply, 'This setup code belongs to a different company.', 403);
+      }
+      return notFound(reply, 'Invalid setup code or terminal not found');
+    }
+
+    if (term.status === 'archived' || term.status === 'inactive') {
+      return error(reply, 'This terminal is inactive or archived.', 409);
+    }
+
+    const [updated] = await db
+      .update(terminals)
+      .set({
+        status: 'active',
+        lastActiveAt: new Date(),
+      })
+      .where(eq(terminals.id, term.id))
+      .returning();
+
+    return success(reply, {
+      ...updated,
+      terminal_id: updated.terminalId,
+      location_id: updated.locationId,
+      is_primary: updated.isPrimary,
+    }, 'Terminal paired successfully');
+  });
+
+  // GET /v1/admin/terminals/check - Verify if terminal_id is active in company
+  fastify.get('/v1/admin/terminals/check', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    const query = (req.query ?? {}) as any;
+    const terminalId = String(query.terminal_id || query.terminalId || '').trim();
+
+    if (!terminalId) {
+      return validationError(reply, { terminal_id: 'terminal_id is required' });
+    }
+
+    const [term] = await db
+      .select()
+      .from(terminals)
+      .where(and(eq(terminals.terminalId, terminalId), eq(terminals.companyId, companyId)))
+      .limit(1);
+
+    if (term && term.status === 'active') {
+      await db
+        .update(terminals)
+        .set({ lastActiveAt: new Date() })
+        .where(eq(terminals.id, term.id));
+
+      return success(reply, { registered: true, exists_in_other_company: false, terminal: term });
+    }
+
+    const [other] = await db
+      .select({ id: terminals.id })
+      .from(terminals)
+      .where(eq(terminals.terminalId, terminalId))
+      .limit(1);
+
+    return success(reply, {
+      registered: false,
+      exists_in_other_company: Boolean(other),
+    });
+  });
+
   // GET /v1/admin/terminals/:id - Get terminal details
   fastify.get('/v1/admin/terminals/:id', async (req, reply) => {
     const { id } = req.params as { id: string };

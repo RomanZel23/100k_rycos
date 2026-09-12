@@ -5,9 +5,11 @@ import { redirect } from 'next/navigation'
 import { adminApi } from '@/lib/api'
 
 export async function createTerminal(formData: FormData): Promise<void> {
+  const customId = String(formData.get('terminal_id') || '').trim()
   const body = {
     name: String(formData.get('name') || '').trim(),
     location_id: formData.get('location_id') ? Number(formData.get('location_id')) : null,
+    ...(customId ? { terminal_id: customId } : {}),
   }
   const res = await adminApi('/terminals', { method: 'POST', body: JSON.stringify(body) })
   const json = await res.json().catch(() => ({}))

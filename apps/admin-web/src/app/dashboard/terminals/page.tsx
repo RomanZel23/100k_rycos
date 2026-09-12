@@ -85,23 +85,29 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
 
       <div className="card mt-6">
         <h2 className="text-base font-semibold">Add terminal</h2>
-        <form action={createTerminal} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <form action={createTerminal} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
           <div className="sm:col-span-1">
-            <label className="label" htmlFor="name">Name</label>
-            <input id="name" name="name" required placeholder="Till 1" className="input" />
+            <label className="label" htmlFor="name">Nazwa terminala</label>
+            <input id="name" name="name" required placeholder="np. Till 1, Kasa Bar" className="input" />
           </div>
           <div className="sm:col-span-1">
-            <label className="label" htmlFor="location_id">Location</label>
+            <label className="label" htmlFor="terminal_id">
+              Terminal ID <span className="font-normal text-neutral-400">(opcjonalny / SBR-*)</span>
+            </label>
+            <input id="terminal_id" name="terminal_id" placeholder="np. SBR-A0S0UH (lub puste)" className="input" />
+          </div>
+          <div className="sm:col-span-1">
+            <label className="label" htmlFor="location_id">Lokalizacja</label>
             <select id="location_id" name="location_id" className="input">
-              <option value="">— none —</option>
+              <option value="">— brak —</option>
               {(locations ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
             <Link href="/dashboard/locations" className="mt-1 inline-block text-xs font-medium text-brand hover:underline">
-              {(locations ?? []).length === 0 ? 'No locations yet — add one ↗' : 'Manage locations ↗'}
+              {(locations ?? []).length === 0 ? 'Brak lokalizacji — dodaj ↗' : 'Zarządzaj lokalizacjami ↗'}
             </Link>
           </div>
           <div className="flex items-end">
-            <button className="btn-brand">Create &amp; get code</button>
+            <button className="btn-brand w-full sm:w-auto">Utwórz i pobierz kod</button>
           </div>
         </form>
       </div>
