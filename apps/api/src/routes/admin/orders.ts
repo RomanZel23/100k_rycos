@@ -81,6 +81,87 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // POST /v1/admin/orders/verify-pin - Verify pickup PIN or QR code and complete order
+  fastify.post('/v1/admin/orders/verify-pin', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    let { orderId, orderNumber, pin, qrData } = (req.body ?? {}) as {
+      orderId?: string;
+      orderNumber?: number | string;
+      pin?: string;
+      qrData?: string;
+    };
+
+    // If QR code scanned: e.g. "4:5412" or "UUID:5412"
+    if (qrData && typeof qrData === 'string') {
+      const parts = qrData.trim().split(':');
+      if (parts.length === 2) {
+        if (parts[0].length > 10) {
+          orderId = parts[0];
+        } else {
+          orderNumber = parseInt(parts[0], 10);
+        }
+        pin = parts[1];
+      } else if (parts.length === 1) {
+        pin = parts[0];
+      }
+    }
+
+    if (!pin) {
+      return validationError(reply, { pin: 'Wprowadź 4-cyfrowy PIN lub zeskanuj kod QR' });
+    }
+
+    const cleanPin = String(pin).trim();
+
+    // Find order
+    let targetOrder = null;
+    if (orderId) {
+      const [o] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.companyId, companyId), eq(orders.id, orderId)))
+        .limit(1);
+      targetOrder = o;
+    } else if (orderNumber && !isNaN(Number(orderNumber))) {
+      const [o] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.companyId, companyId), eq(orders.orderNumber, Number(orderNumber))))
+        .limit(1);
+      targetOrder = o;
+    } else {
+      // Find candidate by PIN among active orders
+      const candidates = await db
+        .select()
+        .from(orders)
+        .where(
+          and(
+            eq(orders.companyId, companyId),
+            sql`${orders.status} IN ('ready_to_collect', 'in_progress', 'paid')`,
+            eq(orders.collectionPin, cleanPin)
+          )
+        )
+        .orderBy(desc(orders.createdAt))
+        .limit(1);
+      targetOrder = candidates[0];
+    }
+
+    if (!targetOrder) {
+      return error(reply, 'Nie znaleziono zamówienia pasującego do podanego PIN-u', 404);
+    }
+
+    if (targetOrder.collectionPin !== cleanPin) {
+      return error(reply, `Błędny PIN dla zamówienia #${targetOrder.orderNumber}`, 400);
+    }
+
+    try {
+      const updated = await updateOrderStatus(targetOrder.id, 'completed');
+      return success(reply, updated, `Zamówienie #${targetOrder.orderNumber} zostało pomyślnie wydane!`);
+    } catch (err: any) {
+      return error(reply, err.message || 'Nie udało się wydać zamówienia');
+    }
+  });
+
   // GET /v1/admin/orders/analytics - Sales & volume summary
   fastify.get('/v1/admin/orders/analytics', async (req, reply) => {
     const db = getDatabase();

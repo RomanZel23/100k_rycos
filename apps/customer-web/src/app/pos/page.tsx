@@ -15,10 +15,13 @@ import {
   Clock, 
   X, 
   Receipt,
-  RotateCcw
+  RotateCcw,
+  Camera,
+  KeyRound
 } from 'lucide-react';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
+import { PinVerificationModal } from '../../components/PinVerificationModal';
 
 interface PosCartItem {
   id: string; // unique key
@@ -57,6 +60,9 @@ export default function PosPage() {
     action: string;
     total: number;
   } | null>(null);
+
+  // Verification modal state
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
 
   // Time display
   const [currentTime, setCurrentTime] = useState('');
@@ -355,6 +361,15 @@ export default function PosPage() {
 
         {/* Right Info */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsPinModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-black text-slate-950 bg-amber-500 hover:bg-amber-400 px-3 py-1.5 rounded-xl transition-all shadow-md shadow-amber-500/20 active:scale-95"
+            title="Weryfikacja odbioru zamówienia kodem QR lub PIN"
+          >
+            <Camera size={14} />
+            <span>Weryfikuj Odbiór / QR</span>
+          </button>
+
           <a
             href="/kds"
             target="_blank"
@@ -787,6 +802,15 @@ export default function PosPage() {
           </div>
         </div>
       )}
+
+      {/* Verification Modal (Keypad & Camera Scanner) */}
+      <PinVerificationModal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+        onSuccess={(updatedOrder) => {
+          // Handled
+        }}
+      />
     </div>
   );
 }

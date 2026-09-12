@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell } from 'lucide-react';
+import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell, Camera, KeyRound, QrCode } from 'lucide-react';
 import { getApiBaseUrl } from '../../lib/api';
+import { PinVerificationModal } from '../../components/PinVerificationModal';
 
 interface ServiceCallNotification {
   id: string;
@@ -48,6 +49,10 @@ export default function KitchenDisplayPage() {
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Verification modal state
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinModalTargetOrder, setPinModalTargetOrder] = useState<any | null>(null);
 
   // Clock
   useEffect(() => {
@@ -262,7 +267,20 @@ export default function KitchenDisplayPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Quick QR & PIN pickup buttons */}
+          <button
+            onClick={() => {
+              setPinModalTargetOrder(null);
+              setIsPinModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95"
+            title="Weryfikuj odbiór (Skaner QR / PIN)"
+          >
+            <Camera size={15} />
+            <span>Weryfikuj Odbiór / QR</span>
+          </button>
+
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
@@ -528,18 +546,44 @@ export default function KitchenDisplayPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => updateStatus(order.id, 'completed')}
-                    className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
-                  >
-                    Wydano klientowi ✓
-                  </button>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        setPinModalTargetOrder(order);
+                        setIsPinModalOpen(true);
+                      }}
+                      className="py-2.5 bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 text-emerald-300 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+                      title="Weryfikuj kod PIN lub QR"
+                    >
+                      <KeyRound size={14} />
+                      <span>PIN / QR</span>
+                    </button>
+                    <button
+                      onClick={() => updateStatus(order.id, 'completed')}
+                      className="py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
+                    >
+                      Wydano ✓
+                    </button>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </section>
       </main>
+
+      {/* Verification Modal (Keypad & Camera Scanner) */}
+      <PinVerificationModal
+        isOpen={isPinModalOpen}
+        targetOrder={pinModalTargetOrder}
+        onClose={() => {
+          setIsPinModalOpen(false);
+          setPinModalTargetOrder(null);
+        }}
+        onSuccess={(updatedOrder) => {
+          loadOrders();
+        }}
+      />
     </div>
   );
 }

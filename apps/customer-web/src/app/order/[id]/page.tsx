@@ -4,7 +4,8 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { OrderDetail, OrderStatus } from '@rycos/shared';
 import { fetchOrder, getApiBaseUrl } from '../../../lib/api';
-import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode } from 'lucide-react';
+import QRCode from 'qrcode';
 import { PaymentModal } from '../../../components/PaymentModal';
 
 const STATUS_STEPS: { status: OrderStatus; label: string; sublabel: string; icon: any }[] = [
@@ -23,6 +24,25 @@ function OrderTrackingContent() {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  // Generate collection QR code
+  useEffect(() => {
+    if (order?.orderNumber && order?.collectionPin) {
+      const qrPayload = `${order.orderNumber}:${order.collectionPin}`;
+      QRCode.toDataURL(qrPayload, {
+        width: 260,
+        margin: 1,
+        color: {
+          dark: '#090d16',
+          light: '#ffffff',
+        },
+      })
+        .then(setQrDataUrl)
+        .catch(console.error);
+    }
+  }, [order?.orderNumber, order?.collectionPin]);
 
   // Initial Fetch & Live WebSocket connection
   useEffect(() => {
@@ -128,14 +148,38 @@ function OrderTrackingContent() {
         </span>
         <h1 className="text-3xl font-black mt-1">Zamówienie #{order.orderNumber}</h1>
 
-        {/* Collection PIN */}
-        <div className="mt-5 p-4 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 inline-block px-8">
-          <span className="text-xs font-bold uppercase tracking-wider block opacity-90">
-            Twój PIN do odbioru:
-          </span>
-          <span className="text-4xl font-mono font-black tracking-widest block mt-1">
-            {order.collectionPin}
-          </span>
+        {/* Collection QR Code & PIN Card */}
+        <div className="mt-5 p-5 rounded-3xl bg-white text-slate-900 shadow-xl max-w-xs mx-auto border border-slate-100">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-600 mb-2.5">
+            <QrCode size={16} />
+            <span>Kod odbioru zamówienia</span>
+          </div>
+
+          {qrDataUrl ? (
+            <div className="bg-white p-2 rounded-2xl border border-slate-200 inline-block shadow-sm">
+              <img
+                src={qrDataUrl}
+                alt="QR Kod Odbioru"
+                className="w-48 h-48 mx-auto rounded-xl object-contain"
+              />
+            </div>
+          ) : (
+            <div className="w-48 h-48 mx-auto bg-slate-100 animate-pulse rounded-2xl flex items-center justify-center text-slate-400 text-xs">
+              Generowanie QR...
+            </div>
+          )}
+
+          <div className="mt-3.5 pt-3 border-t border-slate-100">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block">
+              Twój PIN do odbioru:
+            </span>
+            <span className="text-4xl font-mono font-black text-slate-950 tracking-widest block mt-0.5">
+              {order.collectionPin}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2 font-medium">
+            Pokaż ten kod QR lub podaj PIN obsłudze przy odbiorze
+          </p>
         </div>
 
         {isReady ? (
