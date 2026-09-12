@@ -24,9 +24,10 @@ export function BrandMenuPicker({ products, initial = [] }: { products: PickerPr
     add ? next.add(id) : next.delete(id)
     setSelected(next)
   }
-  const match = (p: PickerProduct) => p.name.toLowerCase().includes(q.toLowerCase())
-  const available = products.filter((p) => !selected.has(p.id) && match(p))
-  const chosen = products.filter((p) => selected.has(p.id) && match(p))
+  const match = (p: PickerProduct) => (p?.name || '').toLowerCase().includes(q.toLowerCase())
+  const list = Array.isArray(products) ? products : []
+  const available = list.filter((p) => p && !selected.has(p.id) && match(p))
+  const chosen = list.filter((p) => p && selected.has(p.id) && match(p))
 
   return (
     <div>

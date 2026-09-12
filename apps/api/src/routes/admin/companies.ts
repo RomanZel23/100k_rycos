@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getDatabase, companies, brands, brandProducts, eq, and, desc, inArray } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
+import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
 
 export async function adminCompaniesRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -208,8 +209,127 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
       currency: 'PLN',
       style: null,
       product_ids: assigned.map((p) => p.productId),
-      images: { header: brand.bannerUrl, logo: brand.logoUrl, footer: null },
+      images: {
+        header: brand.bannerUrl ?? null,
+        logo: brand.logoUrl ?? null,
+        footer: (brand as any).footerUrl ?? null,
+      },
     });
+  });
+
+  // POST /v1/admin/brands/:id/image - Upload brand image (logo, header/banner, footer)
+  fastify.post('/v1/admin/brands/:id/image', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const brandId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const query = (req.query ?? {}) as { type?: string };
+    const rawType = (query.type || 'logo').toLowerCase();
+    const type = rawType === 'header' || rawType === 'banner' ? 'header' : rawType === 'footer' ? 'footer' : 'logo';
+
+    const db = getDatabase();
+
+    const file = await req.file();
+    if (!file) {
+      return validationError(reply, { image: 'No image file uploaded' });
+    }
+
+    try {
+      const buffer = await file.toBuffer();
+      const imageUrl = await uploadImageToSupabase(buffer, file.mimetype, file.filename);
+
+      const [existing] = await db
+        .select()
+        .from(brands)
+        .where(and(eq(brands.id, brandId), eq(brands.companyId, companyId)))
+        .limit(1);
+
+      if (!existing) {
+        return notFound(reply, 'Brand not found');
+      }
+
+      const updateData: Record<string, any> = {};
+      if (type === 'logo') updateData.logoUrl = imageUrl;
+      else if (type === 'header') updateData.bannerUrl = imageUrl;
+      else if (type === 'footer') (updateData as any).footerUrl = imageUrl;
+
+      const [updated] = await db
+        .update(brands)
+        .set(updateData)
+        .where(and(eq(brands.id, brandId), eq(brands.companyId, companyId)))
+        .returning();
+
+      return success(reply, {
+        id: updated.id,
+        type,
+        imageUrl,
+        images: {
+          header: updated.bannerUrl ?? null,
+          logo: updated.logoUrl ?? null,
+          footer: (updated as any).footerUrl ?? null,
+        },
+      }, `${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully`);
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to upload brand image');
+    }
+  });
+
+  // DELETE /v1/admin/brands/:id/image - Remove brand image
+  fastify.delete('/v1/admin/brands/:id/image', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const brandId = parseInt(id, 10);
+    const companyId = getCompanyId(req);
+    const query = (req.query ?? {}) as { type?: string };
+    const rawType = (query.type || 'logo').toLowerCase();
+    const type = rawType === 'header' || rawType === 'banner' ? 'header' : rawType === 'footer' ? 'footer' : 'logo';
+
+    const db = getDatabase();
+
+    try {
+      const [existing] = await db
+        .select()
+        .from(brands)
+        .where(and(eq(brands.id, brandId), eq(brands.companyId, companyId)))
+        .limit(1);
+
+      if (!existing) {
+        return notFound(reply, 'Brand not found');
+      }
+
+      let oldUrl: string | null = null;
+      const updateData: Record<string, any> = {};
+      if (type === 'logo') {
+        oldUrl = existing.logoUrl;
+        updateData.logoUrl = null;
+      } else if (type === 'header') {
+        oldUrl = existing.bannerUrl;
+        updateData.bannerUrl = null;
+      } else if (type === 'footer') {
+        oldUrl = (existing as any).footerUrl;
+        (updateData as any).footerUrl = null;
+      }
+
+      if (oldUrl) {
+        await deleteImageFromSupabase(oldUrl).catch(() => {});
+      }
+
+      const [updated] = await db
+        .update(brands)
+        .set(updateData)
+        .where(and(eq(brands.id, brandId), eq(brands.companyId, companyId)))
+        .returning();
+
+      return success(reply, {
+        id: updated.id,
+        type,
+        images: {
+          header: updated.bannerUrl ?? null,
+          logo: updated.logoUrl ?? null,
+          footer: (updated as any).footerUrl ?? null,
+        },
+      }, `${type} image removed`);
+    } catch (err: any) {
+      return error(reply, err.message || 'Failed to remove brand image');
+    }
   });
 
   // PUT /v1/admin/brands/:id - Update brand

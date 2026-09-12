@@ -178,16 +178,35 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
   return (
     <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col">
+      {/* Brand Banner */}
+      {menu?.brand.bannerUrl && (
+        <div className="w-full h-32 overflow-hidden bg-slate-900 shrink-0">
+          <img
+            src={menu.brand.bannerUrl}
+            alt={menu.brand.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+
       {/* Brand Header */}
-      <header className="bg-white px-5 pt-6 pb-4 border-b border-slate-100 sticky top-0 z-20 shadow-sm">
+      <header className="bg-white px-5 pt-5 pb-4 border-b border-slate-100 sticky top-0 z-20 shadow-sm">
         <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-xl text-slate-900 tracking-tight">
-                {menu?.brand.name}
-              </h1>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            </div>
+          <div className="flex items-center gap-3">
+            {menu?.brand.logoUrl && (
+              <img
+                src={menu.brand.logoUrl}
+                alt={menu.brand.name}
+                className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-xs shrink-0"
+              />
+            )}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-extrabold text-xl text-slate-900 tracking-tight">
+                  {menu?.brand.name}
+                </h1>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              </div>
             <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
               <div className="flex items-center gap-1">
                 <MapPin size={13} className="text-brand-500" />
@@ -211,6 +230,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
               )}
             </div>
           </div>
+        </div>
 
           {/* Language Switcher */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">

@@ -5,8 +5,9 @@ import { adminApiData } from '@/lib/api'
 import { currentUser, isManager } from '@/lib/auth'
 import { NoAccess } from '@/components/NoAccess'
 import { BrandMenuPicker, type PickerProduct } from '@/components/BrandMenuPicker'
+import { BrandImageUploader } from '@/components/BrandImageUploader'
 import { Banner } from '@/components/Banner'
-import { updateBrand, assignProducts, uploadBrandImage, deleteBrand } from '../actions'
+import { updateBrand, assignProducts, deleteBrand } from '../actions'
 
 interface Brand {
   id: number; name: string | null; qr_slug: string
@@ -58,11 +59,14 @@ export default async function EditBrandPage({
   ])
   if (!brand) notFound()
   const colors = parseColors(brand.style)
-  const orderUrl = `${orderBase(company?.business_type).replace(/\/$/, '')}/${brand.qr_slug}`
+  const brandSlug = brand.qr_slug || (brand as any).slug || `brand-${id}`
+  const orderUrl = `${orderBase(company?.business_type).replace(/\/$/, '')}/${brandSlug}`
   const qrDataUrl = await QRCode.toDataURL(orderUrl, { width: 180, margin: 1 })
   // Limit layouts to the company's vertical; always include the current value.
   const layouts = LAYOUTS_BY_TYPE[company?.business_type ?? ''] ?? ALL_LAYOUTS
   const layoutOptions = layouts.includes(brand.menu_layout) ? layouts : [brand.menu_layout, ...layouts]
+  const brandImages = brand.images ?? { header: null, logo: null, footer: null }
+  const brandProductIds = Array.isArray(brand.product_ids) ? brand.product_ids : []
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -81,7 +85,7 @@ export default async function EditBrandPage({
         <div className="text-sm">
           <p className="text-xs uppercase tracking-wide text-neutral-400">Ordering link</p>
           <p className="mt-1 break-all font-medium">{orderUrl}</p>
-          <p className="mt-2 text-xs text-neutral-400">QR slug: {brand.qr_slug}</p>
+          <p className="mt-2 text-xs text-neutral-400">QR slug: {brandSlug}</p>
         </div>
       </div>
 
@@ -110,24 +114,32 @@ export default async function EditBrandPage({
         <button className="btn-brand sm:w-auto sm:px-6">Save details</button>
       </form>
 
-      {/* Images */}
+      {/* Images (Supabase Storage) */}
       <div className="card">
-        <h2 className="text-base font-semibold">Images</h2>
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {(['header', 'logo', 'footer'] as const).map((t) => (
-            <div key={t}>
-              <p className="mb-1 text-xs font-medium capitalize text-neutral-600">{t}</p>
-              {brand.images[t]
-                ? <img src={brand.images[t]!} alt={t} className="mb-2 h-16 w-full rounded object-contain bg-neutral-50" />
-                : <div className="mb-2 flex h-16 items-center justify-center rounded bg-neutral-100 text-xs text-neutral-400">none</div>}
-              <form action={uploadBrandImage} className="space-y-1">
-                <input type="hidden" name="id" value={brand.id} />
-                <input type="hidden" name="type" value={t} />
-                <input type="file" name="image" accept="image/*" required className="block w-full text-xs" />
-                <button className="text-xs font-medium text-brand hover:underline">Upload</button>
-              </form>
-            </div>
-          ))}
+        <h2 className="text-base font-semibold">Grafiki marki (Supabase Storage)</h2>
+        <p className="mt-1 text-xs text-neutral-500">Zarządzaj grafikami nagłówka, logo oraz stopki dla tej marki.</p>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <BrandImageUploader
+            brandId={brand.id}
+            type="header"
+            label="Header / Baner"
+            aspectHint="Baner na samej górze menu"
+            currentUrl={brandImages.header}
+          />
+          <BrandImageUploader
+            brandId={brand.id}
+            type="logo"
+            label="Logo"
+            aspectHint="Kwadratowe logo marki (1:1)"
+            currentUrl={brandImages.logo}
+          />
+          <BrandImageUploader
+            brandId={brand.id}
+            type="footer"
+            label="Stopka (Footer)"
+            aspectHint="Baner na dole menu"
+            currentUrl={brandImages.footer}
+          />
         </div>
       </div>
 
@@ -136,7 +148,7 @@ export default async function EditBrandPage({
         <input type="hidden" name="id" value={brand.id} />
         <h2 className="text-base font-semibold">Menu — products in this brand</h2>
         <p className="mb-3 mt-1 text-sm text-neutral-500">Choose which products appear when customers order from this brand.</p>
-        <BrandMenuPicker products={products ?? []} initial={brand.product_ids} />
+        <BrandMenuPicker products={products ?? []} initial={brandProductIds} />
         <button className="btn-brand mt-3 sm:w-auto sm:px-6">Save menu</button>
       </form>
 
