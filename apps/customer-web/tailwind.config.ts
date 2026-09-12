@@ -10,11 +10,12 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: '#fff7ed',
-          100: '#ffedd5',
-          500: '#f97316', // Vibrant energetic orange for food apps
-          600: '#ea580c',
-          700: '#c2410c',
+          50: 'color-mix(in srgb, var(--brand-color, #f97316) 12%, white)',
+          100: 'color-mix(in srgb, var(--brand-color, #f97316) 24%, white)',
+          500: 'var(--brand-color, #f97316)',
+          600: 'color-mix(in srgb, var(--brand-color, #f97316) 85%, black)',
+          700: 'color-mix(in srgb, var(--brand-color, #f97316) 70%, black)',
+          text: 'var(--brand-text, #ffffff)',
         },
       },
     },

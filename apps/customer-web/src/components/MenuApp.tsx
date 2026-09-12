@@ -114,6 +114,52 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
     });
   };
 
+  // Apply Brand Theme Colors
+  useEffect(() => {
+    if (!menu?.brand) return;
+
+    let buttonColor = (menu.brand as any).buttonColor;
+    let buttonTextColor = (menu.brand as any).buttonTextColor;
+
+    // Fallback if buttonColor is not directly present (e.g. older response or style string)
+    if (!buttonColor && menu.brand.style) {
+      try {
+        const parsed = typeof menu.brand.style === 'string' ? JSON.parse(menu.brand.style) : menu.brand.style;
+        const s = Array.isArray(parsed) ? parsed[0] : parsed;
+        const raw = s?.active_button_color;
+        if (raw) {
+          if (raw.startsWith('0x') || raw.startsWith('0X')) {
+            const hex = raw.slice(2);
+            buttonColor = hex.length === 8 ? `#${hex.slice(2)}` : `#${hex}`;
+          } else if (raw.startsWith('#')) {
+            buttonColor = raw;
+          }
+        }
+      } catch {}
+    }
+
+    const brandColor = buttonColor || '#f97316';
+
+    // Compute contrast text if buttonTextColor not set
+    let brandTextColor = buttonTextColor;
+    if (!brandTextColor) {
+      const hex = brandColor.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16) || 0;
+      const g = parseInt(hex.substring(2, 4), 16) || 0;
+      const b = parseInt(hex.substring(4, 6), 16) || 0;
+      const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+      brandTextColor = yiq >= 140 ? '#0F172A' : '#FFFFFF';
+    }
+
+    document.documentElement.style.setProperty('--brand-color', brandColor);
+    document.documentElement.style.setProperty('--brand-text', brandTextColor);
+
+    return () => {
+      document.documentElement.style.removeProperty('--brand-color');
+      document.documentElement.style.removeProperty('--brand-text');
+    };
+  }, [menu?.brand]);
+
   const handleUpdateQuantity = (id: string, qty: number) => {
     setCartItems((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: qty } : i)));
   };
@@ -359,7 +405,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             className="w-full py-4 px-6 bg-slate-900 hover:bg-black active:scale-[0.98] transition-all text-white font-extrabold rounded-2xl shadow-xl flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-brand-500 text-white font-extrabold text-xs flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-brand-500 text-brand-text font-extrabold text-xs flex items-center justify-center">
                 {totalCount}
               </div>
               <span className="text-sm">{t.cart}</span>

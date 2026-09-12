@@ -13,6 +13,43 @@ try {
 
 const CACHE_TTL_SECONDS = 300; // 5 minutes
 
+function parseBrandColors(style: string | null | undefined): { buttonColor: string; buttonTextColor: string; backgroundColor: string } {
+  let active = '#f97316';
+  let bg = '#FFFFFF';
+  if (style) {
+    try {
+      const parsed = typeof style === 'string' ? JSON.parse(style) : style;
+      const s = Array.isArray(parsed) ? parsed[0] : parsed;
+      const rawActive = s?.active_button_color;
+      if (rawActive) {
+        if (rawActive.startsWith('0x') || rawActive.startsWith('0X')) {
+          active = '#' + rawActive.slice(rawActive.length === 10 ? 4 : 2);
+        } else if (rawActive.startsWith('#')) {
+          active = rawActive;
+        }
+      }
+      const rawBg = s?.background_button_color;
+      if (rawBg) {
+        if (rawBg === 'black') bg = '#0F172A';
+        else if (rawBg === 'white') bg = '#FFFFFF';
+        else if (rawBg.startsWith('#')) bg = rawBg;
+      }
+    } catch {}
+  }
+
+  const clean = active.replace('#', '');
+  let text = '#FFFFFF';
+  if (clean.length === 6) {
+    const r = parseInt(clean.substring(0, 2), 16);
+    const g = parseInt(clean.substring(2, 4), 16);
+    const b = parseInt(clean.substring(4, 6), 16);
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    text = yiq >= 150 ? '#0F172A' : '#FFFFFF';
+  }
+
+  return { buttonColor: active, buttonTextColor: text, backgroundColor: bg };
+}
+
 export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
   const db = getDatabase();
   let rows = await db
@@ -27,6 +64,8 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
       isActive: brands.isActive,
       locationId: brands.locationId,
       locationName: locations.name,
+      currency: brands.currency,
+      style: brands.style,
     })
     .from(brands)
     .leftJoin(locations, eq(brands.locationId, locations.id))
@@ -47,6 +86,8 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
         isActive: brands.isActive,
         locationId: brands.locationId,
         locationName: locations.name,
+        currency: brands.currency,
+        style: brands.style,
       })
       .from(brands)
       .leftJoin(locations, eq(brands.locationId, locations.id))
@@ -57,6 +98,7 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
 
   if (rows.length === 0) return null;
   const row = rows[0];
+  const brandColors = parseBrandColors(row.style);
 
   return {
     id: row.id,
@@ -66,10 +108,14 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
     logoUrl: row.logoUrl,
     bannerUrl: row.bannerUrl,
     footerUrl: row.footerUrl,
-    currency: 'PLN',
+    currency: row.currency || 'PLN',
     isAcceptingOrders: true,
     locationId: row.locationId,
     locationName: row.locationName,
+    style: row.style,
+    buttonColor: brandColors.buttonColor,
+    buttonTextColor: brandColors.buttonTextColor,
+    backgroundColor: brandColors.backgroundColor,
   };
 }
 
@@ -114,6 +160,8 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
   if (brandRows.length === 0) return null;
   const b = brandRows[0];
 
+  const brandColors = parseBrandColors(b.style);
+
   const brandInfo: BrandInfo = {
     id: b.id,
     companyId: b.companyId,
@@ -122,10 +170,14 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
     logoUrl: b.logoUrl,
     bannerUrl: b.bannerUrl,
     footerUrl: (b as any).footerUrl ?? null,
-    currency: 'PLN',
+    currency: (b as any).currency || 'PLN',
     isAcceptingOrders: b.isActive,
     locationId: b.locationId,
     locationName: null,
+    style: b.style ?? null,
+    buttonColor: brandColors.buttonColor,
+    buttonTextColor: brandColors.buttonTextColor,
+    backgroundColor: brandColors.backgroundColor,
   };
 
   // 3. Fetch Categories
@@ -294,4 +346,16 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
   }
 
   return response;
+}
+
+export async function invalidateBrandMenuCache(brandId: number): Promise<void> {
+  if (!redis || redis.status !== 'ready') return;
+  try {
+    const keys = await redis.keys(`menu:brand:${brandId}:*`);
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  } catch (err: any) {
+    console.warn('[Catalog:Redis] Failed to invalidate cache:', err.message);
+  }
 }

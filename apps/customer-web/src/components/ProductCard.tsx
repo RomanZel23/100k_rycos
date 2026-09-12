@@ -58,7 +58,7 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
               e.stopPropagation();
               onSelect(product);
             }}
-            className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center shadow-sm active:scale-90 transition-all"
+            className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 text-brand-text flex items-center justify-center shadow-sm active:scale-90 transition-all"
           >
             <Plus size={18} />
           </button>

@@ -154,7 +154,7 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
         <button
           onClick={handlePay}
           disabled={isProcessing}
-          className="w-full py-4 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 transition-all text-base"
+          className="w-full py-4 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-brand-text font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 transition-all text-base"
         >
           {isProcessing ? (
             <>

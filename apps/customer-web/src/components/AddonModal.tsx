@@ -83,7 +83,7 @@ export function AddonModal({ product, onClose, onAddToCart }: AddonModalProps) {
                         <div
                           className={`w-5 h-5 rounded-md flex items-center justify-center border ${
                             isSelected
-                              ? 'bg-brand-500 border-brand-500 text-white'
+                              ? 'bg-brand-500 border-brand-500 text-brand-text'
                               : 'border-slate-300'
                           }`}
                         >
@@ -125,7 +125,7 @@ export function AddonModal({ product, onClose, onAddToCart }: AddonModalProps) {
               onAddToCart(product, selectedAddons, instructions);
               onClose();
             }}
-            className="w-full py-3.5 bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-white font-extrabold rounded-2xl flex items-center justify-between px-6 shadow-lg shadow-brand-500/25"
+            className="w-full py-3.5 bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-brand-text font-extrabold rounded-2xl flex items-center justify-between px-6 shadow-lg shadow-brand-500/25"
           >
             <span>Dodaj do zamówienia</span>
             <span>{finalPrice.toFixed(2)} zł</span>

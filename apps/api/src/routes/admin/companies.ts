@@ -3,6 +3,7 @@ import { getDatabase, getRawClient, companies, brands, brandProducts, eq, and, d
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
+import { invalidateBrandMenuCache } from '../../services/catalogService.js';
 
 let brandsColumnsChecked = false;
 async function ensureBrandColumns() {
@@ -281,6 +282,8 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
         .where(and(eq(brands.id, brandId), eq(brands.companyId, companyId)))
         .returning();
 
+      invalidateBrandMenuCache(brandId).catch(() => {});
+
       return success(reply, {
         id: updated.id,
         type,
@@ -340,6 +343,8 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
         .set(updateData)
         .where(and(eq(brands.id, brandId), eq(brands.companyId, companyId)))
         .returning();
+
+      invalidateBrandMenuCache(brandId).catch(() => {});
 
       return success(reply, {
         id: updated.id,
@@ -409,6 +414,8 @@ function generateShortSlug(length = 5): string {
       return notFound(reply, 'Brand not found');
     }
 
+    invalidateBrandMenuCache(brandId).catch(() => {});
+
     return success(reply, {
       ...updated,
       qr_slug: updated.slug,
@@ -452,6 +459,8 @@ function generateShortSlug(length = 5): string {
         .values(targetIds.map((pid: number) => ({ brandId, productId: pid })))
         .onConflictDoNothing();
     }
+
+    invalidateBrandMenuCache(brandId).catch(() => {});
 
     return success(reply, { assigned: targetIds.length }, 'Menu products assigned');
   });

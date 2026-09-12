@@ -174,7 +174,7 @@ export function CartDrawer({
 
             <button
               onClick={onCheckout}
-              className="w-full py-4 bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 text-base"
+              className="w-full py-4 bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-brand-text font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 text-base"
             >
               <CreditCard size={18} />
               <span>Przejdź do płatności</span>
