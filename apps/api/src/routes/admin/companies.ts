@@ -1,8 +1,27 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, companies, brands, brandProducts, eq, and, desc, inArray } from '@rycos/database';
+import { getDatabase, getRawClient, companies, brands, brandProducts, eq, and, desc, inArray } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
+
+let brandsColumnsChecked = false;
+async function ensureBrandColumns() {
+  if (brandsColumnsChecked) return;
+  const raw = getRawClient();
+  if (!raw) return;
+  try {
+    await raw.unsafe(`
+      ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "menu_layout" varchar(32) DEFAULT 'list';
+      ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "language" varchar(8) DEFAULT 'pl';
+      ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "currency" varchar(8) DEFAULT 'PLN';
+      ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "style" text;
+      ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "footer_url" text;
+    `);
+    brandsColumnsChecked = true;
+  } catch (err) {
+    console.warn('[Brands] Notice during column check:', err);
+  }
+}
 
 export async function adminCompaniesRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -147,6 +166,7 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
   // GET /v1/admin/brands - List brands for company
   fastify.get('/v1/admin/brands', async (req, reply) => {
+    await ensureBrandColumns();
     const db = getDatabase();
     const companyId = getCompanyId(req);
 
@@ -183,6 +203,7 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
   // GET /v1/admin/brands/:id - Brand details
   fastify.get('/v1/admin/brands/:id', async (req, reply) => {
+    await ensureBrandColumns();
     const { id } = req.params as { id: string };
     const brandId = parseInt(id, 10);
     const companyId = getCompanyId(req);
@@ -345,6 +366,7 @@ function generateShortSlug(length = 5): string {
 
   // PUT /v1/admin/brands/:id - Update brand
   fastify.put('/v1/admin/brands/:id', async (req, reply) => {
+    await ensureBrandColumns();
     const { id } = req.params as { id: string };
     const brandId = parseInt(id, 10);
     const companyId = getCompanyId(req);
@@ -455,6 +477,7 @@ function generateShortSlug(length = 5): string {
 
   // POST /v1/admin/brands - Create brand
   fastify.post('/v1/admin/brands', async (req, reply) => {
+    await ensureBrandColumns();
     const db = getDatabase();
     const companyId = getCompanyId(req);
     const body = req.body as any;

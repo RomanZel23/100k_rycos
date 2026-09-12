@@ -357,6 +357,22 @@ export async function ensureDatabaseSchema() {
           );
           ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
           ALTER TABLE "fiscal_devices" ADD COLUMN IF NOT EXISTS "status" varchar(32) DEFAULT 'active' NOT NULL;
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "menu_layout" varchar(32) DEFAULT 'list';
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "language" varchar(8) DEFAULT 'pl';
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "currency" varchar(8) DEFAULT 'PLN';
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "style" text;
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "footer_url" text;
+          CREATE TABLE IF NOT EXISTS "storage_files" (
+            "id" varchar(128) PRIMARY KEY NOT NULL,
+            "bucket" varchar(64) DEFAULT 'products' NOT NULL,
+            "name" varchar(255) NOT NULL,
+            "mime_type" varchar(128) NOT NULL,
+            "size" integer NOT NULL,
+            "data" bytea NOT NULL,
+            "created_at" timestamp DEFAULT now() NOT NULL,
+            "updated_at" timestamp DEFAULT now() NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS "idx_storage_files_bucket_name" ON "storage_files" ("bucket", "name");
           CREATE TABLE IF NOT EXISTS "terminal_fiscal_devices" (
             "id" serial PRIMARY KEY NOT NULL,
             "terminal_id" integer NOT NULL REFERENCES "terminals"("id") ON DELETE cascade,
