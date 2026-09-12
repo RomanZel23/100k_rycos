@@ -33,7 +33,10 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
   // PUT /v1/admin/orders/:id/status - Update order lifecycle status (e.g. kitchen starts prep, marks ready)
   fastify.put('/v1/admin/orders/:id/status', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { status } = req.body as { status?: string };
+    let { status } = req.body as { status?: string };
+
+    if (status === 'preparing') status = 'in_progress';
+    if (status === 'ready_for_pickup') status = 'ready_to_collect';
 
     const validStatuses = ['pending_payment', 'paid', 'in_progress', 'ready_to_collect', 'completed', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {

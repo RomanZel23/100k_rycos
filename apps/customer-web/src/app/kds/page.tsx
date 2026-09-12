@@ -25,7 +25,7 @@ interface KdsOrder {
   id: string;
   orderNumber: number;
   collectionPin: string;
-  status: 'paid' | 'preparing' | 'ready_for_pickup' | 'completed';
+  status: 'paid' | 'in_progress' | 'ready_to_collect' | 'completed' | 'preparing' | 'ready_for_pickup';
   orderType: string;
   tableLabel?: string | null;
   parkingSpot?: string | null;
@@ -121,7 +121,7 @@ export default function KitchenDisplayPage() {
         const json = await res.json();
         const data = json.data || [];
         const active = data.filter((o: any) =>
-          ['paid', 'preparing', 'ready_for_pickup'].includes(o.status)
+          ['paid', 'in_progress', 'ready_to_collect', 'preparing', 'ready_for_pickup'].includes(o.status)
         );
         setOrders(active);
       }
@@ -158,7 +158,7 @@ export default function KitchenDisplayPage() {
             if (data.type === 'order.paid' || data.type === 'order.created') {
               playNewOrderChime();
               loadOrders();
-            } else if (data.type === 'order.status_changed') {
+            } else if (data.type === 'order.status_changed' || data.type === 'order.status_updated') {
               loadOrders();
             } else if (data.type === 'service_call') {
               playServiceCallChime();
@@ -200,23 +200,36 @@ export default function KitchenDisplayPage() {
 
   // Status Change
   const updateStatus = async (orderId: string, nextStatus: string) => {
+    // Canonical backend status
+    const canonicalStatus =
+      nextStatus === 'preparing' ? 'in_progress' :
+      nextStatus === 'ready_for_pickup' ? 'ready_to_collect' :
+      nextStatus;
+
+    // Optimistic update
+    setOrders((prev) =>
+      prev
+        .map((o) => (o.id === orderId ? { ...o, status: canonicalStatus as any } : o))
+        .filter((o) => o.status !== 'completed')
+    );
+
     try {
-      await fetch(`${getApiBaseUrl()}/v1/admin/orders/${orderId}/status`, {
+      const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'x-company-id': '1',
         },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: canonicalStatus }),
       });
-      // Optimistic update
-      setOrders((prev) =>
-        prev
-          .map((o) => (o.id === orderId ? { ...o, status: nextStatus as any } : o))
-          .filter((o) => o.status !== 'completed')
-      );
+
+      if (!res.ok) {
+        console.error('Failed to update status on server:', res.status, res.statusText);
+        loadOrders();
+      }
     } catch (e) {
       console.error('Failed to update status:', e);
+      loadOrders();
     }
   };
 
@@ -227,8 +240,8 @@ export default function KitchenDisplayPage() {
   };
 
   const newOrders = orders.filter((o) => o.status === 'paid');
-  const preparingOrders = orders.filter((o) => o.status === 'preparing');
-  const readyOrders = orders.filter((o) => o.status === 'ready_for_pickup');
+  const preparingOrders = orders.filter((o) => o.status === 'in_progress' || o.status === 'preparing');
+  const readyOrders = orders.filter((o) => o.status === 'ready_to_collect' || o.status === 'ready_for_pickup');
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -382,7 +395,7 @@ export default function KitchenDisplayPage() {
                   </div>
 
                   <button
-                    onClick={() => updateStatus(order.id, 'preparing')}
+                    onClick={() => updateStatus(order.id, 'in_progress')}
                     className="mt-4 w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
                   >
                     Rozpocznij przygotowanie &rarr;
@@ -453,7 +466,7 @@ export default function KitchenDisplayPage() {
                   </div>
 
                   <button
-                    onClick={() => updateStatus(order.id, 'ready_for_pickup')}
+                    onClick={() => updateStatus(order.id, 'ready_to_collect')}
                     className="mt-4 w-full py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
                   >
                     Oznacz jako Gotowe &rarr;
