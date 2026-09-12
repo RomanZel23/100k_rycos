@@ -1,8 +1,89 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, users, eq, and, desc } from '@rycos/database';
+import { getDatabase, users, eq, and, desc, sql } from '@rycos/database';
 import { requireAdminAuth, getCompanyId, getAuthUser } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
+import { hashPassword } from '../../lib/password.js';
+import { env } from '../../config/env.js';
 import crypto from 'crypto';
+
+async function syncSupabaseAuthUser(opts: {
+  userId: string;
+  email: string;
+  password?: string;
+  name?: string | null;
+  role: string;
+  companyId: number;
+  db: any;
+}) {
+  const { userId, email, password, name, role, companyId, db } = opts;
+  if (!password) return;
+
+  if (env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const res = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { company_id: companyId, role, name: name || '' },
+        }),
+      });
+
+      if (!res.ok && (res.status === 422 || res.status === 400)) {
+        await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            password,
+            user_metadata: { company_id: companyId, role, name: name || '' },
+          }),
+        }).catch(() => {});
+      }
+    } catch {}
+  }
+
+  try {
+    await db.execute(sql`
+      INSERT INTO auth.users (
+        instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+      )
+      VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        ${userId}::uuid,
+        'authenticated',
+        'authenticated',
+        ${email},
+        crypt(${password}, gen_salt('bf')),
+        NOW(),
+        '{"provider":"email","providers":["email"]}'::jsonb,
+        jsonb_build_object('company_id', ${companyId}, 'role', ${role}, 'name', ${name || ''}),
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (email) DO UPDATE SET
+        encrypted_password = crypt(${password}, gen_salt('bf')),
+        raw_user_meta_data = jsonb_build_object('company_id', ${companyId}, 'role', ${role}, 'name', ${name || ''}),
+        updated_at = NOW();
+    `);
+  } catch {}
+}
+
+function sanitizeUser(userRow: any) {
+  if (!userRow) return userRow;
+  const { passwordHash, ...safeUser } = userRow;
+  return safeUser;
+}
 
 export async function adminUsersRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -45,7 +126,7 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
       .where(eq(users.companyId, companyId))
       .orderBy(desc(users.createdAt));
 
-    return success(reply, rows, 'Users retrieved');
+    return success(reply, rows.map(sanitizeUser), 'Users retrieved');
   });
 
   // POST /v1/admin/users - Add user / staff member
@@ -58,7 +139,13 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
       return validationError(reply, { email: 'Email is required' });
     }
 
+    const rawPassword = body.password ? String(body.password).trim() : '';
+    if (rawPassword && rawPassword.length < 6) {
+      return validationError(reply, { password: 'Password must be at least 6 characters' });
+    }
+
     const userId = body.id ? String(body.id) : crypto.randomUUID();
+    const passwordHash = rawPassword ? hashPassword(rawPassword) : null;
 
     try {
       const [inserted] = await db
@@ -69,11 +156,24 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
           email: String(body.email).trim().toLowerCase(),
           name: body.name ? String(body.name).trim() : null,
           role: body.role ? String(body.role).trim() : 'staff',
+          passwordHash,
           isActive: body.isActive !== false,
         })
         .returning();
 
-      return success(reply, inserted, 'User created', 201);
+      if (rawPassword) {
+        syncSupabaseAuthUser({
+          userId,
+          email: inserted.email,
+          password: rawPassword,
+          name: inserted.name,
+          role: inserted.role,
+          companyId,
+          db,
+        }).catch((err) => console.warn('[Users] Supabase sync skipped:', err?.message));
+      }
+
+      return success(reply, sanitizeUser(inserted), 'User created', 201);
     } catch (err: any) {
       return error(reply, err.message || 'Failed to create user');
     }
@@ -95,7 +195,7 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'User not found');
     }
 
-    return success(reply, row);
+    return success(reply, sanitizeUser(row));
   });
 
   // PUT /v1/admin/users/:id - Update user / role
@@ -112,6 +212,14 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
     if (body.isActive !== undefined) updateData.isActive = Boolean(body.isActive);
     if (body.is_active !== undefined) updateData.isActive = Boolean(body.is_active);
 
+    const rawPassword = body.password !== undefined ? String(body.password).trim() : '';
+    if (rawPassword) {
+      if (rawPassword.length < 6) {
+        return validationError(reply, { password: 'Password must be at least 6 characters' });
+      }
+      updateData.passwordHash = hashPassword(rawPassword);
+    }
+
     try {
       const [updated] = await db
         .update(users)
@@ -123,7 +231,19 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
         return notFound(reply, 'User not found');
       }
 
-      return success(reply, updated, 'User updated');
+      if (rawPassword) {
+        syncSupabaseAuthUser({
+          userId: updated.id,
+          email: updated.email,
+          password: rawPassword,
+          name: updated.name,
+          role: updated.role,
+          companyId,
+          db,
+        }).catch((err) => console.warn('[Users] Supabase sync skipped:', err?.message));
+      }
+
+      return success(reply, sanitizeUser(updated), 'User updated');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update user');
     }
@@ -160,7 +280,7 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
       .from(users)
       .where(eq(users.companyId, companyId))
       .orderBy(desc(users.createdAt));
-    return success(reply, rows, 'Team retrieved');
+    return success(reply, rows.map(sanitizeUser), 'Team retrieved');
   });
 
   fastify.post('/v1/admin/team', async (req, reply) => {
@@ -172,7 +292,13 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
       return validationError(reply, { email: 'Email is required' });
     }
 
+    const rawPassword = body.password ? String(body.password).trim() : '';
+    if (rawPassword && rawPassword.length < 6) {
+      return validationError(reply, { password: 'Password must be at least 6 characters' });
+    }
+
     const userId = body.id ? String(body.id) : crypto.randomUUID();
+    const passwordHash = rawPassword ? hashPassword(rawPassword) : null;
 
     try {
       const [inserted] = await db
@@ -183,11 +309,24 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
           email: String(body.email).trim().toLowerCase(),
           name: body.name ? String(body.name).trim() : null,
           role: body.role ? String(body.role).trim() : 'staff',
+          passwordHash,
           isActive: body.isActive !== false,
         })
         .returning();
 
-      return success(reply, inserted, 'User invited', 201);
+      if (rawPassword) {
+        syncSupabaseAuthUser({
+          userId,
+          email: inserted.email,
+          password: rawPassword,
+          name: inserted.name,
+          role: inserted.role,
+          companyId,
+          db,
+        }).catch((err) => console.warn('[Team] Supabase sync skipped:', err?.message));
+      }
+
+      return success(reply, sanitizeUser(inserted), 'User invited', 201);
     } catch (err: any) {
       return error(reply, err.message || 'Failed to invite user');
     }
@@ -206,6 +345,14 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
     if (body.isActive !== undefined) updateData.isActive = Boolean(body.isActive);
     if (body.is_active !== undefined) updateData.isActive = Boolean(body.is_active);
 
+    const rawPassword = body.password !== undefined ? String(body.password).trim() : '';
+    if (rawPassword) {
+      if (rawPassword.length < 6) {
+        return validationError(reply, { password: 'Password must be at least 6 characters' });
+      }
+      updateData.passwordHash = hashPassword(rawPassword);
+    }
+
     try {
       const [updated] = await db
         .update(users)
@@ -217,7 +364,19 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
         return notFound(reply, 'User not found');
       }
 
-      return success(reply, updated, 'User updated');
+      if (rawPassword) {
+        syncSupabaseAuthUser({
+          userId: updated.id,
+          email: updated.email,
+          password: rawPassword,
+          name: updated.name,
+          role: updated.role,
+          companyId,
+          db,
+        }).catch((err) => console.warn('[Team] Supabase sync skipped:', err?.message));
+      }
+
+      return success(reply, sanitizeUser(updated), 'User updated');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update user');
     }

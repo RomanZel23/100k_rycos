@@ -5,6 +5,7 @@ import { getDatabase, companies, users, eq, sql } from '@rycos/database';
 import { env } from '../../config/env.js';
 import { resolveUser } from '../../middleware/adminAuth.js';
 import { success, unauthorized, validationError, error } from '../../lib/response.js';
+import { hashPassword, verifyPassword } from '../../lib/password.js';
 
 interface SignupBody {
   company_name?: string;
@@ -59,6 +60,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           email: normalizedEmail,
           name: userRow.name,
           role: 'super_admin',
+          passwordHash: hashPassword('Abc@123456'),
           isActive: true,
         })
         .onConflictDoUpdate({
@@ -66,9 +68,40 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           set: { role: 'super_admin', isActive: true, updatedAt: new Date() },
         });
     } else {
-      const existing = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
-      if (existing.length > 0 && existing[0].isActive) {
-        userRow = existing[0];
+      const [existing] = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+      if (existing && existing.isActive) {
+        let passwordValid = false;
+
+        // 1. Primary verification: scrypt passwordHash
+        if (existing.passwordHash) {
+          passwordValid = verifyPassword(password, existing.passwordHash);
+        }
+
+        // 2. Fallback verification: auth.users (Supabase / pgcrypto crypt)
+        if (!passwordValid) {
+          try {
+            const authCheck: any = await db.execute(sql`
+              SELECT (encrypted_password = crypt(${password}, encrypted_password)) AS valid
+              FROM auth.users
+              WHERE email = ${normalizedEmail}
+              LIMIT 1;
+            `);
+            const row = authCheck?.rows?.[0] || authCheck?.[0];
+            if (row?.valid === true) {
+              passwordValid = true;
+              // Backfill scrypt password_hash for fast local verification
+              await db
+                .update(users)
+                .set({ passwordHash: hashPassword(password), updatedAt: new Date() })
+                .where(eq(users.id, existing.id))
+                .catch(() => {});
+            }
+          } catch {}
+        }
+
+        if (passwordValid) {
+          userRow = existing;
+        }
       }
     }
 
@@ -267,6 +300,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
       }
 
       // 5. Insert or Update row in application `users` table
+      const passwordHash = hashPassword(body.password!);
       await db
         .insert(users)
         .values({
@@ -275,6 +309,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           email,
           name: body.name || 'Admin',
           role: 'super_admin',
+          passwordHash,
           isActive: true,
         })
         .onConflictDoUpdate({
@@ -284,6 +319,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
             email,
             name: body.name || 'Admin',
             role: 'super_admin',
+            passwordHash,
             isActive: true,
             updatedAt: new Date(),
           },

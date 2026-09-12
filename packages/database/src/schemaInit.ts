@@ -265,6 +265,7 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"email" varchar(255) NOT NULL,
 	"name" varchar(128),
 	"role" varchar(32) DEFAULT 'staff' NOT NULL,
+	"password_hash" text,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -311,6 +312,7 @@ ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "tap_device_id" varchar(64);
 ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "fiscal_device_id" varchar(64);
 ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "capabilities" jsonb DEFAULT '{"can_sell":true,"can_kds":true,"can_pickup":true}'::jsonb NOT NULL;
 ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "config_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_brand_product" ON "brand_products" ("brand_id", "product_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_entity_translation" ON "content_translations" ("entity_type", "entity_id", "language", "attribute_name");
