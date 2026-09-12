@@ -360,26 +360,36 @@ export default function PosPage() {
           )}
         </div>
 
+        {/* Workstation Quick Switcher */}
+        <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700 text-xs">
+          <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs">
+            💳 POS
+          </span>
+          <a
+            href="/kds"
+            className="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors"
+          >
+            🍳 KDS
+          </a>
+          <a
+            href="/pickup"
+            className="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors"
+          >
+            📦 Wydawka
+          </a>
+        </div>
+
         {/* Right Info */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => setIsPinModalOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-black text-slate-950 bg-amber-500 hover:bg-amber-400 px-3 py-1.5 rounded-xl transition-all shadow-md shadow-amber-500/20 active:scale-95"
+            className="flex items-center gap-1.5 text-xs font-black text-slate-950 bg-emerald-500 hover:bg-emerald-400 px-3 py-1.5 rounded-xl transition-all shadow-md shadow-emerald-500/20 active:scale-95"
             title="Weryfikacja odbioru zamówienia kodem QR lub PIN"
           >
             <Camera size={14} />
-            <span>Weryfikuj Odbiór / QR</span>
+            <span>Skanuj QR / Wydaj</span>
           </button>
 
-          <a
-            href="/kds"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 transition-colors"
-          >
-            <Clock size={14} className="text-amber-400" />
-            <span>Otwórz KDS</span>
-          </a>
           <div className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl font-mono font-bold text-amber-400 text-sm">
             {currentTime}
           </div>

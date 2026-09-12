@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, boolean, timestamp, integer } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, boolean, timestamp, integer, jsonb } from 'drizzle-orm/pg-core';
 
 export const companies = pgTable('companies', {
   id: serial('id').primaryKey(),
@@ -44,6 +44,19 @@ export const terminals = pgTable('terminals', {
   locationId: integer('location_id').references(() => locations.id, { onDelete: 'set null' }),
   terminalId: varchar('terminal_id', { length: 64 }).notNull().unique(),
   name: varchar('name', { length: 128 }).notNull(),
+  role: varchar('role', { length: 32 }).default('all_in_one').notNull(), // 'all_in_one' | 'pos' | 'pickup' | 'kds' | 'kiosk' | 'fiscal_hub'
+  assignedBrandIds: jsonb('assigned_brand_ids').$type<number[]>().default([]).notNull(), // empty = all brands at location
+  printerDeviceId: varchar('printer_device_id', { length: 64 }), // e.g. SBR-* or 'self'
+  tapDeviceId: varchar('tap_device_id', { length: 64 }), // e.g. SBR-* with SoftPOS license or 'self'
+  fiscalDeviceId: varchar('fiscal_device_id', { length: 64 }), // SBF-* or SBR-*
+  capabilities: jsonb('capabilities').$type<{
+    can_sell?: boolean;
+    can_kds?: boolean;
+    can_pickup?: boolean;
+    has_softpos?: boolean;
+    has_printer?: boolean;
+  }>().default({ can_sell: true, can_kds: true, can_pickup: true }).notNull(),
+  configJson: jsonb('config_json').$type<Record<string, any>>().default({}).notNull(),
   isPrimary: boolean('is_primary').default(false).notNull(),
   status: varchar('status', { length: 32 }).default('active').notNull(),
   lastActiveAt: timestamp('last_active_at'),

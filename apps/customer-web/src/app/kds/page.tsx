@@ -267,6 +267,25 @@ export default function KitchenDisplayPage() {
           </div>
         </div>
 
+        {/* Workstation Quick Switcher */}
+        <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700 text-xs">
+          <a
+            href="/pos"
+            className="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors"
+          >
+            💳 POS
+          </a>
+          <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs">
+            🍳 KDS
+          </span>
+          <a
+            href="/pickup"
+            className="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors"
+          >
+            📦 Wydawka
+          </a>
+        </div>
+
         <div className="flex items-center gap-3">
           {/* Quick QR & PIN pickup buttons */}
           <button

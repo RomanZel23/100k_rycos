@@ -1,43 +1,138 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, terminals, locations, eq, and, desc } from '@rycos/database';
+import { getDatabase, terminals, locations, brands, fiscalDevices, eq, and, desc, inArray } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 
 export async function adminTerminalsRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
 
-  // GET /v1/admin/terminals - List all terminals
+  // GET /v1/admin/terminals - List all workstations & terminals
   fastify.get('/v1/admin/terminals', async (req, reply) => {
     const db = getDatabase();
     const companyId = getCompanyId(req);
 
-    const rows = await db
-      .select({
-        id: terminals.id,
-        terminalId: terminals.terminalId,
-        name: terminals.name,
-        locationId: terminals.locationId,
-        locationName: locations.name,
-        isPrimary: terminals.isPrimary,
-        status: terminals.status,
-        lastActiveAt: terminals.lastActiveAt,
-        createdAt: terminals.createdAt,
-      })
-      .from(terminals)
-      .leftJoin(locations, eq(terminals.locationId, locations.id))
-      .where(eq(terminals.companyId, companyId))
-      .orderBy(desc(terminals.isPrimary), desc(terminals.id));
+    const [rows, allBrands] = await Promise.all([
+      db
+        .select({
+          id: terminals.id,
+          terminalId: terminals.terminalId,
+          name: terminals.name,
+          role: terminals.role,
+          assignedBrandIds: terminals.assignedBrandIds,
+          printerDeviceId: terminals.printerDeviceId,
+          tapDeviceId: terminals.tapDeviceId,
+          fiscalDeviceId: terminals.fiscalDeviceId,
+          capabilities: terminals.capabilities,
+          configJson: terminals.configJson,
+          locationId: terminals.locationId,
+          locationName: locations.name,
+          isPrimary: terminals.isPrimary,
+          status: terminals.status,
+          lastActiveAt: terminals.lastActiveAt,
+          createdAt: terminals.createdAt,
+        })
+        .from(terminals)
+        .leftJoin(locations, eq(terminals.locationId, locations.id))
+        .where(eq(terminals.companyId, companyId))
+        .orderBy(desc(terminals.isPrimary), desc(terminals.id)),
+      db
+        .select({ id: brands.id, name: brands.name, slug: brands.slug })
+        .from(brands)
+        .where(eq(brands.companyId, companyId)),
+    ]);
 
-    const mapped = rows.map((r) => ({
-      ...r,
-      terminal_id: r.terminalId,
-      location_id: r.locationId,
-      location_name: r.locationName,
-      last_active: r.lastActiveAt ? r.lastActiveAt.toISOString() : null,
-      is_primary: r.isPrimary,
-    }));
+    const brandMap = new Map(allBrands.map((b) => [b.id, b]));
+
+    const mapped = rows.map((r) => {
+      const assignedIds = Array.isArray(r.assignedBrandIds) ? (r.assignedBrandIds as number[]) : [];
+      const assignedBrandObjects = assignedIds
+        .map((id) => brandMap.get(id))
+        .filter(Boolean);
+
+      return {
+        ...r,
+        terminal_id: r.terminalId,
+        location_id: r.locationId,
+        location_name: r.locationName,
+        assigned_brand_ids: assignedIds,
+        assigned_brands: assignedBrandObjects,
+        printer_device_id: r.printerDeviceId,
+        tap_device_id: r.tapDeviceId,
+        fiscal_device_id: r.fiscalDeviceId,
+        config_json: r.configJson || {},
+        capabilities: r.capabilities || { can_sell: true, can_kds: true, can_pickup: true },
+        last_active: r.lastActiveAt ? r.lastActiveAt.toISOString() : null,
+        is_primary: r.isPrimary,
+      };
+    });
 
     return success(reply, mapped, 'Terminals retrieved');
+  });
+
+  // GET /v1/admin/terminals/options - Configuration options (brands, locations, devices)
+  fastify.get('/v1/admin/terminals/options', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+
+    const [locList, brandList, fiscalList, termList] = await Promise.all([
+      db.select({ id: locations.id, name: locations.name }).from(locations).where(eq(locations.companyId, companyId)),
+      db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId }).from(brands).where(eq(brands.companyId, companyId)),
+      db.select({ id: fiscalDevices.id, deviceId: fiscalDevices.deviceId, name: fiscalDevices.name, kind: fiscalDevices.kind, status: fiscalDevices.status, isOnline: fiscalDevices.isOnline }).from(fiscalDevices).where(eq(fiscalDevices.companyId, companyId)),
+      db.select({ id: terminals.id, terminalId: terminals.terminalId, name: terminals.name, status: terminals.status }).from(terminals).where(eq(terminals.companyId, companyId)),
+    ]);
+
+    const roles = [
+      {
+        id: 'all_in_one',
+        title: 'All-in-One Foodtruck Master',
+        desc: 'Kasa POS + Kuchnia KDS + Skaner Wydań + SoftPOS i Drukarka SBR-*',
+        icon: 'zap',
+        defaultCapabilities: { can_sell: true, can_kds: true, can_pickup: true, has_softpos: true, has_printer: true },
+      },
+      {
+        id: 'pos',
+        title: 'Kasa na Ladzie (POS)',
+        desc: 'Bezpośrednia sprzedaż, SoftPOS, druk paragonu',
+        icon: 'monitor',
+        defaultCapabilities: { can_sell: true, can_kds: false, can_pickup: true, has_softpos: true, has_printer: true },
+      },
+      {
+        id: 'kds',
+        title: 'Kuchnia (KDS)',
+        desc: 'Ekran zamówień w kuchni / przy grillu, oznaczanie gotowości',
+        icon: 'chef-hat',
+        defaultCapabilities: { can_sell: false, can_kds: true, can_pickup: true, has_softpos: false, has_printer: false },
+      },
+      {
+        id: 'pickup',
+        title: 'Skaner Wydań (BYOD)',
+        desc: 'Prywatny telefon pracownika, skanowanie QR i potwierdzanie wydań',
+        icon: 'smartphone',
+        defaultCapabilities: { can_sell: false, can_kds: false, can_pickup: true, has_softpos: false, has_printer: false },
+      },
+      {
+        id: 'kiosk',
+        title: 'Kiosk Samoobsługowy',
+        desc: 'Tablet dla klientów na zewnątrz foodtrucka',
+        icon: 'store',
+        defaultCapabilities: { can_sell: true, can_kds: false, can_pickup: false, has_softpos: false, has_printer: false },
+      },
+      {
+        id: 'fiscal_hub',
+        title: 'Hub Fiskalny / Manager',
+        desc: 'Centralna rejestracja fiskalna / e-paragony',
+        icon: 'shield-check',
+        defaultCapabilities: { can_sell: false, can_kds: false, can_pickup: false, has_softpos: false, has_printer: false },
+      },
+    ];
+
+    return success(reply, {
+      roles,
+      locations: locList,
+      brands: brandList.map(b => ({ ...b, location_id: b.locationId })),
+      fiscal_devices: fiscalList.map(f => ({ ...f, device_id: f.deviceId })),
+      terminals: termList.map(t => ({ ...t, terminal_id: t.terminalId })),
+    }, 'Options retrieved');
   });
 
   function generateSetupCode(): string {
@@ -49,7 +144,7 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
     return code;
   }
 
-  // POST /v1/admin/terminals - Create terminal
+  // POST /v1/admin/terminals - Create terminal / workstation
   fastify.post('/v1/admin/terminals', async (req, reply) => {
     const db = getDatabase();
     const companyId = getCompanyId(req);
@@ -63,6 +158,15 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
 
     const terminalId = String(body.terminalId || body.terminal_id || generateSetupCode()).trim();
     const locationId = body.locationId || body.location_id ? parseInt(String(body.locationId || body.location_id), 10) : null;
+    const role = String(body.role || 'all_in_one').trim();
+    const assignedBrandIds = Array.isArray(body.assignedBrandIds || body.assigned_brand_ids)
+      ? (body.assignedBrandIds || body.assigned_brand_ids).map((x: any) => parseInt(String(x), 10)).filter((n: number) => !isNaN(n))
+      : [];
+    const printerDeviceId = body.printerDeviceId || body.printer_device_id ? String(body.printerDeviceId || body.printer_device_id).trim() : null;
+    const tapDeviceId = body.tapDeviceId || body.tap_device_id ? String(body.tapDeviceId || body.tap_device_id).trim() : null;
+    const fiscalDeviceId = body.fiscalDeviceId || body.fiscal_device_id ? String(body.fiscalDeviceId || body.fiscal_device_id).trim() : null;
+    const capabilities = body.capabilities || { can_sell: true, can_kds: true, can_pickup: true };
+    const configJson = body.configJson || body.config_json || {};
 
     try {
       const [inserted] = await db
@@ -71,7 +175,14 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
           companyId,
           terminalId,
           name: String(body.name).trim(),
+          role,
           locationId,
+          assignedBrandIds,
+          printerDeviceId,
+          tapDeviceId,
+          fiscalDeviceId,
+          capabilities,
+          configJson,
           isPrimary: Boolean(body.isPrimary || body.is_primary),
           status: body.status || 'unclaimed',
         })
@@ -81,6 +192,10 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
         ...inserted,
         terminal_id: inserted.terminalId,
         location_id: inserted.locationId,
+        assigned_brand_ids: inserted.assignedBrandIds,
+        printer_device_id: inserted.printerDeviceId,
+        tap_device_id: inserted.tapDeviceId,
+        fiscal_device_id: inserted.fiscalDeviceId,
         is_primary: inserted.isPrimary,
       }, 'Terminal created', 201);
     } catch (err: any) {
@@ -135,6 +250,10 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       ...updated,
       terminal_id: updated.terminalId,
       location_id: updated.locationId,
+      assigned_brand_ids: updated.assignedBrandIds,
+      printer_device_id: updated.printerDeviceId,
+      tap_device_id: updated.tapDeviceId,
+      fiscal_device_id: updated.fiscalDeviceId,
       is_primary: updated.isPrimary,
     }, 'Terminal paired successfully');
   });
@@ -189,6 +308,13 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
         id: terminals.id,
         terminalId: terminals.terminalId,
         name: terminals.name,
+        role: terminals.role,
+        assignedBrandIds: terminals.assignedBrandIds,
+        printerDeviceId: terminals.printerDeviceId,
+        tapDeviceId: terminals.tapDeviceId,
+        fiscalDeviceId: terminals.fiscalDeviceId,
+        capabilities: terminals.capabilities,
+        configJson: terminals.configJson,
         locationId: terminals.locationId,
         locationName: locations.name,
         isPrimary: terminals.isPrimary,
@@ -210,12 +336,18 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       terminal_id: term.terminalId,
       location_id: term.locationId,
       location_name: term.locationName,
+      assigned_brand_ids: term.assignedBrandIds || [],
+      printer_device_id: term.printerDeviceId,
+      tap_device_id: term.tapDeviceId,
+      fiscal_device_id: term.fiscalDeviceId,
+      capabilities: term.capabilities || { can_sell: true, can_kds: true, can_pickup: true },
+      config_json: term.configJson || {},
       last_active: term.lastActiveAt ? term.lastActiveAt.toISOString() : null,
       is_primary: term.isPrimary,
     });
   });
 
-  // PUT /v1/admin/terminals/:id - Update terminal
+  // PUT /v1/admin/terminals/:id - Update terminal / workstation
   fastify.put('/v1/admin/terminals/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const termId = parseInt(id, 10);
@@ -225,11 +357,37 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
 
     const updateData: Record<string, any> = {};
     if (body.name !== undefined) updateData.name = String(body.name).trim();
+    if (body.role !== undefined) updateData.role = String(body.role).trim();
     if (body.location_id !== undefined || body.locationId !== undefined) {
       const loc = body.location_id ?? body.locationId;
       updateData.locationId = loc ? parseInt(String(loc), 10) : null;
     }
+    if (body.assigned_brand_ids !== undefined || body.assignedBrandIds !== undefined) {
+      const arr = body.assigned_brand_ids ?? body.assignedBrandIds;
+      updateData.assignedBrandIds = Array.isArray(arr) ? arr.map((x: any) => parseInt(String(x), 10)).filter((n: number) => !isNaN(n)) : [];
+    }
+    if (body.printer_device_id !== undefined || body.printerDeviceId !== undefined) {
+      const val = body.printer_device_id ?? body.printerDeviceId;
+      updateData.printerDeviceId = val ? String(val).trim() : null;
+    }
+    if (body.tap_device_id !== undefined || body.tapDeviceId !== undefined) {
+      const val = body.tap_device_id ?? body.tapDeviceId;
+      updateData.tapDeviceId = val ? String(val).trim() : null;
+    }
+    if (body.fiscal_device_id !== undefined || body.fiscalDeviceId !== undefined) {
+      const val = body.fiscal_device_id ?? body.fiscalDeviceId;
+      updateData.fiscalDeviceId = val ? String(val).trim() : null;
+    }
+    if (body.capabilities !== undefined) {
+      updateData.capabilities = typeof body.capabilities === 'object' ? body.capabilities : {};
+    }
+    if (body.config_json !== undefined || body.configJson !== undefined) {
+      updateData.configJson = body.config_json ?? body.configJson ?? {};
+    }
     if (body.status !== undefined) updateData.status = body.status;
+    if (body.is_primary !== undefined || body.isPrimary !== undefined) {
+      updateData.isPrimary = Boolean(body.is_primary ?? body.isPrimary);
+    }
 
     const [updated] = await db
       .update(terminals)
@@ -245,6 +403,10 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       ...updated,
       terminal_id: updated.terminalId,
       location_id: updated.locationId,
+      assigned_brand_ids: updated.assignedBrandIds,
+      printer_device_id: updated.printerDeviceId,
+      tap_device_id: updated.tapDeviceId,
+      fiscal_device_id: updated.fiscalDeviceId,
       is_primary: updated.isPrimary,
     }, 'Terminal updated');
   });

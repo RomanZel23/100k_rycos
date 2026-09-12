@@ -49,6 +49,13 @@ CREATE TABLE IF NOT EXISTS "terminals" (
 	"location_id" integer REFERENCES "locations"("id") ON DELETE set null,
 	"terminal_id" varchar(64) NOT NULL,
 	"name" varchar(128) NOT NULL,
+	"role" varchar(32) DEFAULT 'all_in_one' NOT NULL,
+	"assigned_brand_ids" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"printer_device_id" varchar(64),
+	"tap_device_id" varchar(64),
+	"fiscal_device_id" varchar(64),
+	"capabilities" jsonb DEFAULT '{"can_sell":true,"can_kds":true,"can_pickup":true}'::jsonb NOT NULL,
+	"config_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"is_primary" boolean DEFAULT false NOT NULL,
 	"status" varchar(32) DEFAULT 'active' NOT NULL,
 	"last_active_at" timestamp,
@@ -297,6 +304,14 @@ ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "language" varchar(8) DEFAULT 'pl'
 ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "currency" varchar(8) DEFAULT 'PLN';
 ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "style" text;
 
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "role" varchar(32) DEFAULT 'all_in_one' NOT NULL;
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "assigned_brand_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "printer_device_id" varchar(64);
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "tap_device_id" varchar(64);
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "fiscal_device_id" varchar(64);
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "capabilities" jsonb DEFAULT '{"can_sell":true,"can_kds":true,"can_pickup":true}'::jsonb NOT NULL;
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "config_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
+
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_brand_product" ON "brand_products" ("brand_id", "product_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_entity_translation" ON "content_translations" ("entity_type", "entity_id", "language", "attribute_name");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_product_addon_group" ON "product_addon_groups" ("product_id", "group_id");
@@ -362,6 +377,13 @@ export async function ensureDatabaseSchema() {
           ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "currency" varchar(8) DEFAULT 'PLN';
           ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "style" text;
           ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "footer_url" text;
+          ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "role" varchar(32) DEFAULT 'all_in_one' NOT NULL;
+          ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "assigned_brand_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;
+          ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "printer_device_id" varchar(64);
+          ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "tap_device_id" varchar(64);
+          ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "fiscal_device_id" varchar(64);
+          ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "capabilities" jsonb DEFAULT '{"can_sell":true,"can_kds":true,"can_pickup":true}'::jsonb NOT NULL;
+          ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "config_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
           CREATE TABLE IF NOT EXISTS "storage_files" (
             "id" varchar(128) PRIMARY KEY NOT NULL,
             "bucket" varchar(64) DEFAULT 'products' NOT NULL,

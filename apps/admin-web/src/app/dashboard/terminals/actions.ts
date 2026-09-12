@@ -6,9 +6,14 @@ import { adminApi } from '@/lib/api'
 
 export async function createTerminal(formData: FormData): Promise<void> {
   const customId = String(formData.get('terminal_id') || '').trim()
+  const role = String(formData.get('role') || 'all_in_one').trim()
   const body = {
     name: String(formData.get('name') || '').trim(),
+    role,
     location_id: formData.get('location_id') ? Number(formData.get('location_id')) : null,
+    printer_device_id: formData.get('printer_device_id') ? String(formData.get('printer_device_id')).trim() : null,
+    tap_device_id: formData.get('tap_device_id') ? String(formData.get('tap_device_id')).trim() : null,
+    fiscal_device_id: formData.get('fiscal_device_id') ? String(formData.get('fiscal_device_id')).trim() : null,
     ...(customId ? { terminal_id: customId } : {}),
   }
   const res = await adminApi('/terminals', { method: 'POST', body: JSON.stringify(body) })
@@ -20,16 +25,44 @@ export async function createTerminal(formData: FormData): Promise<void> {
 
 export async function updateTerminal(formData: FormData): Promise<void> {
   const id = String(formData.get('id') || '')
-  // fiscal_device_id intentionally omitted — assignment now lives on the
-  // Fiscal devices page (terminal_fiscal_devices join table).
+  const role = String(formData.get('role') || 'all_in_one').trim()
+  
+  // Brands handling:
+  // If 'all_brands' checkbox is checked, assigned_brand_ids is [] (meaning all brands in location).
+  // Otherwise, collect all checked 'assigned_brand_ids'.
+  const allBrands = formData.get('all_brands') === 'on' || formData.get('all_brands') === 'true'
+  const brandIdsRaw = formData.getAll('assigned_brand_ids')
+  const assignedBrandIds = allBrands
+    ? []
+    : brandIdsRaw.map((x) => parseInt(String(x), 10)).filter((n) => !isNaN(n))
+
+  const capabilities = {
+    can_sell: formData.get('cap_sell') === 'on' || formData.get('cap_sell') === 'true',
+    can_kds: formData.get('cap_kds') === 'on' || formData.get('cap_kds') === 'true',
+    can_pickup: formData.get('cap_pickup') === 'on' || formData.get('cap_pickup') === 'true',
+    has_softpos: formData.get('cap_softpos') === 'on' || formData.get('cap_softpos') === 'true',
+    has_printer: formData.get('cap_printer') === 'on' || formData.get('cap_printer') === 'true',
+  }
+
   const body: Record<string, unknown> = {
     name: String(formData.get('name') || '').trim(),
+    role,
     location_id: formData.get('location_id') ? Number(formData.get('location_id')) : null,
-    tap_device_id: String(formData.get('tap_device_id') || '').trim(),
-    printer_device_id: String(formData.get('printer_device_id') || '').trim(),
+    assigned_brand_ids: assignedBrandIds,
+    printer_device_id: formData.get('printer_device_id') ? String(formData.get('printer_device_id')).trim() : null,
+    tap_device_id: formData.get('tap_device_id') ? String(formData.get('tap_device_id')).trim() : null,
+    fiscal_device_id: formData.get('fiscal_device_id') ? String(formData.get('fiscal_device_id')).trim() : null,
+    capabilities,
   }
-  await adminApi(`/terminals/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+
+  const res = await adminApi(`/terminals/${id}`, { method: 'PUT', body: JSON.stringify(body) })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    redirect(`/dashboard/terminals/${id}?error=` + encodeURIComponent(json?.message || 'Could not update workstation'))
+  }
   revalidatePath(`/dashboard/terminals/${id}`)
+  revalidatePath('/dashboard/terminals')
+  redirect(`/dashboard/terminals/${id}?notice=` + encodeURIComponent('Stanowisko zaktualizowane pomyślnie'))
 }
 
 export async function deleteTerminal(formData: FormData): Promise<void> {
