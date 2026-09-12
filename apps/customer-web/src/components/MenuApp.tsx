@@ -181,23 +181,19 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
     <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col">
       {/* Brand Hero Banner */}
       {menu?.brand.bannerUrl && (
-        <div className="relative w-full h-44 sm:h-52 bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center">
-          {/* Ambient blurred backdrop: harmonizes all edges with the image colors */}
+        <div className="relative w-full h-44 sm:h-52 bg-white overflow-hidden shrink-0 flex items-center justify-center">
+          {/* Ambient blurred backdrop: harmonizes all edges with the image colors without dark tint */}
           <div
-            className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-50 pointer-events-none"
+            className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-30 pointer-events-none"
             style={{ backgroundImage: `url(${menu.brand.bannerUrl})` }}
           />
-          {/* Contrast tint */}
-          <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-          {/* Main banner image */}
+          {/* Main banner image: object-contain preserves full graphics, logos and text without cropping */}
           <img
             src={menu.brand.bannerUrl}
             alt={menu.brand.name}
             crossOrigin="anonymous"
-            className="relative w-full h-full object-cover object-center z-10"
+            className="relative w-full h-full object-contain object-center z-10 p-2"
           />
-          {/* Soft gradient fade at bottom */}
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-10 pointer-events-none" />
         </div>
       )}
 
