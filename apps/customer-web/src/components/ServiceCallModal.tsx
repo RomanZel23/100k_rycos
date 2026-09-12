@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Bell, Receipt, Utensils, X, CheckCircle2, Loader2 } from 'lucide-react';
+import { getApiBaseUrl } from '../lib/api';
 
 interface ServiceCallModalProps {
   isOpen: boolean;
@@ -11,8 +12,6 @@ interface ServiceCallModalProps {
   parkingSpot?: string;
   lang?: string;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8008';
 
 export function ServiceCallModal({
   isOpen,
@@ -32,7 +31,8 @@ export function ServiceCallModal({
   const handleSend = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/v1/orders/service-call`, {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/v1/orders/service-call`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

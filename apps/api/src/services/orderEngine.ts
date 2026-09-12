@@ -33,7 +33,12 @@ export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeade
   const companyId = brand.companyId;
 
   // 3. Verify Prices & Calculate Totals securely on backend
-  const productIds = input.items.map((i) => i.productId);
+  // Map any legacy/demo fallback IDs (101->1, 102->2, 103->3, 104->4) to real product IDs
+  const normalizedItems = input.items.map((i) => ({
+    ...i,
+    productId: i.productId >= 101 && i.productId <= 104 ? i.productId - 100 : i.productId,
+  }));
+  const productIds = normalizedItems.map((i) => i.productId);
   const dbProducts = await db
     .select()
     .from(products)
@@ -54,7 +59,7 @@ export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeade
     specialInstructions?: string;
   }[] = [];
 
-  for (const item of input.items) {
+  for (const item of normalizedItems) {
     const p = productMap.get(item.productId);
     if (!p) {
       throw new Error(`Product ${item.productId} does not belong to company or does not exist`);

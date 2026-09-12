@@ -78,7 +78,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           ],
           products: [
             {
-              id: 101,
+              id: 1,
               companyId: 1,
               categoryId: 1,
               name: lang === 'de' ? 'Klassischer Smash Burger' : lang === 'en' ? 'Classic Smash Burger' : 'Classic Smash Burger',

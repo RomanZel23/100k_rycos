@@ -1,10 +1,22 @@
 import { MenuResponse, CreateOrderRequest, OrderDetail, InitiatePaymentResponse } from '@rycos/shared';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8008';
+export function getApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && !envUrl.includes('localhost:8008')) {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined') {
+    if (window.location.hostname.includes('rycos.eu')) {
+      return 'https://100k-api.rycos.eu';
+    }
+  }
+  return envUrl || 'http://localhost:8000';
+}
 
 export async function fetchMenu(slug: string, lang: string = 'pl'): Promise<MenuResponse> {
+  const apiBase = getApiBaseUrl();
   const query = lang ? `?lang=${encodeURIComponent(lang)}` : '';
-  const res = await fetch(`${API_BASE}/v1/brands/${slug}/menu${query}`, {
+  const res = await fetch(`${apiBase}/v1/brands/${slug}/menu${query}`, {
     cache: 'no-store',
   });
 
@@ -17,7 +29,8 @@ export async function fetchMenu(slug: string, lang: string = 'pl'): Promise<Menu
 }
 
 export async function submitOrder(orderData: CreateOrderRequest): Promise<OrderDetail> {
-  const res = await fetch(`${API_BASE}/v1/orders`, {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/orders`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -36,7 +49,8 @@ export async function submitOrder(orderData: CreateOrderRequest): Promise<OrderD
 }
 
 export async function fetchOrder(orderId: string): Promise<OrderDetail> {
-  const res = await fetch(`${API_BASE}/v1/orders/${orderId}`, {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/orders/${orderId}`, {
     cache: 'no-store',
   });
 
@@ -57,7 +71,8 @@ export async function initiatePayment(
   method: 'blik' | 'apple_pay' | 'google_pay' | 'card' | 'cash',
   blikCode?: string
 ): Promise<InitiatePaymentResponse> {
-  const res = await fetch(`${API_BASE}/v1/payments/initiate`, {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/payments/initiate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

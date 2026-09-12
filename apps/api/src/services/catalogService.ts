@@ -15,7 +15,7 @@ const CACHE_TTL_SECONDS = 300; // 5 minutes
 
 export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
   const db = getDatabase();
-  const rows = await db
+  let rows = await db
     .select({
       id: brands.id,
       companyId: brands.companyId,
@@ -31,6 +31,27 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
     .leftJoin(locations, eq(brands.locationId, locations.id))
     .where(and(eq(brands.slug, slug), eq(brands.isActive, true)))
     .limit(1);
+
+  // If not found by exact slug (e.g. 'default', empty or unmatched), fallback to the first active brand
+  if (rows.length === 0) {
+    rows = await db
+      .select({
+        id: brands.id,
+        companyId: brands.companyId,
+        name: brands.name,
+        slug: brands.slug,
+        logoUrl: brands.logoUrl,
+        bannerUrl: brands.bannerUrl,
+        isActive: brands.isActive,
+        locationId: brands.locationId,
+        locationName: locations.name,
+      })
+      .from(brands)
+      .leftJoin(locations, eq(brands.locationId, locations.id))
+      .where(eq(brands.isActive, true))
+      .orderBy(brands.id)
+      .limit(1);
+  }
 
   if (rows.length === 0) return null;
   const row = rows[0];
@@ -120,7 +141,20 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
 
   const productIds = assignedProducts.map((p) => p.productId);
 
-  if (productIds.length === 0) {
+  // Fallback to all company products if brand has no explicit products bound yet
+  const productRows = productIds.length > 0
+    ? await db
+        .select()
+        .from(products)
+        .where(and(eq(products.companyId, companyId), inArray(products.id, productIds), eq(products.isAvailable, true)))
+        .orderBy(products.productOrder)
+    : await db
+        .select()
+        .from(products)
+        .where(and(eq(products.companyId, companyId), eq(products.isAvailable, true)))
+        .orderBy(products.productOrder);
+
+  if (productRows.length === 0) {
     const emptyResponse: MenuResponse = {
       brand: brandInfo,
       categories: categoryRows.map((c) => ({
@@ -135,28 +169,26 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
     return emptyResponse;
   }
 
-  const productRows = await db
-    .select()
-    .from(products)
-    .where(and(inArray(products.id, productIds), eq(products.isAvailable, true)))
-    .orderBy(products.productOrder);
+  const effectiveProductIds = productRows.map((p) => p.id);
 
   // 5. Fetch Addon Groups & Options for these products
-  const productAddonGroupRows = await db
-    .select({
-      productId: productAddonGroups.productId,
-      groupId: addonGroups.id,
-      groupName: addonGroups.name,
-      selectionMode: addonGroups.selectionMode,
-      required: addonGroups.required,
-      minSelect: addonGroups.minSelect,
-      maxSelect: addonGroups.maxSelect,
-      position: addonGroups.position,
-    })
-    .from(productAddonGroups)
-    .innerJoin(addonGroups, eq(productAddonGroups.groupId, addonGroups.id))
-    .where(inArray(productAddonGroups.productId, productIds))
-    .orderBy(addonGroups.position);
+  const productAddonGroupRows = effectiveProductIds.length > 0
+    ? await db
+        .select({
+          productId: productAddonGroups.productId,
+          groupId: addonGroups.id,
+          groupName: addonGroups.name,
+          selectionMode: addonGroups.selectionMode,
+          required: addonGroups.required,
+          minSelect: addonGroups.minSelect,
+          maxSelect: addonGroups.maxSelect,
+          position: addonGroups.position,
+        })
+        .from(productAddonGroups)
+        .innerJoin(addonGroups, eq(productAddonGroups.groupId, addonGroups.id))
+        .where(inArray(productAddonGroups.productId, effectiveProductIds))
+        .orderBy(addonGroups.position)
+    : [];
 
   const groupIds = Array.from(new Set(productAddonGroupRows.map((g) => g.groupId)));
 

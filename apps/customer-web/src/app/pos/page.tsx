@@ -18,7 +18,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
-import { fetchMenu, submitOrder } from '../../lib/api';
+import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
 
 interface PosCartItem {
   id: string; // unique key
@@ -27,8 +27,6 @@ interface PosCartItem {
   selectedAddons: AddonOption[];
   specialInstructions?: string;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8008';
 
 const QUICK_TABLES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'];
 
@@ -105,7 +103,7 @@ export default function PosPage() {
           ],
           products: [
             {
-              id: 101,
+              id: 1,
               companyId: 1,
               categoryId: 1,
               name: 'Classic Smash Burger',
@@ -123,7 +121,7 @@ export default function PosPage() {
               translations: {},
             },
             {
-              id: 102,
+              id: 2,
               companyId: 1,
               categoryId: 1,
               name: 'Bacon & Cheese Smash',
@@ -275,7 +273,7 @@ export default function PosPage() {
       // If action is Cash or Card, immediately set status to paid to trigger fiscal printing
       if (action === 'cash' || action === 'card') {
         try {
-          await fetch(`${API_BASE}/v1/admin/orders/${placed.id}/status`, {
+          await fetch(`${getApiBaseUrl()}/v1/admin/orders/${placed.id}/status`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',

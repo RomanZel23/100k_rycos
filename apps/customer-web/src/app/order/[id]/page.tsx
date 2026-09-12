@@ -3,7 +3,7 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { OrderDetail, OrderStatus } from '@rycos/shared';
-import { fetchOrder } from '../../../lib/api';
+import { fetchOrder, getApiBaseUrl } from '../../../lib/api';
 import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle } from 'lucide-react';
 import { PaymentModal } from '../../../components/PaymentModal';
 
@@ -37,7 +37,8 @@ function OrderTrackingContent() {
       });
 
     // WebSocket live tracker
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8008/v1/ws';
+    const apiBase = getApiBaseUrl();
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || (apiBase.replace(/^http/, 'ws') + '/v1/ws');
     let ws: WebSocket | null = null;
 
     try {

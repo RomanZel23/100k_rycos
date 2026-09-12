@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell } from 'lucide-react';
+import { getApiBaseUrl } from '../../lib/api';
 
 interface ServiceCallNotification {
   id: string;
@@ -33,8 +34,11 @@ interface KdsOrder {
   items: KdsOrderItem[];
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8008';
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8008/v1/ws';
+const getWsBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+  const apiBase = getApiBaseUrl();
+  return apiBase.replace(/^http/, 'ws') + '/v1/ws';
+};
 
 export default function KitchenDisplayPage() {
   const [orders, setOrders] = useState<KdsOrder[]>([]);
@@ -110,7 +114,7 @@ export default function KitchenDisplayPage() {
   // Fetch initial orders
   const loadOrders = async () => {
     try {
-      const res = await fetch(`${API_BASE}/v1/admin/orders`, {
+      const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders`, {
         headers: { 'x-company-id': '1' },
       });
       if (res.ok) {
@@ -141,7 +145,7 @@ export default function KitchenDisplayPage() {
 
     const connect = () => {
       try {
-        ws = new WebSocket(WS_BASE);
+        ws = new WebSocket(getWsBaseUrl());
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -197,7 +201,7 @@ export default function KitchenDisplayPage() {
   // Status Change
   const updateStatus = async (orderId: string, nextStatus: string) => {
     try {
-      await fetch(`${API_BASE}/v1/admin/orders/${orderId}/status`, {
+      await fetch(`${getApiBaseUrl()}/v1/admin/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

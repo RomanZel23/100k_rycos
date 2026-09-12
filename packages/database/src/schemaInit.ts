@@ -358,6 +358,21 @@ export async function ensureDatabaseSchema() {
           await seedDatabase();
           console.log('✓ [DB Auto-Init] Demo menu seeded successfully');
         }
+
+        // Ensure brand_products links all products to existing brands
+        await raw.unsafe(`
+          INSERT INTO brands (company_id, location_id, name, slug, is_active)
+          SELECT b.company_id, b.location_id, b.name, 'default', true
+          FROM brands b
+          WHERE b.id = 1 AND NOT EXISTS (SELECT 1 FROM brands WHERE slug = 'default')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO brand_products (brand_id, product_id)
+          SELECT b.id, p.id
+          FROM brands b
+          JOIN products p ON p.company_id = b.company_id
+          ON CONFLICT DO NOTHING;
+        `);
       }
 
       // Ensure roman.zeleznik@solutionsbay.pl is seeded as super_admin
