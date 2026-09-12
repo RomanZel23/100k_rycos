@@ -1,26 +1,36 @@
 'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { OrderDetail, OrderStatus } from '@rycos/shared';
 import { fetchOrder, getApiBaseUrl } from '../../../lib/api';
-import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode } from 'lucide-react';
+import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode, ArrowLeft } from 'lucide-react';
 import QRCode from 'qrcode';
 import { PaymentModal } from '../../../components/PaymentModal';
 import { saveStoredOrder, updateStoredOrderStatus } from '../../../store/orderStorage';
-
-const STATUS_STEPS: { status: OrderStatus; label: string; sublabel: string; icon: any }[] = [
-  { status: 'paid', label: 'Opłacone', sublabel: 'Płatność potwierdzona', icon: CheckCircle2 },
-  { status: 'in_progress', label: 'W przygotowaniu', sublabel: 'Dania przygotowywane w kuchni', icon: UtensilsCrossed },
-  { status: 'ready_to_collect', label: 'Gotowe do odbioru!', sublabel: 'Czeka na odbiór przy ladzie', icon: BellRing },
-  { status: 'completed', label: 'Odebrane', sublabel: 'Zamówienie zrealizowane', icon: CheckCircle2 },
-];
+import { i18n, Language, getStoredLanguage, saveStoredLanguage } from '../../../lib/i18n';
 
 function OrderTrackingContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const orderId = params.id as string;
   const paymentErrorParam = searchParams.get('payment_error');
+  const urlLang = searchParams.get('lang') as Language | null;
+
+  const [lang, setLang] = useState<Language>(urlLang || 'pl');
+  useEffect(() => {
+    if (!urlLang) {
+      setLang(getStoredLanguage());
+    }
+  }, [urlLang]);
+
+  const handleSelectLanguage = (newLang: Language) => {
+    setLang(newLang);
+    saveStoredLanguage(newLang);
+  };
+
+  const t = i18n[lang] || i18n.pl;
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,7 +132,7 @@ function OrderTrackingContent() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-3">
         <Loader2 size={36} className="animate-spin text-brand-500" />
-        <span className="text-sm font-bold text-slate-600">Pobieranie statusu zamówienia...</span>
+        <span className="text-sm font-bold text-slate-600">{t.fetchingOrderStatus}</span>
       </div>
     );
   }
@@ -131,8 +141,15 @@ function OrderTrackingContent() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
         <span className="text-5xl mb-4">🔍</span>
-        <h2 className="font-extrabold text-xl text-slate-900">Nie znaleziono zamówienia</h2>
-        <p className="text-sm text-slate-500 mt-1">Upewnij się, że link z kodem QR jest poprawny.</p>
+        <h2 className="font-extrabold text-xl text-slate-900">{t.orderNotFound}</h2>
+        <p className="text-sm text-slate-500 mt-1">{t.orderNotFoundSub}</p>
+        <Link
+          href="/"
+          className="mt-6 inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold shadow hover:bg-slate-800 transition-all"
+        >
+          <ArrowLeft size={16} />
+          <span>{t.backToMenu}</span>
+        </Link>
       </div>
     );
   }
@@ -140,25 +157,80 @@ function OrderTrackingContent() {
   const isReady = order.status === 'ready_to_collect';
   const isPending = order.status === 'pending_payment';
 
+  const statusSteps = [
+    {
+      status: 'paid',
+      label: t.orderStatusPaid,
+      sublabel: t.orderStatusPaidSub,
+      icon: CreditCard,
+    },
+    {
+      status: 'in_progress',
+      label: t.orderStatusInProgress,
+      sublabel: t.orderStatusInProgressSub,
+      icon: UtensilsCrossed,
+    },
+    {
+      status: 'ready_to_collect',
+      label: t.orderStatusReady,
+      sublabel: t.orderStatusReadySub,
+      icon: BellRing,
+    },
+    {
+      status: 'completed',
+      label: t.orderStatusCompleted,
+      sublabel: t.orderStatusCompletedSub,
+      icon: CheckCircle2,
+    },
+  ];
+
   const getBannerSubtitle = () => {
     switch (order.status) {
       case 'pending_payment':
-        return 'Oczekiwanie na opłacenie zamówienia';
+        return t.orderPendingBanner;
       case 'paid':
-        return 'Płatność potwierdzona • Przekazano do kuchni';
+        return t.orderPaidBanner;
       case 'in_progress':
-        return 'Kuchnia przygotowuje Twoje dania';
+        return t.orderPreparing;
       case 'ready_to_collect':
-        return 'Zamówienie jest GOTOWE do odbioru!';
+        return t.orderReadyBanner;
       case 'completed':
-        return 'Zamówienie odebrane • Dziękujemy!';
+        return t.orderCompletedBanner;
       default:
-        return 'Pokaż ten PIN lub numer zamówienia przy odbiorze';
+        return t.orderPickupBannerHelp;
     }
   };
 
   return (
     <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col p-4 space-y-4">
+      {/* Top Bar: Back to Menu & Language Switcher */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-950 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm transition-all"
+        >
+          <ArrowLeft size={16} />
+          <span>{t.backToMenu}</span>
+        </Link>
+
+        {/* Language selector */}
+        <div className="flex items-center bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+          {(['pl', 'en', 'de'] as Language[]).map((l) => (
+            <button
+              key={l}
+              onClick={() => handleSelectLanguage(l)}
+              className={`px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-lg transition-all ${
+                lang === l
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Top Banner */}
       <div className={`p-6 rounded-3xl text-center shadow-md transition-all ${
         isReady ? 'bg-emerald-500 text-white animate-bounce' : 'bg-slate-900 text-white'
@@ -166,13 +238,13 @@ function OrderTrackingContent() {
         <span className="text-xs font-bold uppercase tracking-widest opacity-80">
           {order.brandName}
         </span>
-        <h1 className="text-3xl font-black mt-1">Zamówienie #{order.orderNumber}</h1>
+        <h1 className="text-3xl font-black mt-1">{t.orderWord} #{order.orderNumber}</h1>
 
         {/* Collection QR Code & PIN Card */}
         <div className="mt-5 p-5 rounded-3xl bg-white text-slate-900 shadow-xl max-w-xs mx-auto border border-slate-100">
           <div className="flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-600 mb-2.5">
             <QrCode size={16} />
-            <span>Kod odbioru zamówienia</span>
+            <span>{t.pickupPinLabel}</span>
           </div>
 
           {qrDataUrl ? (
@@ -191,21 +263,21 @@ function OrderTrackingContent() {
 
           <div className="mt-3.5 pt-3 border-t border-slate-100">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block">
-              Twój PIN do odbioru:
+              {t.pin}:
             </span>
             <span className="text-4xl font-mono font-black text-slate-950 tracking-widest block mt-0.5">
               {order.collectionPin}
             </span>
           </div>
           <p className="text-[11px] text-slate-500 mt-2 font-medium">
-            Pokaż ten kod QR lub podaj PIN obsłudze przy odbiorze
+            {t.pickupPinSub}
           </p>
         </div>
 
         {isReady ? (
           <p className="font-extrabold text-base mt-4 flex items-center justify-center gap-2">
             <Sparkles size={20} />
-            <span>Zapraszamy po odbiór do punktu wydawania!</span>
+            <span>{t.pickupReadyCall}</span>
           </p>
         ) : (
           <p className="text-xs text-white/80 mt-3">
@@ -218,7 +290,7 @@ function OrderTrackingContent() {
       {paymentErrorParam && isPending && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
           <AlertCircle size={18} className="shrink-0" />
-          <span>Płatność w banku nie została sfinalizowana. Możesz ponowić próbę poniżej.</span>
+          <span>{t.paymentFailedBanner}</span>
         </div>
       )}
 
@@ -228,9 +300,9 @@ function OrderTrackingContent() {
           <div className="flex items-center gap-3">
             <Clock size={24} className="text-white shrink-0" />
             <div>
-              <h3 className="font-extrabold text-base">Oczekiwanie na płatność</h3>
+              <h3 className="font-extrabold text-base">{t.orderPendingBanner}</h3>
               <p className="text-xs text-white/90">
-                To zamówienie nie zostało jeszcze opłacone. Aby kuchnia rozpoczęła przygotowanie, dokończ płatność.
+                {t.paymentFailedBanner}
               </p>
             </div>
           </div>
@@ -239,7 +311,7 @@ function OrderTrackingContent() {
             className="w-full py-3.5 bg-white text-slate-900 font-extrabold rounded-2xl shadow-md hover:bg-slate-50 active:scale-[0.98] transition-all text-sm flex items-center justify-center gap-2"
           >
             <CreditCard size={18} className="text-brand-500" />
-            <span>Opłać zamówienie ({order.totalAmount.toFixed(2)} zł)</span>
+            <span>{t.retryPayment} ({order.totalAmount.toFixed(2)} {order.currency || 'zł'})</span>
           </button>
         </div>
       )}
@@ -247,13 +319,13 @@ function OrderTrackingContent() {
       {/* Progress Stepper */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
         <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
-          Status przygotowania
+          {t.orderTrackingTitle}
         </h3>
 
         <div className="space-y-6 relative pl-3">
           <div className="absolute left-[23px] top-4 bottom-4 w-0.5 bg-slate-100" />
 
-          {STATUS_STEPS.map((step, idx) => {
+          {statusSteps.map((step, idx) => {
             // Step completion logic
             const isPaidOrBeyond = ['paid', 'in_progress', 'ready_to_collect', 'completed'].includes(order.status);
             const isInProgressOrBeyond = ['in_progress', 'ready_to_collect', 'completed'].includes(order.status);
@@ -266,7 +338,7 @@ function OrderTrackingContent() {
             if (idx === 0) {
               // Opłacone
               isCompleted = isPaidOrBeyond;
-              isCurrent = false; // once paid, it's completed, not stuck on in progress
+              isCurrent = false;
             } else if (idx === 1) {
               // W przygotowaniu
               isCompleted = isInProgressOrBeyond;
@@ -311,10 +383,10 @@ function OrderTrackingContent() {
                   </h4>
                   {isCurrent && (
                     <span className="text-[11px] text-brand-600 font-bold block">
-                      {order.status === 'paid' && '● Oczekuje na realizację w kuchni...'}
-                      {order.status === 'in_progress' && '● Dania są przygotowywane w kuchni...'}
-                      {order.status === 'ready_to_collect' && '● Zapraszamy po odbiór do punktu wydawania!'}
-                      {order.status === 'completed' && '● Dziękujemy i zapraszamy ponownie!'}
+                      {order.status === 'paid' && `● ${t.waitingForKitchen}`}
+                      {order.status === 'in_progress' && `● ${t.dishesBeingPrepared}`}
+                      {order.status === 'ready_to_collect' && `● ${t.pickupReadyCall}`}
+                      {order.status === 'completed' && `● ${t.thankYouVisitAgain}`}
                     </span>
                   )}
                   {!isCurrent && isCompleted && (
@@ -337,7 +409,7 @@ function OrderTrackingContent() {
               <Receipt size={20} />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-500 block">E-Paragon Fiskalny (RYCOS)</span>
+              <span className="text-xs font-bold text-slate-500 block">{t.fiscalReceiptTitle}</span>
               <span className="text-sm font-mono font-bold text-slate-900">
                 Nr: {order.fiscalReceiptNumber}
               </span>
@@ -352,7 +424,7 @@ function OrderTrackingContent() {
               className="p-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm"
             >
               <Download size={14} />
-              <span>Pobierz PDF</span>
+              <span>{t.downloadPdf}</span>
             </a>
           )}
         </div>
@@ -360,7 +432,7 @@ function OrderTrackingContent() {
 
       {/* Order Summary Details */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
-        <h3 className="font-extrabold text-slate-900 text-sm">Podsumowanie zamówienia</h3>
+        <h3 className="font-extrabold text-slate-900 text-sm">{t.orderSummary}</h3>
 
         <div className="space-y-2 divide-y divide-slate-100 text-xs">
           {order.items.map((it, idx) => (
@@ -375,14 +447,14 @@ function OrderTrackingContent() {
                   </span>
                 )}
               </div>
-              <span className="font-bold text-slate-900">{it.lineTotal.toFixed(2)} zł</span>
+              <span className="font-bold text-slate-900">{it.lineTotal.toFixed(2)} {order.currency || 'zł'}</span>
             </div>
           ))}
         </div>
 
         <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-extrabold text-slate-900">
-          <span>Razem:</span>
-          <span>{order.totalAmount.toFixed(2)} zł</span>
+          <span>{t.total}:</span>
+          <span>{order.totalAmount.toFixed(2)} {order.currency || 'zł'}</span>
         </div>
       </div>
 
@@ -392,6 +464,7 @@ function OrderTrackingContent() {
         onClose={() => setIsPaymentOpen(false)}
         orderId={order.id}
         totalAmount={order.totalAmount}
+        lang={lang}
       />
     </div>
   );

@@ -4,16 +4,19 @@ import React, { useState } from 'react';
 import { X, Smartphone, CreditCard, Banknote, Loader2, CheckCircle2 } from 'lucide-react';
 import { initiatePayment } from '../lib/api';
 import { useRouter } from 'next/navigation';
+import { i18n, Language } from '../lib/i18n';
 
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   orderId: string;
   totalAmount: number;
+  lang?: Language;
 }
 
-export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, orderId, totalAmount, lang = 'pl' }: PaymentModalProps) {
   const router = useRouter();
+  const t = i18n[lang] || i18n.pl;
   const [selectedMethod, setSelectedMethod] = useState<'blik' | 'apple_pay' | 'card' | 'cash'>('blik');
   const [blikCode, setBlikCode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -37,7 +40,7 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
       // Gotówka lub płatność już opłacona -> przejdź do ekranu śledzenia
       router.push(`/order/${orderId}`);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Błąd połączenia z bramką płatności');
+      setErrorMessage(err.message || t.paymentError);
       setIsProcessing(false);
     }
   };
@@ -47,7 +50,7 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
       <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h3 className="font-extrabold text-slate-900 text-lg">Wybierz metodę płatności</h3>
+          <h3 className="font-extrabold text-slate-900 text-lg">{t.selectPaymentMethod}</h3>
           <button
             onClick={onClose}
             disabled={isProcessing}
@@ -59,7 +62,7 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
 
         {/* Amount */}
         <div className="bg-slate-50 p-3.5 rounded-2xl flex items-center justify-between">
-          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Kwota do zapłaty:</span>
+          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">{t.amountToPay}</span>
           <span className="text-xl font-extrabold text-slate-900">{totalAmount.toFixed(2)} zł</span>
         </div>
 
@@ -79,8 +82,8 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
                 BLIK
               </span>
               <div>
-                <span className="font-bold text-sm block">BLIK (Saferpay)</span>
-                <span className="text-[11px] text-slate-500">Szybka płatność kodem</span>
+                <span className="font-bold text-sm block">BLIK</span>
+                <span className="text-[11px] text-slate-500">{t.blikFast}</span>
               </div>
             </div>
             {selectedMethod === 'blik' && <CheckCircle2 size={18} className="text-brand-500" />}
@@ -99,7 +102,7 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
               <Smartphone size={20} className="text-slate-800" />
               <div>
                 <span className="font-bold text-sm block">Apple Pay / Google Pay</span>
-                <span className="text-[11px] text-slate-500">Płatność jednym kliknięciem</span>
+                <span className="text-[11px] text-slate-500">{t.cardWallet}</span>
               </div>
             </div>
             {selectedMethod === 'apple_pay' && <CheckCircle2 size={18} className="text-brand-500" />}
@@ -117,7 +120,7 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
             <div className="flex items-center gap-3">
               <CreditCard size={20} className="text-slate-800" />
               <div>
-                <span className="font-bold text-sm block">Karta płatnicza online</span>
+                <span className="font-bold text-sm block">{t.payCard}</span>
                 <span className="text-[11px] text-slate-500">Visa, Mastercard</span>
               </div>
             </div>
@@ -136,8 +139,8 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
             <div className="flex items-center gap-3">
               <Banknote size={20} className="text-slate-800" />
               <div>
-                <span className="font-bold text-sm block">Płatność przy odbiorze</span>
-                <span className="text-[11px] text-slate-500">Gotówką lub kartą u obsługi</span>
+                <span className="font-bold text-sm block">{t.payAtCounterTitle}</span>
+                <span className="text-[11px] text-slate-500">{t.payAtCounterSub}</span>
               </div>
             </div>
             {selectedMethod === 'cash' && <CheckCircle2 size={18} className="text-brand-500" />}
@@ -159,11 +162,11 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount }: PaymentM
           {isProcessing ? (
             <>
               <Loader2 size={20} className="animate-spin" />
-              <span>Łączenie z bramką Saferpay...</span>
+              <span>{t.connectingGateway}</span>
             </>
           ) : (
             <span>
-              {selectedMethod === 'cash' ? 'Zatwierdź zamówienie' : `Zapłać ${totalAmount.toFixed(2)} zł`}
+              {selectedMethod === 'cash' ? t.confirmOrder : `${t.payAmount} ${totalAmount.toFixed(2)} zł`}
             </span>
           )}
         </button>

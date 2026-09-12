@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { CartItem, calculateItemTotal, calculateSubtotal } from '../store/cartStore';
 import { X, Trash2, Plus, Minus, CreditCard, ChevronRight, FileText } from 'lucide-react';
+import { i18n, Language } from '../lib/i18n';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface CartDrawerProps {
   parkingSpot?: string;
   tipAmount: number;
   customerNip?: string;
+  lang?: Language;
   onUpdateQuantity: (id: string, qty: number) => void;
   onRemoveItem: (id: string) => void;
   onSetTip: (tip: number) => void;
@@ -27,6 +29,7 @@ export function CartDrawer({
   parkingSpot,
   tipAmount,
   customerNip,
+  lang = 'pl',
   onUpdateQuantity,
   onRemoveItem,
   onSetTip,
@@ -35,6 +38,7 @@ export function CartDrawer({
 }: CartDrawerProps) {
   if (!isOpen) return null;
 
+  const t = i18n[lang] || i18n.pl;
   const [showNipInput, setShowNipInput] = useState(!!customerNip);
   const subtotal = calculateSubtotal(items);
   const total = subtotal + tipAmount;
@@ -47,9 +51,9 @@ export function CartDrawer({
         {/* Drawer Header */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <div>
-            <h2 className="font-extrabold text-slate-900 text-lg">Twój Koszyk</h2>
+            <h2 className="font-extrabold text-slate-900 text-lg">{t.cartTitle}</h2>
             <p className="text-xs text-slate-500">
-              {tableLabel ? `Stolik: ${tableLabel}` : parkingSpot ? `Miejsce: ${parkingSpot}` : 'Na wynos'}
+              {tableLabel ? `${t.table}: ${tableLabel}` : parkingSpot ? `${t.parking}: ${parkingSpot}` : t.takeaway}
             </p>
           </div>
           <button
@@ -65,7 +69,7 @@ export function CartDrawer({
           {items.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
               <span className="text-4xl block mb-2">🛒</span>
-              <p className="font-medium">Koszyk jest pusty</p>
+              <p className="font-medium">{t.cartEmptyNotice}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -120,7 +124,7 @@ export function CartDrawer({
             <>
               {/* Gratuity / Napiwek */}
               <div className="pt-2 border-t border-slate-100">
-                <span className="text-xs font-bold text-slate-600 block mb-2">Napiwek dla obsługi:</span>
+                <span className="text-xs font-bold text-slate-600 block mb-2">{t.serviceTip}</span>
                 <div className="grid grid-cols-3 gap-2">
                   {tipOptions.map((tip, idx) => (
                     <button
@@ -132,7 +136,7 @@ export function CartDrawer({
                           : 'border-slate-200 text-slate-600'
                       }`}
                     >
-                      {tip === 0 ? 'Brak' : `+${tip.toFixed(2)} zł`}
+                      {tip === 0 ? t.noTip : `+${tip.toFixed(2)} zł`}
                     </button>
                   ))}
                 </div>
@@ -146,14 +150,14 @@ export function CartDrawer({
                   className="flex items-center gap-2 text-xs font-bold text-slate-700"
                 >
                   <FileText size={15} className="text-brand-500" />
-                  <span>Chcę paragon z NIP</span>
+                  <span>{t.nipOptional}</span>
                 </button>
 
                 {showNipInput && (
                   <input
                     type="text"
                     maxLength={10}
-                    placeholder="Wpisz 10-cyfrowy NIP"
+                    placeholder={t.nipPlaceholder}
                     value={customerNip || ''}
                     onChange={(e) => onSetCustomerNip(e.target.value.replace(/\D/g, ''))}
                     className="mt-2 w-full p-2.5 rounded-xl border border-slate-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -168,7 +172,7 @@ export function CartDrawer({
         {items.length > 0 && (
           <div className="p-4 border-t border-slate-100 bg-white sticky bottom-0 space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Razem do zapłaty:</span>
+              <span className="text-slate-500">{t.totalToPay}</span>
               <span className="text-xl font-extrabold text-slate-900">{total.toFixed(2)} zł</span>
             </div>
 
@@ -177,7 +181,7 @@ export function CartDrawer({
               className="w-full py-4 bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-brand-text font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 text-base"
             >
               <CreditCard size={18} />
-              <span>Przejdź do płatności</span>
+              <span>{t.proceedToPayment}</span>
               <ChevronRight size={18} />
             </button>
           </div>

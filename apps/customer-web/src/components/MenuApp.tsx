@@ -11,7 +11,7 @@ import { CartDrawer } from './CartDrawer';
 import { PaymentModal } from './PaymentModal';
 import { CartItem, calculateSubtotal } from '../store/cartStore';
 import { ShoppingBag, MapPin, Loader2, Globe, Bell, Clock } from 'lucide-react';
-import { i18n, Language } from '../lib/i18n';
+import { i18n, Language, getStoredLanguage, saveStoredLanguage } from '../lib/i18n';
 import { ServiceCallModal } from './ServiceCallModal';
 import { OrderHistoryModal } from './OrderHistoryModal';
 import { getStoredOrders, saveStoredOrder, StoredOrder } from '../store/orderStorage';
@@ -27,9 +27,18 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const tableLabel = searchParams.get('table') || undefined;
   const parkingSpot = searchParams.get('parking') || undefined;
 
-  // Language state (pl, en, de)
+  // Language state (pl, en, de) with localStorage persistence
   const [lang, setLang] = useState<Language>('pl');
-  const t = i18n[lang];
+  useEffect(() => {
+    setLang(getStoredLanguage());
+  }, []);
+
+  const handleSelectLanguage = (newLang: Language) => {
+    setLang(newLang);
+    saveStoredLanguage(newLang);
+  };
+
+  const t = i18n[lang] || i18n.pl;
 
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -346,7 +355,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
             <div className="flex items-center gap-0.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
               <button
-                onClick={() => setLang('pl')}
+                onClick={() => handleSelectLanguage('pl')}
                 className={`px-2 py-1 rounded-lg transition-all ${
                   lang === 'pl' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -355,7 +364,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                 PL
               </button>
               <button
-                onClick={() => setLang('en')}
+                onClick={() => handleSelectLanguage('en')}
                 className={`px-2 py-1 rounded-lg transition-all ${
                   lang === 'en' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -364,7 +373,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                 EN
               </button>
               <button
-                onClick={() => setLang('de')}
+                onClick={() => handleSelectLanguage('de')}
                 className={`px-2 py-1 rounded-lg transition-all ${
                   lang === 'de' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
                 }`}
@@ -401,10 +410,10 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
               <span className="font-extrabold">{activeBannerOrder.orderNumber}: </span>
               <span className="text-slate-300">
                 {activeBannerOrder.status === 'ready_to_collect'
-                  ? `Gotowe do odbioru! PIN: ${activeBannerOrder.collectionPin || ''}`
+                  ? `${t.orderStatusReady} PIN: ${activeBannerOrder.collectionPin || ''}`
                   : activeBannerOrder.status === 'paid'
-                  ? 'Opłacone · Oczekiwanie na kuchnię'
-                  : 'W przygotowaniu w kuchni'}
+                  ? `${t.orderStatusPaid} · ${t.orderStatusPaidSub}`
+                  : t.orderStatusInProgress}
               </span>
             </div>
           </div>
@@ -412,7 +421,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             href={`/order/${activeBannerOrder.id}`}
             className="shrink-0 px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-brand-text text-xs font-black transition-all active:scale-95 shadow-xs"
           >
-            Śledź &rarr;
+            {lang === 'de' ? 'Details' : lang === 'en' ? 'Track' : 'Śledź'} &rarr;
           </Link>
         </div>
       )}
@@ -498,6 +507,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
         onAddToCart={handleAddToCart}
+        lang={lang}
       />
 
       {/* Cart Drawer */}
@@ -509,6 +519,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         parkingSpot={parkingSpot}
         tipAmount={tipAmount}
         customerNip={customerNip}
+        lang={lang}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onSetTip={setTipAmount}
@@ -523,6 +534,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           onClose={() => setIsPaymentOpen(false)}
           orderId={placedOrderId}
           totalAmount={subtotal + tipAmount}
+          lang={lang}
         />
       )}
 

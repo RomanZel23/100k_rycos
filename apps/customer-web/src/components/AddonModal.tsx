@@ -3,16 +3,19 @@
 import React, { useState } from 'react';
 import { Product, AddonOption } from '@rycos/shared';
 import { X, Check } from 'lucide-react';
+import { i18n, Language } from '../lib/i18n';
 
 interface AddonModalProps {
   product: Product | null;
   onClose: () => void;
+  lang?: Language;
   onAddToCart: (product: Product, selectedAddons: AddonOption[], instructions?: string) => void;
 }
 
-export function AddonModal({ product, onClose, onAddToCart }: AddonModalProps) {
+export function AddonModal({ product, onClose, lang = 'pl', onAddToCart }: AddonModalProps) {
   if (!product) return null;
 
+  const t = i18n[lang] || i18n.pl;
   const [selectedAddons, setSelectedAddons] = useState<AddonOption[]>([]);
   const [instructions, setInstructions] = useState('');
 
@@ -61,7 +64,7 @@ export function AddonModal({ product, onClose, onAddToCart }: AddonModalProps) {
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-slate-900 text-sm">{group.name}</h4>
                 <span className="text-xs text-slate-400">
-                  {group.required ? 'Wymagane' : 'Opcjonalne'}
+                  {group.required ? t.required : t.optional}
                 </span>
               </div>
 
@@ -106,11 +109,11 @@ export function AddonModal({ product, onClose, onAddToCart }: AddonModalProps) {
 
           {/* Special Instructions */}
           <div className="space-y-2">
-            <label className="font-bold text-slate-900 text-sm">Uwagi do pozycji</label>
+            <label className="font-bold text-slate-900 text-sm">{t.specialInstructionsLabel}</label>
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="np. bez cebuli, sos osobno..."
+              placeholder={t.specialInstructionsPlaceholder}
               maxLength={200}
               className="w-full rounded-xl border border-slate-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
               rows={2}
@@ -127,7 +130,7 @@ export function AddonModal({ product, onClose, onAddToCart }: AddonModalProps) {
             }}
             className="w-full py-3.5 bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-brand-text font-extrabold rounded-2xl flex items-center justify-between px-6 shadow-lg shadow-brand-500/25"
           >
-            <span>Dodaj do zamówienia</span>
+            <span>{t.addToOrder}</span>
             <span>{finalPrice.toFixed(2)} zł</span>
           </button>
         </div>

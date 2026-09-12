@@ -1,8 +1,74 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, products, categories, eq, and, desc, sql } from '@rycos/database';
+import { getDatabase, products, categories, brands, contentTranslations, eq, and, desc, sql } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
+import { invalidateBrandMenuCache } from '../../services/catalogService.js';
+
+async function getProductTranslations(db: any, productId: number): Promise<Record<string, Record<string, string>>> {
+  const rows = await db
+    .select()
+    .from(contentTranslations)
+    .where(
+      and(
+        eq(contentTranslations.entityType, 'products'),
+        eq(contentTranslations.entityId, productId)
+      )
+    );
+  const result: Record<string, Record<string, string>> = {};
+  for (const r of rows) {
+    if (!result[r.language]) {
+      result[r.language] = {};
+    }
+    result[r.language][r.attributeName] = r.value;
+  }
+  return result;
+}
+
+async function saveProductTranslations(
+  db: any,
+  productId: number,
+  translations: Record<string, Record<string, string>> | undefined
+) {
+  if (!translations || typeof translations !== 'object') return;
+  for (const [lang, attrs] of Object.entries(translations)) {
+    if (!attrs || typeof attrs !== 'object') continue;
+    for (const [attr, val] of Object.entries(attrs)) {
+      const strVal = String(val ?? '').trim();
+      if (strVal) {
+        await db
+          .insert(contentTranslations)
+          .values({
+            entityType: 'products',
+            entityId: productId,
+            language: lang,
+            attributeName: attr,
+            value: strVal,
+          })
+          .onConflictDoUpdate({
+            target: [
+              contentTranslations.entityType,
+              contentTranslations.entityId,
+              contentTranslations.language,
+              contentTranslations.attributeName,
+            ],
+            set: { value: strVal },
+          });
+      } else {
+        await db
+          .delete(contentTranslations)
+          .where(
+            and(
+              eq(contentTranslations.entityType, 'products'),
+              eq(contentTranslations.entityId, productId),
+              eq(contentTranslations.language, lang),
+              eq(contentTranslations.attributeName, attr)
+            )
+          );
+      }
+    }
+  }
+}
 
 async function resolveCategoryId(
   db: any,
@@ -143,8 +209,11 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       ? [{ id: row.categoryId, name: row.categoryName }]
       : [];
 
+    const translations = await getProductTranslations(db, productId);
+
     return success(reply, {
       ...row,
+      translations,
       image_url: row.imageUrl,
       is_available: row.isAvailable,
       is_age_restricted: row.isAgeRestricted,
@@ -231,8 +300,23 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         ? [{ id: inserted.categoryId, name: categoryName }]
         : [];
 
+      if (body.translations) {
+        await saveProductTranslations(db, inserted.id, body.translations);
+      }
+
+      const companyBrands = await db
+        .select({ id: brands.id })
+        .from(brands)
+        .where(eq(brands.companyId, companyId));
+      for (const b of companyBrands) {
+        await invalidateBrandMenuCache(b.id);
+      }
+
+      const savedTranslations = await getProductTranslations(db, inserted.id);
+
       return success(reply, {
         ...inserted,
+        translations: savedTranslations,
         image_url: inserted.imageUrl,
         is_available: inserted.isAvailable,
         is_age_restricted: inserted.isAgeRestricted,
@@ -312,6 +396,18 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         return notFound(reply, 'Product not found');
       }
 
+      if (body.translations !== undefined) {
+        await saveProductTranslations(db, productId, body.translations);
+      }
+
+      const companyBrands = await db
+        .select({ id: brands.id })
+        .from(brands)
+        .where(eq(brands.companyId, companyId));
+      for (const b of companyBrands) {
+        await invalidateBrandMenuCache(b.id);
+      }
+
       let categoryName: string | null = null;
       if (updated.categoryId) {
         const [cat] = await db
@@ -326,8 +422,11 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         ? [{ id: updated.categoryId, name: categoryName }]
         : [];
 
+      const currentTranslations = await getProductTranslations(db, productId);
+
       return success(reply, {
         ...updated,
+        translations: currentTranslations,
         image_url: updated.imageUrl,
         is_available: updated.isAvailable,
         is_age_restricted: updated.isAgeRestricted,
@@ -357,6 +456,23 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
 
     if (!deleted) {
       return notFound(reply, 'Product not found');
+    }
+
+    await db
+      .delete(contentTranslations)
+      .where(
+        and(
+          eq(contentTranslations.entityType, 'products'),
+          eq(contentTranslations.entityId, productId)
+        )
+      );
+
+    const companyBrands = await db
+      .select({ id: brands.id })
+      .from(brands)
+      .where(eq(brands.companyId, companyId));
+    for (const b of companyBrands) {
+      await invalidateBrandMenuCache(b.id);
     }
 
     return success(reply, { id: productId }, 'Product deleted');
