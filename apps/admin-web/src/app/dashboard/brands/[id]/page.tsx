@@ -6,6 +6,7 @@ import { currentUser, isManager } from '@/lib/auth'
 import { NoAccess } from '@/components/NoAccess'
 import { BrandMenuPicker, type PickerProduct } from '@/components/BrandMenuPicker'
 import { BrandImageUploader } from '@/components/BrandImageUploader'
+import { BrandColorPicker } from '@/components/BrandColorPicker'
 import { Banner } from '@/components/Banner'
 import { updateBrand, assignProducts, deleteBrand } from '../actions'
 
@@ -110,11 +111,12 @@ export default async function EditBrandPage({
           <Select name="language" label="Język menu" options={LANGS} value={brand.language} />
           <Select name="currency" label="Waluta" options={CURRENCIES} value={brand.currency} />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field name="active_button_color" label="Kolor przycisków (0xAARRGGBB lub nazwa)" defaultValue={colors.active} />
-          <Field name="background_button_color" label="Kolor tła" defaultValue={colors.bg} />
+        <div className="pt-3 border-t border-neutral-100">
+          <BrandColorPicker initialActiveColor={colors.active} initialBgColor={colors.bg} />
         </div>
-        <button className="btn-brand sm:w-auto sm:px-6">Zapisz szczegóły</button>
+        <div className="pt-2">
+          <button className="btn-brand sm:w-auto sm:px-6">Zapisz szczegóły</button>
+        </div>
       </form>
 
       {/* Images (Supabase Storage) */}
