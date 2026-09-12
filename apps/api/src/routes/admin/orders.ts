@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, orders, orderItems, eq, and, desc, sql } from '@rycos/database';
+import { getDatabase, orders, orderItems, eq, and, desc, sql, inArray } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { updateOrderStatus } from '../../services/orderEngine.js';
@@ -27,7 +27,35 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
       .limit(takeLimit);
 
     const rows = await query;
-    return success(reply, rows, 'Orders retrieved');
+    const orderIds = rows.map((r) => r.id);
+    const itemsByOrderId: Record<string, any[]> = {};
+
+    if (orderIds.length > 0) {
+      const items = await db
+        .select()
+        .from(orderItems)
+        .where(inArray(orderItems.orderId, orderIds));
+
+      for (const item of items) {
+        if (!itemsByOrderId[item.orderId]) {
+          itemsByOrderId[item.orderId] = [];
+        }
+        itemsByOrderId[item.orderId].push({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          addons: item.addonsJson,
+          specialInstructions: item.specialInstructions,
+        });
+      }
+    }
+
+    const rowsWithItems = rows.map((r) => ({
+      ...r,
+      items: itemsByOrderId[r.id] || [],
+    }));
+
+    return success(reply, rowsWithItems, 'Orders retrieved');
   });
 
   // PUT /v1/admin/orders/:id/status - Update order lifecycle status (e.g. kitchen starts prep, marks ready)
