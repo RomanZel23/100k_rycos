@@ -273,6 +273,18 @@ CREATE TABLE IF NOT EXISTS "company_payment_gateways" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "storage_files" (
+	"id" varchar(128) PRIMARY KEY NOT NULL,
+	"bucket" varchar(64) DEFAULT 'products' NOT NULL,
+	"name" varchar(255) NOT NULL,
+	"mime_type" varchar(128) NOT NULL,
+	"size" integer NOT NULL,
+	"data" bytea NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "idx_storage_files_bucket_name" ON "storage_files" ("bucket", "name");
+
 ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_brand_product" ON "brand_products" ("brand_id", "product_id");
