@@ -115,12 +115,21 @@ export async function fetchImageFromSupabase(
   if (!raw) return null;
 
   try {
-    const rows = await raw`
+    let rows = await raw`
       SELECT data, mime_type
       FROM storage_files
       WHERE bucket = ${bucket} AND (name = ${fileName} OR id = ${fileName})
       LIMIT 1;
     `;
+
+    if (!rows || rows.length === 0) {
+      rows = await raw`
+        SELECT data, mime_type
+        FROM storage_files
+        WHERE name = ${fileName} OR id = ${fileName}
+        LIMIT 1;
+      `;
+    }
 
     if (!rows || rows.length === 0) {
       return null;

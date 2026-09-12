@@ -20,6 +20,29 @@ export async function storageRoutes(fastify: FastifyInstance) {
     return reply
       .header('Content-Type', image.contentType)
       .header('Cache-Control', 'public, max-age=31536000, immutable')
+      .header('Cross-Origin-Resource-Policy', 'cross-origin')
+      .header('Access-Control-Allow-Origin', '*')
+      .send(image.buffer);
+  });
+
+  // GET /v1/storage/:bucket/:fileName - Generic public storage endpoint
+  fastify.get('/v1/storage/:bucket/:fileName', async (req, reply) => {
+    const { bucket, fileName } = req.params as { bucket: string; fileName: string };
+    const safeName = fileName.replace(/[^a-zA-Z0-9.\-_]/g, '');
+    if (!safeName) {
+      return reply.status(400).send({ error: 'Invalid file name' });
+    }
+
+    const image = await fetchImageFromSupabase(safeName, bucket);
+    if (!image) {
+      return reply.status(404).send({ error: 'Image not found' });
+    }
+
+    return reply
+      .header('Content-Type', image.contentType)
+      .header('Cache-Control', 'public, max-age=31536000, immutable')
+      .header('Cross-Origin-Resource-Policy', 'cross-origin')
+      .header('Access-Control-Allow-Origin', '*')
       .send(image.buffer);
   });
 
@@ -37,6 +60,8 @@ export async function storageRoutes(fastify: FastifyInstance) {
     return reply
       .header('Content-Type', image.contentType)
       .header('Cache-Control', 'public, max-age=31536000, immutable')
+      .header('Cross-Origin-Resource-Policy', 'cross-origin')
+      .header('Access-Control-Allow-Origin', '*')
       .send(image.buffer);
   });
 
@@ -53,6 +78,8 @@ export async function storageRoutes(fastify: FastifyInstance) {
     return reply
       .header('Content-Type', image.contentType)
       .header('Cache-Control', 'private, max-age=3600')
+      .header('Cross-Origin-Resource-Policy', 'cross-origin')
+      .header('Access-Control-Allow-Origin', '*')
       .send(image.buffer);
   });
 

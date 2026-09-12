@@ -51,7 +51,7 @@ export default async function StockPage({
             <li key={p.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {p.image_url ? (
-                <img src={p.image_url} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
+                <img src={p.image_url} alt="" crossOrigin="anonymous" className="h-12 w-12 shrink-0 rounded-md object-cover" />
               ) : (
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">no img</div>
               )}

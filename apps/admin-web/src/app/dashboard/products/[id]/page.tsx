@@ -68,7 +68,7 @@ export default async function EditProductPage({ params, searchParams }: {
       {notice && <Banner kind="success" className="mt-4">{notice}</Banner>}
 
       {/* Image Uploader (Supabase Storage) */}
-      <ProductImageUploader productId={product.id} currentImageUrl={product.image_url} />
+      <ProductImageUploader productId={product.id} currentImageUrl={product.image_url || (product as any).imageUrl || null} />
 
       {/* Fields */}
       <form action={updateProduct} className="card mt-6 space-y-3">

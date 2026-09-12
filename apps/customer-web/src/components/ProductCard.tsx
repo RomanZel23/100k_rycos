@@ -21,6 +21,7 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
           <img
             src={product.imageUrl}
             alt={product.name}
+            crossOrigin="anonymous"
             className="w-full h-full object-cover"
             loading="lazy"
           />

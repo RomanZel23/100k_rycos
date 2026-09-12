@@ -74,7 +74,7 @@ export default async function ProductsPage({
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     {p.image_url
-                      ? <img src={p.image_url} alt="" className="h-9 w-9 rounded object-cover" />
+                      ? <img src={p.image_url} alt="" crossOrigin="anonymous" className="h-9 w-9 rounded object-cover" />
                       : <div className="h-9 w-9 rounded bg-neutral-100" />}
                     <Link href={`/dashboard/products/${p.id}`} className="font-medium hover:text-brand">{p.name}</Link>
                   </div>

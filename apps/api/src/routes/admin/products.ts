@@ -67,7 +67,16 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'Product not found');
     }
 
-    return success(reply, row);
+    return success(reply, {
+      ...row,
+      image_url: row.imageUrl,
+      is_available: row.isAvailable,
+      stock_quantity: row.stockQuantity,
+      category_id: row.categoryId,
+      prep_time: row.prepTimeMinutes,
+      tax: row.taxRate,
+      sku: row.barcode,
+    });
   });
 
   // POST /v1/admin/products - Create a new product

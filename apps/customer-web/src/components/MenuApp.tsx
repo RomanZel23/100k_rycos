@@ -184,6 +184,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           <img
             src={menu.brand.bannerUrl}
             alt={menu.brand.name}
+            crossOrigin="anonymous"
             className="w-full h-full object-cover"
           />
         </div>
@@ -197,6 +198,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
               <img
                 src={menu.brand.logoUrl}
                 alt={menu.brand.name}
+                crossOrigin="anonymous"
                 className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-xs shrink-0"
               />
             )}

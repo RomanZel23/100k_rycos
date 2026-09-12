@@ -28,6 +28,7 @@ async function bootstrap() {
 
   await fastify.register(helmet, {
     contentSecurityPolicy: false, // Allow Swagger UI
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
   });
 
   await fastify.register(multipart, {

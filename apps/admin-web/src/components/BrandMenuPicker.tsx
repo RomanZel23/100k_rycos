@@ -62,7 +62,7 @@ function Column({ title, products, action, onClick, highlight }: {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {p.image_url
-              ? <img src={p.image_url} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+              ? <img src={p.image_url} alt="" crossOrigin="anonymous" className="h-10 w-10 shrink-0 rounded object-cover" />
               : <div className="h-10 w-10 shrink-0 rounded bg-neutral-100" />}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{p.name}</span>

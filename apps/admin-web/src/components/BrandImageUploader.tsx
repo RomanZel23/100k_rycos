@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface BrandImageUploaderProps {
@@ -27,6 +27,10 @@ export function BrandImageUploader({
   const [isDeleting, setIsDeleting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    setImageUrl(currentUrl || null)
+  }, [currentUrl])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -77,7 +81,8 @@ export function BrandImageUploader({
         throw new Error(data.error || 'Nie udało się wgrać zdjęcia')
       }
 
-      setImageUrl(data.imageUrl || data.data?.imageUrl || previewUrl)
+      const newUrl = data.imageUrl || data.data?.imageUrl || (data.data?.images && data.data.images[type]) || previewUrl
+      setImageUrl(newUrl)
       setSelectedFile(null)
       setPreviewUrl(null)
       setSuccessMessage('Zdjęcie zapisane pomyślnie!')
@@ -160,6 +165,7 @@ export function BrandImageUploader({
             <img
               src={displayUrl}
               alt={label}
+              crossOrigin="anonymous"
               className="h-full w-full object-contain"
             />
           ) : (

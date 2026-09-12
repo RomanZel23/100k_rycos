@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, ChangeEvent } from 'react'
+import { useState, useRef, useEffect, ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface ProductImageUploaderProps {
@@ -19,6 +19,10 @@ export function ProductImageUploader({ productId, currentImageUrl }: ProductImag
   const [isDeleting, setIsDeleting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    setImageUrl(currentImageUrl || null)
+  }, [currentImageUrl])
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     setErrorMessage(null)
@@ -68,7 +72,7 @@ export function ProductImageUploader({ productId, currentImageUrl }: ProductImag
         throw new Error(data.error || 'Nie udało się wgrać zdjęcia')
       }
 
-      const newUrl = data.data?.imageUrl || data.data?.image_url || previewUrl
+      const newUrl = data.data?.imageUrl || data.data?.image_url || data.imageUrl || previewUrl
       setImageUrl(newUrl)
       setSelectedFile(null)
       setPreviewUrl(null)
@@ -152,6 +156,7 @@ export function ProductImageUploader({ productId, currentImageUrl }: ProductImag
             <img
               src={displayUrl}
               alt="Podgląd"
+              crossOrigin="anonymous"
               className="h-full w-full object-cover"
             />
           ) : (
