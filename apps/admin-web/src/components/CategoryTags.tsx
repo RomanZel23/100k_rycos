@@ -50,6 +50,9 @@ export function CategoryTags({
             if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(value) }
             else if (e.key === 'Backspace' && value === '' && tags.length) remove(tags[tags.length - 1])
           }}
+          onBlur={() => {
+            if (value.trim()) add(value)
+          }}
           placeholder={tags.length ? 'Add another…' : 'Type to tag, e.g. Drinks'}
           className="min-w-[8rem] flex-1 border-0 p-1 text-sm outline-none"
         />

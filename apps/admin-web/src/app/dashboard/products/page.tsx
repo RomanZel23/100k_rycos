@@ -82,7 +82,9 @@ export default async function ProductsPage({
                 <td className="px-4 py-3">
                   {p.categories && p.categories.length
                     ? <span className="flex flex-wrap gap-1">{p.categories.map((c) => <span key={c.id} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">#{c.name}</span>)}</span>
-                    : <span className="text-neutral-400">—</span>}
+                    : (p as any).category_name || (p as any).categoryName
+                      ? <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">#{(p as any).category_name || (p as any).categoryName}</span>
+                      : <span className="text-neutral-400">—</span>}
                 </td>
                 <td className="px-4 py-3 text-right">{fmtPrice(p.price)}</td>
                 <td className="px-4 py-3 text-center">

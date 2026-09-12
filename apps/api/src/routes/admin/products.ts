@@ -1,8 +1,49 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, products, categories, eq, and, desc } from '@rycos/database';
+import { getDatabase, products, categories, eq, and, desc, sql } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
+
+async function resolveCategoryId(
+  db: any,
+  companyId: number,
+  categoryNames: unknown
+): Promise<number | null | undefined> {
+  if (categoryNames === undefined) return undefined;
+
+  const names = Array.isArray(categoryNames)
+    ? categoryNames.map((s) => String(s).trim()).filter(Boolean)
+    : [String(categoryNames).trim()].filter(Boolean);
+
+  if (names.length === 0) {
+    return null;
+  }
+
+  const primaryName = names[0];
+
+  // Check existing category for company (case-insensitive)
+  const existing = await db
+    .select()
+    .from(categories)
+    .where(and(eq(categories.companyId, companyId), sql`lower(${categories.name}) = lower(${primaryName})`))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
+  // Create new category if not found
+  const [created] = await db
+    .insert(categories)
+    .values({
+      companyId,
+      name: primaryName,
+      position: 0,
+    })
+    .returning();
+
+  return created.id;
+}
 
 export async function adminProductsRoutes(fastify: FastifyInstance) {
   // Pre-handler for all admin product routes
@@ -39,17 +80,24 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       .where(eq(products.companyId, companyId))
       .orderBy(desc(products.id));
 
-    const mapped = rows.map((r) => ({
-      ...r,
-      is_available: r.isAvailable,
-      is_age_restricted: r.isAgeRestricted,
-      stock_quantity: r.stockQuantity,
-      image_url: r.imageUrl,
-      category_name: r.categoryName,
-      tax: r.taxRate,
-      tax_rate: r.taxRate,
-      prep_time: r.prepTimeMinutes,
-    }));
+    const mapped = rows.map((r) => {
+      const categoryList = r.categoryId && r.categoryName
+        ? [{ id: r.categoryId, name: r.categoryName }]
+        : [];
+      return {
+        ...r,
+        is_available: r.isAvailable,
+        is_age_restricted: r.isAgeRestricted,
+        stock_quantity: r.stockQuantity,
+        image_url: r.imageUrl,
+        category_name: r.categoryName,
+        categoryName: r.categoryName,
+        categories: categoryList,
+        tax: r.taxRate,
+        tax_rate: r.taxRate,
+        prep_time: r.prepTimeMinutes,
+      };
+    });
 
     return success(reply, mapped, 'Products retrieved');
   });
@@ -62,14 +110,38 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     const db = getDatabase();
 
     const [row] = await db
-      .select()
+      .select({
+        id: products.id,
+        companyId: products.companyId,
+        categoryId: products.categoryId,
+        categoryName: categories.name,
+        name: products.name,
+        description: products.description,
+        price: products.price,
+        taxRate: products.taxRate,
+        ptuCode: products.ptuCode,
+        imageUrl: products.imageUrl,
+        isAvailable: products.isAvailable,
+        isAgeRestricted: products.isAgeRestricted,
+        stockQuantity: products.stockQuantity,
+        prepTimeMinutes: products.prepTimeMinutes,
+        barcode: products.barcode,
+        productOrder: products.productOrder,
+        createdAt: products.createdAt,
+        updatedAt: products.updatedAt,
+      })
       .from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
       .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
       .limit(1);
 
     if (!row) {
       return notFound(reply, 'Product not found');
     }
+
+    const categoryList = row.categoryId && row.categoryName
+      ? [{ id: row.categoryId, name: row.categoryName }]
+      : [];
 
     return success(reply, {
       ...row,
@@ -79,6 +151,9 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       isAgeRestricted: row.isAgeRestricted,
       stock_quantity: row.stockQuantity,
       category_id: row.categoryId,
+      category_name: row.categoryName,
+      categoryName: row.categoryName,
+      categories: categoryList,
       prep_time: row.prepTimeMinutes,
       prepTimeMinutes: row.prepTimeMinutes,
       tax: row.taxRate,
@@ -109,7 +184,17 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     const isAgeRestricted = body.isAgeRestricted !== undefined ? Boolean(body.isAgeRestricted) : body.is_age_restricted !== undefined ? Boolean(body.is_age_restricted) : false;
     const rawPrep = body.prepTimeMinutes ?? body.prep_time ?? body.prepTime;
     const prepTimeMinutes = rawPrep !== undefined && rawPrep !== null && rawPrep !== '' ? parseInt(String(rawPrep), 10) : 10;
-    const categoryId = body.categoryId ?? body.category_id ? parseInt(String(body.categoryId ?? body.category_id), 10) : null;
+    
+    let categoryId: number | null = null;
+    const catInput = body.category_names ?? body.category_name ?? body.categoryNames;
+    if (catInput !== undefined) {
+      const resolved = await resolveCategoryId(db, companyId, catInput);
+      if (resolved !== undefined) categoryId = resolved;
+    } else if (body.categoryId !== undefined || body.category_id !== undefined) {
+      const cid = body.categoryId ?? body.category_id;
+      categoryId = cid ? parseInt(String(cid), 10) : null;
+    }
+
     const barcode = body.barcode ?? body.sku ?? null;
 
     try {
@@ -132,6 +217,20 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         })
         .returning();
 
+      let categoryName: string | null = null;
+      if (inserted.categoryId) {
+        const [cat] = await db
+          .select()
+          .from(categories)
+          .where(eq(categories.id, inserted.categoryId))
+          .limit(1);
+        if (cat) categoryName = cat.name;
+      }
+
+      const categoryList = inserted.categoryId && categoryName
+        ? [{ id: inserted.categoryId, name: categoryName }]
+        : [];
+
       return success(reply, {
         ...inserted,
         image_url: inserted.imageUrl,
@@ -139,6 +238,10 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         is_age_restricted: inserted.isAgeRestricted,
         tax: inserted.taxRate,
         prep_time: inserted.prepTimeMinutes,
+        category_id: inserted.categoryId,
+        category_name: categoryName,
+        categoryName: categoryName,
+        categories: categoryList,
       }, 'Product created', 201);
     } catch (err: any) {
       console.error('[Admin:Products] Insert failed:', err);
@@ -161,7 +264,14 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     if (body.name !== undefined) updateData.name = String(body.name).trim();
     if (body.description !== undefined) updateData.description = body.description ? String(body.description).trim() : null;
     if (body.price !== undefined) updateData.price = typeof body.price === 'number' ? body.price.toFixed(2) : String(body.price);
-    if (body.categoryId !== undefined || body.category_id !== undefined) {
+
+    const catInput = body.category_names ?? body.category_name ?? body.categoryNames;
+    if (catInput !== undefined) {
+      const resolved = await resolveCategoryId(db, companyId, catInput);
+      if (resolved !== undefined) {
+        updateData.categoryId = resolved;
+      }
+    } else if (body.categoryId !== undefined || body.category_id !== undefined) {
       const cid = body.categoryId ?? body.category_id;
       updateData.categoryId = cid ? parseInt(String(cid), 10) : null;
     }
@@ -202,6 +312,20 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         return notFound(reply, 'Product not found');
       }
 
+      let categoryName: string | null = null;
+      if (updated.categoryId) {
+        const [cat] = await db
+          .select()
+          .from(categories)
+          .where(eq(categories.id, updated.categoryId))
+          .limit(1);
+        if (cat) categoryName = cat.name;
+      }
+
+      const categoryList = updated.categoryId && categoryName
+        ? [{ id: updated.categoryId, name: categoryName }]
+        : [];
+
       return success(reply, {
         ...updated,
         image_url: updated.imageUrl,
@@ -209,6 +333,10 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
         is_age_restricted: updated.isAgeRestricted,
         tax: updated.taxRate,
         prep_time: updated.prepTimeMinutes,
+        category_id: updated.categoryId,
+        category_name: categoryName,
+        categoryName: categoryName,
+        categories: categoryList,
       }, 'Product updated');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update product');
