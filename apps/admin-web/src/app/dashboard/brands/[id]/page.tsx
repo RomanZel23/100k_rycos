@@ -92,26 +92,29 @@ export default async function EditBrandPage({
       {/* Details */}
       <form action={updateBrand} className="card space-y-3">
         <input type="hidden" name="id" value={brand.id} />
-        <h2 className="text-base font-semibold">Details</h2>
+        <h2 className="text-base font-semibold">Szczegóły marki (Details)</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field name="name" label="Name" defaultValue={brand.name ?? ''} />
+          <Field name="name" label="Nazwa marki" defaultValue={brand.name ?? ''} />
+          <Field name="qr_slug" label="Krótki QR Slug (np. g2d6a)" defaultValue={brandSlug} />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="menu_layout">
-              Menu layout{' '}
+              Układ menu (Layout){' '}
               <span title={LAYOUT_HELP} className="cursor-help text-neutral-400" aria-label={LAYOUT_HELP}>ⓘ</span>
             </label>
             <select id="menu_layout" name="menu_layout" defaultValue={brand.menu_layout} className="input">
               {layoutOptions.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
-          <Select name="language" label="Language" options={LANGS} value={brand.language} />
-          <Select name="currency" label="Currency" options={CURRENCIES} value={brand.currency} />
+          <Select name="language" label="Język menu" options={LANGS} value={brand.language} />
+          <Select name="currency" label="Waluta" options={CURRENCIES} value={brand.currency} />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field name="active_button_color" label="Button color (0xAARRGGBB or name)" defaultValue={colors.active} />
-          <Field name="background_button_color" label="Background color" defaultValue={colors.bg} />
+          <Field name="active_button_color" label="Kolor przycisków (0xAARRGGBB lub nazwa)" defaultValue={colors.active} />
+          <Field name="background_button_color" label="Kolor tła" defaultValue={colors.bg} />
         </div>
-        <button className="btn-brand sm:w-auto sm:px-6">Save details</button>
+        <button className="btn-brand sm:w-auto sm:px-6">Zapisz szczegóły</button>
       </form>
 
       {/* Images (Supabase Storage) */}

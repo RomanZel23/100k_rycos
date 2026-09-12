@@ -12,7 +12,8 @@ async function failTo(path: string, res: Response, fallback: string): Promise<ne
 
 export async function createBrand(formData: FormData): Promise<void> {
   const name = String(formData.get('name') || '').trim()
-  const res = await adminApi('/brands', { method: 'POST', body: JSON.stringify({ name }) })
+  const slug = String(formData.get('slug') || formData.get('qr_slug') || '').trim()
+  const res = await adminApi('/brands', { method: 'POST', body: JSON.stringify({ name, slug: slug || undefined }) })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) redirect('/dashboard/brands?error=' + encodeURIComponent(json?.message || 'Could not create brand'))
   revalidatePath('/dashboard/brands')
@@ -22,7 +23,7 @@ export async function createBrand(formData: FormData): Promise<void> {
 // Routing (location_id/terminal_id), location_description and delivery_required
 // were removed from the brand UI — routing moves to the upcoming "QR Print"
 // section. Only send what the form still edits.
-const DETAIL_FIELDS = ['name', 'menu_layout', 'language', 'currency', 'active_button_color', 'background_button_color']
+const DETAIL_FIELDS = ['name', 'slug', 'qr_slug', 'menu_layout', 'language', 'currency', 'active_button_color', 'background_button_color']
 
 export async function updateBrand(formData: FormData): Promise<void> {
   const id = String(formData.get('id') || '')
@@ -33,6 +34,7 @@ export async function updateBrand(formData: FormData): Promise<void> {
   }
   const res = await adminApi(`/brands/${id}`, { method: 'PUT', body: JSON.stringify(body) })
   if (!res.ok) await failTo(`/dashboard/brands/${id}`, res, 'Failed to save brand details')
+  revalidatePath('/dashboard/brands')
   revalidatePath(`/dashboard/brands/${id}`)
   redirect(`/dashboard/brands/${id}?notice=` + encodeURIComponent('Details saved'))
 }

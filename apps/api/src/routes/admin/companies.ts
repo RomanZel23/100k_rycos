@@ -172,7 +172,9 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     const mapped = rows.map((r) => ({
       ...r,
       qr_slug: r.slug,
-      menu_layout: 'standard',
+      menu_layout: (r as any).menuLayout || 'list',
+      language: (r as any).language || 'pl',
+      currency: (r as any).currency || 'PLN',
       product_count: productsCountMap[r.id] || 0,
     }));
 
@@ -204,10 +206,10 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     return success(reply, {
       ...brand,
       qr_slug: brand.slug,
-      menu_layout: 'list',
-      language: 'pl',
-      currency: 'PLN',
-      style: null,
+      menu_layout: (brand as any).menuLayout || 'list',
+      language: (brand as any).language || 'pl',
+      currency: (brand as any).currency || 'PLN',
+      style: (brand as any).style || null,
       product_ids: assigned.map((p) => p.productId),
       images: {
         header: brand.bannerUrl ?? null,
@@ -332,6 +334,15 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     }
   });
 
+function generateShortSlug(length = 5): string {
+  const chars = '23456789abcdefghjkmnpqrstuvwxyz';
+  let slug = '';
+  for (let i = 0; i < length; i++) {
+    slug += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return slug;
+}
+
   // PUT /v1/admin/brands/:id - Update brand
   fastify.put('/v1/admin/brands/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -342,6 +353,29 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
     const updateData: Record<string, any> = {};
     if (body.name !== undefined) updateData.name = String(body.name).trim();
+    if (body.slug !== undefined || body.qr_slug !== undefined) {
+      const raw = String(body.slug ?? body.qr_slug).trim().toLowerCase();
+      if (raw) {
+        updateData.slug = raw.replace(/[^a-z0-9_-]/g, '');
+      }
+    }
+    if (body.menu_layout !== undefined || body.menuLayout !== undefined) {
+      updateData.menuLayout = String(body.menu_layout ?? body.menuLayout).trim();
+    }
+    if (body.language !== undefined) {
+      updateData.language = String(body.language).trim().toLowerCase();
+    }
+    if (body.currency !== undefined) {
+      updateData.currency = String(body.currency).trim().toUpperCase();
+    }
+    if (body.active_button_color !== undefined || body.background_button_color !== undefined) {
+      updateData.style = JSON.stringify({
+        active_button_color: body.active_button_color || '0xFFFF8800',
+        background_button_color: body.background_button_color || 'black',
+      });
+    } else if (body.style !== undefined) {
+      updateData.style = typeof body.style === 'string' ? body.style : JSON.stringify(body.style);
+    }
 
     const [updated] = await db
       .update(brands)
@@ -356,6 +390,10 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     return success(reply, {
       ...updated,
       qr_slug: updated.slug,
+      menu_layout: updated.menuLayout,
+      language: updated.language,
+      currency: updated.currency,
+      style: updated.style,
     }, 'Brand updated');
   });
 
@@ -423,14 +461,14 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
     const brandName = body.name ? String(body.name).trim() : '';
     let brandSlug = body.slug ? String(body.slug).trim().toLowerCase() : '';
-    if (!brandSlug && brandName) {
-      brandSlug = brandName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    // Short non-meaningful random slug like 'g2d6a' by default
+    if (!brandSlug) {
+      brandSlug = generateShortSlug(5);
     }
 
-    if (!brandName || !brandSlug) {
+    if (!brandName) {
       return validationError(reply, {
-        name: !brandName ? 'name is required' : '',
-        slug: !brandSlug ? 'slug is required' : '',
+        name: 'name is required',
       });
     }
 
@@ -441,8 +479,13 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
           companyId,
           name: brandName,
           slug: brandSlug,
+          menuLayout: body.menu_layout || body.menuLayout || 'list',
+          language: body.language || 'pl',
+          currency: body.currency || 'PLN',
+          style: body.style ? (typeof body.style === 'string' ? body.style : JSON.stringify(body.style)) : null,
           logoUrl: body.logoUrl || null,
           bannerUrl: body.bannerUrl || null,
+          footerUrl: body.footerUrl || null,
           locationId: body.locationId ? parseInt(String(body.locationId), 10) : null,
           isActive: body.isActive !== false,
         })
@@ -451,6 +494,10 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
       return success(reply, {
         ...inserted,
         qr_slug: inserted.slug,
+        menu_layout: inserted.menuLayout,
+        language: inserted.language,
+        currency: inserted.currency,
+        style: inserted.style,
       }, 'Brand created', 201);
     } catch (err: any) {
       return error(reply, err.message || 'Failed to create brand');

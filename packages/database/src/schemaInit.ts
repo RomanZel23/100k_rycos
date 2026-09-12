@@ -31,8 +31,13 @@ CREATE TABLE IF NOT EXISTS "brands" (
 	"location_id" integer REFERENCES "locations"("id") ON DELETE set null,
 	"name" varchar(255) NOT NULL,
 	"slug" varchar(128) NOT NULL,
+	"menu_layout" varchar(32) DEFAULT 'list' NOT NULL,
+	"language" varchar(8) DEFAULT 'pl' NOT NULL,
+	"currency" varchar(8) DEFAULT 'PLN' NOT NULL,
+	"style" text,
 	"logo_url" text,
 	"banner_url" text,
+	"footer_url" text,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "brands_slug_unique" UNIQUE("slug")
@@ -287,6 +292,10 @@ CREATE INDEX IF NOT EXISTS "idx_storage_files_bucket_name" ON "storage_files" ("
 
 ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
 ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "footer_url" text;
+ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "menu_layout" varchar(32) DEFAULT 'list';
+ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "language" varchar(8) DEFAULT 'pl';
+ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "currency" varchar(8) DEFAULT 'PLN';
+ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "style" text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_brand_product" ON "brand_products" ("brand_id", "product_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_entity_translation" ON "content_translations" ("entity_type", "entity_id", "language", "attribute_name");
