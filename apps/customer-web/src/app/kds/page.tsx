@@ -50,6 +50,9 @@ export default function KitchenDisplayPage() {
   const [currentTime, setCurrentTime] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Mobile tab state
+  const [activeMobileTab, setActiveMobileTab] = useState<'new' | 'preparing' | 'ready'>('preparing');
+
   // Verification modal state
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinModalTargetOrder, setPinModalTargetOrder] = useState<any | null>(null);
@@ -211,6 +214,12 @@ export default function KitchenDisplayPage() {
       nextStatus === 'ready_for_pickup' ? 'ready_to_collect' :
       nextStatus;
 
+    if (canonicalStatus === 'in_progress') {
+      setActiveMobileTab('preparing');
+    } else if (canonicalStatus === 'ready_to_collect') {
+      setActiveMobileTab('ready');
+    }
+
     // Optimistic update
     setOrders((prev) =>
       prev
@@ -249,78 +258,82 @@ export default function KitchenDisplayPage() {
   const readyOrders = orders.filter((o) => o.status === 'ready_to_collect' || o.status === 'ready_for_pickup');
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
       {/* Top Bar */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
-            <ChefHat size={22} />
+      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between shadow-md shrink-0 gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0">
+            <ChefHat size={18} />
           </div>
-          <div>
-            <h1 className="font-extrabold text-lg text-white tracking-tight flex items-center gap-2">
-              KDS · Kuchnia Live
-              <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+          <div className="min-w-0">
+            <h1 className="font-extrabold text-sm sm:text-lg text-white tracking-tight flex items-center gap-1.5 sm:gap-2 truncate">
+              <span>KDS · Kuchnia Live</span>
+              <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
             </h1>
-            <p className="text-xs text-slate-400">
+            <p className="hidden sm:block text-xs text-slate-400 truncate">
               {isConnected ? 'Połączono live z systemem' : 'Łączenie z WebSocket...'}
             </p>
           </div>
         </div>
 
         {/* Workstation Quick Switcher */}
-        <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700 text-xs">
+        <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700 text-xs shrink-0">
           <a
             href="/pos"
-            className="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors"
+            className="px-2 sm:px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
           >
-            💳 POS
+            <span>💳</span>
+            <span className="hidden sm:inline">POS</span>
           </a>
-          <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs">
-            🍳 KDS
+          <span className="px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1">
+            <span>🍳</span>
+            <span className="hidden sm:inline">KDS</span>
           </span>
           <a
             href="/pickup"
-            className="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors"
+            className="px-2 sm:px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
           >
-            📦 Wydawka
+            <span>📦</span>
+            <span className="hidden sm:inline">Wydawka</span>
           </a>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {/* Quick QR & PIN pickup buttons */}
           <button
             onClick={() => {
               setPinModalTargetOrder(null);
               setIsPinModalOpen(true);
             }}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer"
             title="Weryfikuj odbiór (Skaner QR / PIN)"
           >
             <Camera size={15} />
-            <span>Weryfikuj Odbiór / QR</span>
+            <span className="hidden sm:inline">Weryfikuj Odbiór</span>
           </button>
 
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
               soundEnabled
                 ? 'bg-slate-800 border-slate-700 text-emerald-400'
                 : 'bg-slate-800 border-slate-700 text-slate-500'
             }`}
+            title={soundEnabled ? 'Dźwięk włączony' : 'Wyciszony'}
           >
             {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-            <span>{soundEnabled ? 'Dźwięk włączony' : 'Wyciszony'}</span>
+            <span className="hidden md:inline ml-1.5">{soundEnabled ? 'Dźwięk' : 'Wyciszony'}</span>
           </button>
 
           <button
             onClick={loadOrders}
-            className="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all"
+            className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
             title="Odśwież"
           >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
 
-          <div className="px-4 py-1.5 rounded-lg bg-slate-800 border border-slate-700 font-mono text-base font-bold text-amber-400">
+          <div className="hidden sm:block px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 font-mono text-sm font-bold text-amber-400">
             {currentTime}
           </div>
         </div>
@@ -328,35 +341,34 @@ export default function KitchenDisplayPage() {
 
       {/* Service Calls Bar */}
       {serviceCalls.length > 0 && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-6 py-2.5 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase tracking-wider">
-            <Bell size={16} className="animate-bounce text-amber-400" />
-            <span>Wezwania stolika ({serviceCalls.length}):</span>
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-3 sm:px-6 py-2 flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 text-amber-400 font-black text-xs uppercase tracking-wider">
+            <Bell size={15} className="animate-bounce text-amber-400" />
+            <span>Wezwania ({serviceCalls.length}):</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {serviceCalls.map((call) => (
               <div
                 key={call.id}
-                className="flex items-center gap-2 bg-slate-900 border border-amber-500/50 text-white px-3 py-1 rounded-xl shadow-md text-xs"
+                className="flex items-center gap-1.5 bg-slate-900 border border-amber-500/50 text-white px-2.5 py-1 rounded-xl shadow-md text-xs"
               >
                 <span className="font-black text-amber-400">
                   {call.tableLabel ? `Stolik ${call.tableLabel}` : call.parkingSpot ? `Parking ${call.parkingSpot}` : 'Stolik'}
                 </span>
-                <span className="text-slate-200 font-medium">
+                <span className="text-slate-200 font-medium truncate max-w-[130px] sm:max-w-none">
                   {call.callType === 'bill'
-                    ? '🧾 Prośba o rachunek'
+                    ? '🧾 Rachunek'
                     : call.callType === 'waiter'
-                    ? '🙋 Podejdź do stolika'
+                    ? '🙋 Podejdź'
                     : call.callType === 'cutlery'
-                    ? '🍴 Sztućce / serwetki'
+                    ? '🍴 Sztućce'
                     : call.notes || 'Wezwanie'}
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">({call.timestamp})</span>
                 <button
                   onClick={() => setServiceCalls((prev) => prev.filter((c) => c.id !== call.id))}
-                  className="ml-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-bold bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded transition-colors"
+                  className="ml-1 text-[11px] text-emerald-400 hover:text-emerald-300 font-bold bg-slate-800 hover:bg-slate-700 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
                 >
-                  ✓ Załatwione
+                  ✓
                 </button>
               </div>
             ))}
@@ -364,12 +376,65 @@ export default function KitchenDisplayPage() {
         </div>
       )}
 
+      {/* Mobile Column Tabs */}
+      <div className="md:hidden flex items-center gap-1.5 p-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0">
+        <button
+          onClick={() => setActiveMobileTab('new')}
+          className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            activeMobileTab === 'new'
+              ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+              : 'bg-slate-800/80 text-slate-300 hover:bg-slate-750'
+          }`}
+        >
+          <span>Nowe</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+            activeMobileTab === 'new' ? 'bg-slate-950 text-amber-400' : 'bg-slate-700 text-amber-300'
+          }`}>
+            {newOrders.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveMobileTab('preparing')}
+          className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            activeMobileTab === 'preparing'
+              ? 'bg-blue-600 text-white shadow-md font-black'
+              : 'bg-slate-800/80 text-slate-300 hover:bg-slate-750'
+          }`}
+        >
+          <span>W kuchni</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+            activeMobileTab === 'preparing' ? 'bg-slate-950 text-blue-300' : 'bg-slate-700 text-blue-300'
+          }`}>
+            {preparingOrders.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveMobileTab('ready')}
+          className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            activeMobileTab === 'ready'
+              ? 'bg-emerald-600 text-white shadow-md font-black'
+              : 'bg-slate-800/80 text-slate-300 hover:bg-slate-750'
+          }`}
+        >
+          <span>Gotowe</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+            activeMobileTab === 'ready' ? 'bg-slate-950 text-emerald-300' : 'bg-slate-700 text-emerald-300'
+          }`}>
+            {readyOrders.length}
+          </span>
+        </button>
+      </div>
+
       {/* Kanban Board */}
-      <main className="flex-1 p-6 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+      <main className="flex-1 p-2.5 sm:p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6 overflow-hidden">
         {/* Kolumna 1: Nowe / Opłacone */}
-        <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-            <h2 className="font-bold text-sm uppercase tracking-wider text-amber-400 flex items-center gap-2">
+        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden ${
+          activeMobileTab === 'new' ? 'flex flex-1' : 'hidden md:flex'
+        }`}>
+          <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
+            <h2 className="font-bold text-xs sm:text-sm uppercase tracking-wider text-amber-400 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               Nowe do przygotowania
             </h2>
@@ -387,7 +452,7 @@ export default function KitchenDisplayPage() {
               newOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-slate-850 border-2 border-amber-500/50 rounded-xl p-4 shadow-lg flex flex-col justify-between animate-in fade-in zoom-in duration-200"
+                  className="bg-slate-850 border-2 border-amber-500/50 rounded-xl p-3.5 sm:p-4 shadow-lg flex flex-col justify-between animate-in fade-in zoom-in duration-200"
                 >
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-750 pb-2 mb-2">
@@ -398,8 +463,8 @@ export default function KitchenDisplayPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
-                      <span className="flex items-center gap-1">
-                        <MapPin size={12} className="text-amber-400" />
+                      <span className="flex items-center gap-1 font-semibold">
+                        <MapPin size={13} className="text-amber-400" />
                         {order.tableLabel ? `Stolik: ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos / Bar'}
                       </span>
                       <span className="flex items-center gap-1 text-slate-500">
@@ -413,7 +478,7 @@ export default function KitchenDisplayPage() {
                       {order.items?.map((item, idx) => (
                         <div key={idx} className="text-sm">
                           <div className="flex items-start gap-2 font-bold text-slate-200">
-                            <span className="text-amber-400">{item.quantity}x</span>
+                            <span className="text-amber-400 font-mono">{item.quantity}x</span>
                             <span>{item.name}</span>
                           </div>
                           {item.addons && item.addons.length > 0 && (
@@ -433,7 +498,7 @@ export default function KitchenDisplayPage() {
 
                   <button
                     onClick={() => updateStatus(order.id, 'in_progress')}
-                    className="mt-4 w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
+                    className="mt-4 w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-amber-500/10"
                   >
                     Rozpocznij przygotowanie &rarr;
                   </button>
@@ -444,9 +509,11 @@ export default function KitchenDisplayPage() {
         </section>
 
         {/* Kolumna 2: W przygotowaniu */}
-        <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-            <h2 className="font-bold text-sm uppercase tracking-wider text-blue-400 flex items-center gap-2">
+        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden ${
+          activeMobileTab === 'preparing' ? 'flex flex-1' : 'hidden md:flex'
+        }`}>
+          <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
+            <h2 className="font-bold text-xs sm:text-sm uppercase tracking-wider text-blue-400 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
               W przygotowaniu
             </h2>
@@ -464,7 +531,7 @@ export default function KitchenDisplayPage() {
               preparingOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-slate-850 border border-blue-500/40 rounded-xl p-4 shadow-lg flex flex-col justify-between"
+                  className="bg-slate-850 border border-blue-500/40 rounded-xl p-3.5 sm:p-4 shadow-lg flex flex-col justify-between animate-in fade-in duration-150"
                 >
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-750 pb-2 mb-2">
@@ -475,8 +542,8 @@ export default function KitchenDisplayPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
-                      <span className="flex items-center gap-1">
-                        <MapPin size={12} className="text-blue-400" />
+                      <span className="flex items-center gap-1 font-semibold">
+                        <MapPin size={13} className="text-blue-400" />
                         {order.tableLabel ? `Stolik: ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
                       </span>
                       <span className="flex items-center gap-1 text-slate-500">
@@ -489,12 +556,17 @@ export default function KitchenDisplayPage() {
                       {order.items?.map((item, idx) => (
                         <div key={idx} className="text-sm">
                           <div className="flex items-start gap-2 font-bold text-slate-200">
-                            <span className="text-blue-400">{item.quantity}x</span>
+                            <span className="text-blue-400 font-mono">{item.quantity}x</span>
                             <span>{item.name}</span>
                           </div>
                           {item.addons && item.addons.length > 0 && (
                             <div className="text-xs text-slate-400 pl-6">
                               + {item.addons.map((a) => a.name).join(', ')}
+                            </div>
+                          )}
+                          {item.specialInstructions && (
+                            <div className="text-xs text-amber-200/80 italic pl-6">
+                              „{item.specialInstructions}”
                             </div>
                           )}
                         </div>
@@ -504,7 +576,7 @@ export default function KitchenDisplayPage() {
 
                   <button
                     onClick={() => updateStatus(order.id, 'ready_to_collect')}
-                    className="mt-4 w-full py-2.5 bg-blue-500 hover:bg-blue-400 text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
+                    className="mt-4 w-full py-3 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-black rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-blue-600/10"
                   >
                     Oznacz jako Gotowe &rarr;
                   </button>
@@ -515,9 +587,11 @@ export default function KitchenDisplayPage() {
         </section>
 
         {/* Kolumna 3: Gotowe do odbioru */}
-        <section className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-col">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-            <h2 className="font-bold text-sm uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden ${
+          activeMobileTab === 'ready' ? 'flex flex-1' : 'hidden md:flex'
+        }`}>
+          <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
+            <h2 className="font-bold text-xs sm:text-sm uppercase tracking-wider text-emerald-400 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               Gotowe do odbioru
             </h2>
@@ -535,7 +609,7 @@ export default function KitchenDisplayPage() {
               readyOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-slate-850 border border-emerald-500/40 rounded-xl p-4 shadow-lg flex flex-col justify-between"
+                  className="bg-slate-850 border border-emerald-500/40 rounded-xl p-3.5 sm:p-4 shadow-lg flex flex-col justify-between animate-in fade-in duration-150"
                 >
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-750 pb-2 mb-2">
@@ -546,8 +620,8 @@ export default function KitchenDisplayPage() {
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
-                      <span className="flex items-center gap-1">
-                        <MapPin size={12} className="text-emerald-400" />
+                      <span className="flex items-center gap-1 font-semibold">
+                        <MapPin size={13} className="text-emerald-400" />
                         {order.tableLabel ? `Stolik: ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
                       </span>
                       <span className="text-emerald-400 font-bold">
@@ -558,7 +632,7 @@ export default function KitchenDisplayPage() {
                     <div className="space-y-1.5 py-1">
                       {order.items?.map((item, idx) => (
                         <div key={idx} className="text-xs font-semibold text-slate-300 flex items-center gap-2">
-                          <span className="text-emerald-400">{item.quantity}x</span>
+                          <span className="text-emerald-400 font-mono">{item.quantity}x</span>
                           <span>{item.name}</span>
                         </div>
                       ))}
@@ -571,7 +645,7 @@ export default function KitchenDisplayPage() {
                         setPinModalTargetOrder(order);
                         setIsPinModalOpen(true);
                       }}
-                      className="py-2.5 bg-slate-800 hover:bg-slate-700 border border-emerald-500/40 text-emerald-300 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+                      className="py-3 bg-slate-800 hover:bg-slate-750 active:scale-[0.98] border border-emerald-500/40 text-emerald-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       title="Weryfikuj kod PIN lub QR"
                     >
                       <KeyRound size={14} />
@@ -579,7 +653,7 @@ export default function KitchenDisplayPage() {
                     </button>
                     <button
                       onClick={() => updateStatus(order.id, 'completed')}
-                      className="py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg text-xs uppercase tracking-wider transition-all active:scale-[0.98]"
+                      className="py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-black rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-emerald-600/20"
                     >
                       Wydano ✓
                     </button>

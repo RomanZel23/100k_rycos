@@ -246,42 +246,49 @@ export default function PickupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white flex flex-col select-none">
+    <div className="min-h-screen bg-neutral-950 text-white flex flex-col font-sans select-none overflow-x-hidden">
       {/* Top Workstation Navigation Bar */}
-      <header className="bg-neutral-900 border-b border-neutral-800 px-4 py-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-sm">
+      <header className="bg-neutral-900 border-b border-neutral-800 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between shrink-0 gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-sm shrink-0">
             📦
           </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-tight text-white leading-tight">Wydawka Foodtruck</h1>
-            <p className="text-[11px] text-neutral-400">Skaner odbioru zamówień</p>
+          <div className="min-w-0">
+            <h1 className="text-xs sm:text-sm font-bold tracking-tight text-white leading-tight truncate">
+              Wydawka Foodtruck
+            </h1>
+            <p className="hidden sm:block text-[11px] text-neutral-400 truncate">
+              Skaner odbioru zamówień
+            </p>
           </div>
         </div>
 
         {/* Quick Mode Switcher for All-in-One Terminals */}
-        <div className="flex items-center gap-1.5 bg-neutral-800/80 p-1 rounded-xl border border-neutral-700/60 text-xs">
+        <div className="flex items-center gap-1 bg-neutral-800/80 p-1 rounded-xl border border-neutral-700/60 text-xs shrink-0">
           <Link
             href="/pos"
-            className="px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-medium transition-colors"
+            className="px-2 sm:px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-bold transition-colors flex items-center gap-1"
           >
-            💳 Kasa POS
+            <span>💳</span>
+            <span className="hidden sm:inline">POS</span>
           </Link>
           <Link
             href="/kds"
-            className="px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-medium transition-colors"
+            className="px-2 sm:px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-bold transition-colors flex items-center gap-1"
           >
-            🍳 KDS
+            <span>🍳</span>
+            <span className="hidden sm:inline">KDS</span>
           </Link>
-          <span className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold shadow-sm">
-            📦 Wydawka
+          <span className="px-2 sm:px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold shadow-sm flex items-center gap-1">
+            <span>📦</span>
+            <span className="hidden sm:inline">Wydawka</span>
           </span>
         </div>
 
         {/* Audio Toggle */}
         <button
           onClick={() => setSoundEnabled(!soundEnabled)}
-          className="p-2 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white"
+          className="p-2 rounded-xl bg-neutral-850 border border-neutral-700 text-neutral-300 hover:text-white transition-colors cursor-pointer shrink-0"
           title={soundEnabled ? 'Dźwięk włączony' : 'Dźwięk wyciszony'}
         >
           {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-neutral-500" />}
@@ -289,23 +296,23 @@ export default function PickupPage() {
       </header>
 
       {/* Main Action Area */}
-      <main className="flex-1 flex flex-col p-4 max-w-lg mx-auto w-full">
+      <main className="flex-1 flex flex-col p-3 sm:p-4 max-w-sm sm:max-w-md mx-auto w-full justify-between overflow-y-auto">
         {/* Success Confirmation Overlay Card */}
         {successOrder ? (
-          <div className="flex-1 flex flex-col justify-center items-center text-center p-6 bg-emerald-950/40 border-2 border-emerald-500/80 rounded-3xl animate-in zoom-in-95 duration-200">
-            <div className="w-20 h-20 rounded-full bg-emerald-500 text-neutral-950 flex items-center justify-center mb-4 shadow-lg shadow-emerald-500/20">
-              <CheckCircle2 className="w-12 h-12" />
+          <div className="flex-1 flex flex-col justify-center items-center text-center p-5 sm:p-6 bg-emerald-950/40 border-2 border-emerald-500/80 rounded-3xl animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-500 text-neutral-950 flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-emerald-500/20">
+              <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12" />
             </div>
 
             <span className="text-xs uppercase font-bold tracking-widest text-emerald-400">
               Zamówienie Wydane!
             </span>
-            <div className="text-5xl font-black text-white mt-1 mb-2 font-mono">
+            <div className="text-4xl sm:text-5xl font-black text-white mt-1 mb-2 font-mono">
               #{successOrder.orderNumber}
             </div>
 
             {successOrder.items && successOrder.items.length > 0 && (
-              <div className="w-full bg-neutral-900/90 rounded-2xl p-4 my-4 border border-neutral-800 text-left text-xs max-h-48 overflow-y-auto space-y-2">
+              <div className="w-full bg-neutral-900/90 rounded-2xl p-3 sm:p-4 my-3 sm:my-4 border border-neutral-800 text-left text-xs max-h-48 overflow-y-auto space-y-2">
                 {successOrder.items.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-start border-b border-neutral-800 pb-1.5 last:border-0 last:pb-0">
                     <span className="font-semibold text-neutral-200">
@@ -321,18 +328,18 @@ export default function PickupPage() {
 
             <button
               onClick={handleNextScan}
-              className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-black text-base transition-colors shadow-lg mt-2 flex items-center justify-center gap-2"
+              className="w-full py-3.5 sm:py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-neutral-950 font-black text-sm sm:text-base transition-all shadow-lg mt-2 flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>Następne zamówienie ➔</span>
             </button>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col justify-between">
             {/* Mode Tabs: Camera vs PIN */}
-            <div className="grid grid-cols-2 gap-2 bg-neutral-900 p-1 rounded-2xl border border-neutral-800 mb-4">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 bg-neutral-900 p-1 rounded-2xl border border-neutral-800 mb-3 sm:mb-4 shrink-0">
               <button
                 onClick={() => setActiveTab('camera')}
-                className={`py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 transition-all ${
+                className={`py-2 sm:py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
                   activeTab === 'camera'
                     ? 'bg-neutral-800 text-white shadow-sm border border-neutral-700'
                     : 'text-neutral-400 hover:text-white'
@@ -344,7 +351,7 @@ export default function PickupPage() {
 
               <button
                 onClick={() => setActiveTab('pin')}
-                className={`py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 transition-all ${
+                className={`py-2 sm:py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
                   activeTab === 'pin'
                     ? 'bg-neutral-800 text-white shadow-sm border border-neutral-700'
                     : 'text-neutral-400 hover:text-white'
@@ -357,7 +364,7 @@ export default function PickupPage() {
 
             {/* Error Message */}
             {errorMessage && (
-              <div className="mb-4 p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
+              <div className="mb-3 p-2.5 sm:p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-200 text-xs flex items-center gap-2 shrink-0">
                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
@@ -365,16 +372,16 @@ export default function PickupPage() {
 
             {/* TAB 1: Camera Scanner View */}
             {activeTab === 'camera' && (
-              <div className="flex-1 flex flex-col relative rounded-3xl overflow-hidden bg-neutral-900 border border-neutral-800">
+              <div className="flex-1 flex flex-col relative rounded-3xl overflow-hidden bg-neutral-900 border border-neutral-800 min-h-[300px]">
                 <video
                   ref={videoRef}
-                  className="w-full h-full object-cover min-h-[300px]"
+                  className="w-full h-full object-cover min-h-[280px]"
                 />
                 <canvas ref={canvasRef} className="hidden" />
 
                 {/* Viewfinder Overlay */}
                 <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
-                  <div className="w-56 h-56 rounded-3xl border-2 border-emerald-400/80 border-dashed relative flex items-center justify-center shadow-2xl">
+                  <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-3xl border-2 border-emerald-400/80 border-dashed relative flex items-center justify-center shadow-2xl">
                     <div className="absolute -top-3 px-3 py-0.5 rounded-full bg-emerald-500 text-neutral-950 text-[10px] font-bold uppercase tracking-wider">
                       Nakieruj na kod QR
                     </div>
@@ -385,7 +392,7 @@ export default function PickupPage() {
                       </div>
                     )}
                   </div>
-                  <p className="text-xs text-neutral-400 mt-6 bg-neutral-950/70 px-4 py-1.5 rounded-full backdrop-blur-sm">
+                  <p className="text-xs text-neutral-400 mt-4 sm:mt-6 bg-neutral-950/70 px-3.5 py-1 rounded-full backdrop-blur-sm">
                     Klient pokazuje kod na telefonie lub paragonie
                   </p>
                 </div>
@@ -396,7 +403,7 @@ export default function PickupPage() {
                     <p className="text-xs text-neutral-300 max-w-xs mb-4">{cameraError}</p>
                     <button
                       onClick={() => setActiveTab('pin')}
-                      className="px-4 py-2 rounded-xl bg-amber-500 text-neutral-950 font-bold text-xs"
+                      className="px-4 py-2 rounded-xl bg-amber-500 text-neutral-950 font-bold text-xs cursor-pointer"
                     >
                       Wpisz PIN z klawiatury
                     </button>
@@ -407,26 +414,26 @@ export default function PickupPage() {
 
             {/* TAB 2: PIN Keypad View */}
             {activeTab === 'pin' && (
-              <div className="flex-1 flex flex-col justify-between">
-                <div className="space-y-3">
+              <div className="flex-1 flex flex-col justify-between py-1">
+                <div className="space-y-2.5 shrink-0">
                   {/* Optional Order Number */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center gap-2">
                     <label className="text-xs text-neutral-400">Nr zamówienia (opcjonalnie):</label>
                     <input
                       type="number"
                       placeholder="np. 42"
                       value={orderNumberInput}
                       onChange={(e) => setOrderNumberInput(e.target.value)}
-                      className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-white w-28 text-center font-mono"
+                      className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1 text-xs text-white w-24 text-center font-mono"
                     />
                   </div>
 
                   {/* 4-Digit Display */}
-                  <div className="flex justify-center gap-3 py-4">
+                  <div className="flex justify-center gap-2.5 sm:gap-3 py-2 sm:py-3">
                     {[0, 1, 2, 3].map((idx) => (
                       <div
                         key={idx}
-                        className={`w-14 h-16 rounded-2xl border-2 flex items-center justify-center text-2xl font-bold font-mono transition-all ${
+                        className={`w-12 h-14 sm:w-14 sm:h-16 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center text-xl sm:text-2xl font-bold font-mono transition-all ${
                           pin[idx]
                             ? 'border-amber-400 bg-amber-400/10 text-white'
                             : 'border-neutral-800 bg-neutral-900 text-neutral-600'
@@ -439,31 +446,31 @@ export default function PickupPage() {
                 </div>
 
                 {/* Numeric Keypad */}
-                <div className="grid grid-cols-3 gap-2.5 pt-2">
+                <div className="grid grid-cols-3 gap-2 sm:gap-2.5 pt-2">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                     <button
                       key={digit}
                       onClick={() => handleKeypadPress(digit)}
-                      className="py-4 rounded-2xl bg-neutral-900 hover:bg-neutral-800 active:bg-neutral-700 border border-neutral-800 text-xl font-bold font-mono text-white transition-colors"
+                      className="py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-neutral-900 hover:bg-neutral-800 active:bg-neutral-750 active:scale-95 border border-neutral-800 text-lg sm:text-xl font-bold font-mono text-white transition-all cursor-pointer"
                     >
                       {digit}
                     </button>
                   ))}
                   <button
                     onClick={() => setPin('')}
-                    className="py-4 rounded-2xl bg-neutral-900 hover:bg-neutral-800 text-neutral-500 font-bold text-xs"
+                    className="py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-neutral-900 hover:bg-neutral-800 active:scale-95 border border-neutral-800 text-neutral-400 hover:text-white font-bold text-xs transition-all cursor-pointer"
                   >
                     Wyczyść
                   </button>
                   <button
                     onClick={() => handleKeypadPress('0')}
-                    className="py-4 rounded-2xl bg-neutral-900 hover:bg-neutral-800 active:bg-neutral-700 border border-neutral-800 text-xl font-bold font-mono text-white transition-colors"
+                    className="py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-neutral-900 hover:bg-neutral-800 active:bg-neutral-750 active:scale-95 border border-neutral-800 text-lg sm:text-xl font-bold font-mono text-white transition-all cursor-pointer"
                   >
                     0
                   </button>
                   <button
                     onClick={handleBackspace}
-                    className="py-4 rounded-2xl bg-neutral-900 hover:bg-neutral-800 text-neutral-400 font-bold text-lg flex items-center justify-center"
+                    className="py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-neutral-900 hover:bg-neutral-800 active:scale-95 border border-neutral-800 text-neutral-400 hover:text-white font-bold text-lg flex items-center justify-center transition-all cursor-pointer"
                   >
                     ⌫
                   </button>
