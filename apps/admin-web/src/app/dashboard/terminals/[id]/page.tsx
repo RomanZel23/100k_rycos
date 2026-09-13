@@ -7,6 +7,8 @@ import { NoAccess } from '@/components/NoAccess'
 import { Banner } from '@/components/Banner'
 import { updateTerminal, deleteTerminal, archiveTerminal, logoutTerminal } from '../actions'
 
+import { CopyLinkButton } from './CopyLinkButton'
+
 interface Terminal {
   id: number
   terminal_id: string
@@ -64,7 +66,10 @@ export default async function TerminalEditPage({
 
   const unclaimed = terminal.status === 'unclaimed'
   const editable = terminal.status === 'active' || terminal.status === 'unclaimed'
-  const qr = await QRCode.toDataURL(terminal.terminal_id, { width: 180, margin: 1 })
+
+  const appBase = process.env.NEXT_PUBLIC_ORDER_BASE_URL || 'https://100k.rycos.eu'
+  const pairUrl = `${appBase}/pair?code=${terminal.terminal_id}`
+  const qr = await QRCode.toDataURL(pairUrl, { width: 220, margin: 1 })
 
   const currentRole = terminal.role || 'all_in_one'
   const currentBrandIds = terminal.assigned_brand_ids ?? []
@@ -130,16 +135,30 @@ export default async function TerminalEditPage({
             </div>
             <p className="font-mono text-3xl font-black tracking-widest text-white">{terminal.terminal_id}</p>
             <p className="text-xs text-neutral-300 max-w-md">
-              Zeskanuj ten kod smartfonem pracownika (BYOD) lub wpisz go na ekranie logowania, aby przypisać urządzenie do tego profilu.
+              Zeskanuj ten kod smartfonem pracownika (BYOD) lub wyślij mu bezpośredni link do autoryzacji.
             </p>
+
+            {/* Direct URL & Copy Button */}
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-2">
+              <a
+                href={pairUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-mono text-xs text-amber-300 hover:text-amber-200 underline break-all bg-black/40 px-2.5 py-1.5 rounded-lg border border-white/10"
+              >
+                <span>🔗 {pairUrl}</span>
+                <span className="text-[10px] uppercase font-sans font-bold bg-amber-400/20 px-1.5 py-0.5 rounded text-amber-300">Otwórz ↗</span>
+              </a>
+              <CopyLinkButton url={pairUrl} />
+            </div>
           </div>
 
-          <div className="flex items-center gap-4 bg-white/5 p-3 rounded-xl border border-white/10 self-start md:self-auto">
+          <div className="flex items-center gap-4 bg-white/5 p-3 rounded-xl border border-white/10 self-start md:self-auto shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qr} alt="Setup QR" className="h-28 w-28 rounded-lg bg-white p-1.5 shadow-sm" />
-            <div className="text-xs space-y-1.5 text-neutral-300">
+            <div className="text-xs space-y-1.5 text-neutral-300 max-w-[150px]">
               <p className="font-semibold text-white">Szybkie parowanie</p>
-              <p>Otwórz aparat w telefonie pracownika lub aplikację ladową.</p>
+              <p className="text-[11px] text-neutral-400">Skieruj aparat telefonu na kod QR — otworzy bezpośredni link.</p>
               <div className="pt-1">
                 <span className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded">
                   Stanowisko #{terminal.id}

@@ -48,6 +48,7 @@ export default function KitchenDisplayPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState('');
+  const [terminal, setTerminal] = useState<{ id: number; terminal_id: string; name: string; role?: string } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Mobile tab state
@@ -56,6 +57,18 @@ export default function KitchenDisplayPage() {
   // Verification modal state
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinModalTargetOrder, setPinModalTargetOrder] = useState<any | null>(null);
+
+  // Load terminal from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rycos_terminal');
+      if (stored) {
+        setTerminal(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn('Failed to parse rycos_terminal in KDS', e);
+    }
+  }, []);
 
   // Clock
   useEffect(() => {
@@ -299,6 +312,34 @@ export default function KitchenDisplayPage() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {terminal ? (
+            <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
+              <span className="truncate max-w-[80px] xs:max-w-[120px]">{terminal.name}</span>
+              <button
+                onClick={() => {
+                  if (confirm(`Czy chcesz odłączyć to urządzenie od stanowiska "${terminal.name}"?`)) {
+                    localStorage.removeItem('rycos_terminal');
+                    setTerminal(null);
+                  }
+                }}
+                className="text-slate-500 hover:text-red-400 ml-0.5 text-sm leading-none cursor-pointer"
+                title="Odłącz stanowisko"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <a
+              href="/pair"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors shrink-0"
+              title="Sparuj to urządzenie ze stanowiskiem w lokalu"
+            >
+              <QrCode size={13} className="text-amber-400" />
+              <span className="hidden xs:inline">Paruj</span>
+            </a>
+          )}
+
           {/* Quick QR & PIN pickup buttons */}
           <button
             onClick={() => {

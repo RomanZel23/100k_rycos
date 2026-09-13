@@ -17,7 +17,9 @@ import {
   Receipt,
   RotateCcw,
   Camera,
-  KeyRound
+  KeyRound,
+  QrCode,
+  Smartphone
 } from 'lucide-react';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
@@ -360,6 +362,20 @@ export default function PosPage() {
   // Time display
   const [currentTime, setCurrentTime] = useState('');
 
+  // Paired Workstation Terminal
+  const [terminal, setTerminal] = useState<{ id: number; terminal_id: string; name: string; role?: string } | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('rycos_terminal');
+      if (stored) {
+        setTerminal(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn('Failed to parse rycos_terminal', e);
+    }
+  }, []);
+
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -678,6 +694,34 @@ export default function PosPage() {
 
         {/* Right Info & Action */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {terminal ? (
+            <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="truncate max-w-[80px] xs:max-w-[120px]">{terminal.name}</span>
+              <button
+                onClick={() => {
+                  if (confirm(`Czy chcesz odłączyć to urządzenie od stanowiska "${terminal.name}"?`)) {
+                    localStorage.removeItem('rycos_terminal');
+                    setTerminal(null);
+                  }
+                }}
+                className="text-slate-500 hover:text-red-400 ml-0.5 text-sm leading-none cursor-pointer"
+                title="Odłącz stanowisko"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <a
+              href="/pair"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors shrink-0"
+              title="Sparuj to urządzenie ze stanowiskiem w lokalu"
+            >
+              <QrCode size={13} className="text-amber-400" />
+              <span className="hidden xs:inline">Paruj</span>
+            </a>
+          )}
+
           <button
             onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
             className="md:hidden p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
