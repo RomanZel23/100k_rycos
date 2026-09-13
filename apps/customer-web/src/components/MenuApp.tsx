@@ -10,10 +10,12 @@ import { AddonModal } from './AddonModal';
 import { CartDrawer } from './CartDrawer';
 import { PaymentModal } from './PaymentModal';
 import { CartItem, calculateSubtotal } from '../store/cartStore';
-import { ShoppingBag, MapPin, Loader2, Globe, Bell, Clock } from 'lucide-react';
+import { ShoppingBag, MapPin, Loader2, Globe, Bell, Clock, Share2 } from 'lucide-react';
 import { i18n, Language, getStoredLanguage, saveStoredLanguage } from '../lib/i18n';
 import { ServiceCallModal } from './ServiceCallModal';
 import { OrderHistoryModal } from './OrderHistoryModal';
+import { ShareModal } from './ShareModal';
+import { PolicyModal } from './PolicyModal';
 import { getStoredOrders, saveStoredOrder, StoredOrder } from '../store/orderStorage';
 
 interface MenuAppProps {
@@ -59,6 +61,9 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const [activeBannerOrder, setActiveBannerOrder] = useState<StoredOrder | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isTncOpen, setIsTncOpen] = useState(false);
+  const [isPpOpen, setIsPpOpen] = useState(false);
 
   // Monitor stored orders for active status badge & banner
   useEffect(() => {
@@ -340,8 +345,18 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             </div>
           </div>
 
-          {/* Right actions: History Button & Language Switcher */}
+          {/* Right actions: Share, History Button & Language Switcher */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {menu?.brand.settings?.show_sharing !== false && (
+              <button
+                onClick={() => setIsShareOpen(true)}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
+                title={lang === 'de' ? 'Menü teilen' : lang === 'en' ? 'Share menu' : 'Udostępnij menu'}
+              >
+                <Share2 size={16} />
+              </button>
+            )}
+
             <button
               onClick={() => setIsHistoryOpen(true)}
               className="relative p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
@@ -477,8 +492,35 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           </div>
         )}
 
-        {/* Footer Brand Credit */}
-        <footer className="text-center pt-8 pb-16 text-xs text-slate-400">
+        {/* Footer Brand Credit & Policy Links */}
+        <footer className="text-center pt-8 pb-16 text-xs text-slate-400 space-y-2">
+          {((menu?.brand.settings?.show_tnc !== false && !!menu?.brand.termsAndConditions) ||
+            (menu?.brand.settings?.show_pp !== false && !!menu?.brand.privacyPolicy)) && (
+            <div className="flex items-center justify-center gap-3 text-[11px] font-semibold text-slate-500">
+              {menu?.brand.settings?.show_tnc !== false && !!menu?.brand.termsAndConditions && (
+                <button
+                  type="button"
+                  onClick={() => setIsTncOpen(true)}
+                  className="hover:text-slate-900 underline underline-offset-4 decoration-slate-300 transition-colors"
+                >
+                  {lang === 'de' ? 'AGB' : lang === 'en' ? 'Terms & conditions' : 'Regulamin'}
+                </button>
+              )}
+              {menu?.brand.settings?.show_tnc !== false &&
+                !!menu?.brand.termsAndConditions &&
+                menu?.brand.settings?.show_pp !== false &&
+                !!menu?.brand.privacyPolicy && <span className="text-slate-300">•</span>}
+              {menu?.brand.settings?.show_pp !== false && !!menu?.brand.privacyPolicy && (
+                <button
+                  type="button"
+                  onClick={() => setIsPpOpen(true)}
+                  className="hover:text-slate-900 underline underline-offset-4 decoration-slate-300 transition-colors"
+                >
+                  {lang === 'de' ? 'Datenschutz' : lang === 'en' ? 'Privacy policy' : 'Polityka prywatności'}
+                </button>
+              )}
+            </div>
+          )}
           <p className="font-semibold text-slate-500">100k-RYCOS Ordering</p>
           <p className="text-[10px] text-slate-400 mt-0.5">Szybkie i bezpieczne zamawianie przy stoliku i barze</p>
         </footer>
@@ -552,6 +594,32 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
       <OrderHistoryModal
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
+        lang={lang}
+      />
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        brandName={menu?.brand.name}
+        lang={lang}
+      />
+
+      {/* Terms & Conditions Modal */}
+      <PolicyModal
+        isOpen={isTncOpen}
+        onClose={() => setIsTncOpen(false)}
+        type="terms"
+        content={menu?.brand.termsAndConditions || ''}
+        lang={lang}
+      />
+
+      {/* Privacy Policy Modal */}
+      <PolicyModal
+        isOpen={isPpOpen}
+        onClose={() => setIsPpOpen(false)}
+        type="privacy"
+        content={menu?.brand.privacyPolicy || ''}
         lang={lang}
       />
     </div>

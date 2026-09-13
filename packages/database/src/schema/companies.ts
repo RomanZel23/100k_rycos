@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, boolean, timestamp, integer, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, boolean, timestamp, integer, jsonb, unique } from 'drizzle-orm/pg-core';
 
 export const companies = pgTable('companies', {
   id: serial('id').primaryKey(),
@@ -7,6 +7,12 @@ export const companies = pgTable('companies', {
   email: varchar('email', { length: 255 }),
   country: varchar('country', { length: 4 }).default('PL'),
   currency: varchar('currency', { length: 4 }).default('PLN'),
+  address: text('address'),
+  phone: varchar('phone', { length: 64 }),
+  businessType: varchar('business_type', { length: 64 }).default('product'),
+  defaultLanguage: varchar('default_language', { length: 8 }).default('pl'),
+  termsAndConditions: text('terms_and_conditions'),
+  privacyPolicy: text('privacy_policy'),
   isAcceptingOrders: boolean('is_accepting_orders').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -89,3 +95,15 @@ export const companyPaymentGateways = pgTable('company_payment_gateways', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+export const companySettings = pgTable('company_settings', {
+  id: serial('id').primaryKey(),
+  companyId: integer('company_id').references(() => companies.id, { onDelete: 'cascade' }).notNull(),
+  featureKey: varchar('feature_key', { length: 64 }).notNull(),
+  isEnabled: boolean('is_enabled').default(false).notNull(),
+  config: jsonb('config').$type<Record<string, any>>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => [
+  unique('company_settings_company_feature_unique').on(t.companyId, t.featureKey),
+]);

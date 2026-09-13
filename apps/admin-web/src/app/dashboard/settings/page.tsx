@@ -1,8 +1,9 @@
+import Link from 'next/link'
 import { adminApiData } from '@/lib/api'
 import { currentUser, isManager } from '@/lib/auth'
 import { NoAccess } from '@/components/NoAccess'
-import { updateCompany, saveFeatures, saveTaxRates, saveLanguages } from './actions'
-import { FEATURE_KEYS, FEATURE_LABELS, BUSINESS_TYPES } from './constants'
+import { updateCompany, saveFeatures, saveLanguages } from './actions'
+import { FEATURE_KEYS, FEATURE_LABELS, FEATURE_DESCRIPTIONS, BUSINESS_TYPES } from './constants'
 
 import { getTranslation } from '@/lib/i18n'
 import { getAdminLocale } from '@/lib/i18n-server'
@@ -13,7 +14,6 @@ interface Company {
   terms_and_conditions: string | null; privacy_policy: string | null
 }
 interface Setting { feature_key: string; is_enabled: boolean | string; config: unknown }
-interface Gateway { gateway_name?: string; type?: string; public_key?: string }
 interface Language { code: string; name: string; native_name: string }
 interface CompanyLang { language_code: string }
 
@@ -31,20 +31,12 @@ const LANG_FLAGS: Record<string, string> = {
   de: '🇩🇪',
 }
 
-function parseRates(config: unknown): number[] {
-  try {
-    const c = typeof config === 'string' ? JSON.parse(config) : config
-    return Array.isArray((c as any)?.rates) ? (c as any).rates : []
-  } catch { return [] }
-}
-
 export default async function SettingsPage() {
   if (!isManager(await currentUser())) return <NoAccess />
   const locale = await getAdminLocale()
-  const [company, settings, gateway, allLanguages, companyLanguages] = await Promise.all([
+  const [company, settings, allLanguages, companyLanguages] = await Promise.all([
     adminApiData<Company>('/companies'),
     adminApiData<Setting[]>('/companies/settings'),
-    adminApiData<Gateway>('/companies/payment-gateway'),
     adminApiData<Language[]>('/languages'),
     adminApiData<CompanyLang[]>('/companies/languages'),
   ])
@@ -53,7 +45,6 @@ export default async function SettingsPage() {
   const rawCodes = (companyLanguages ?? []).map((r: any) => (typeof r === 'string' ? r : r?.language_code || ''))
   const enabledCodes = new Set(rawCodes.length > 0 ? rawCodes : ['pl', 'en', 'de'])
   const settingMap = new Map((settings ?? []).map((s) => [s.feature_key, s]))
-  const taxRates = parseRates(settingMap.get('tax_rates')?.config)
   const c = company ?? ({} as Company)
   const currentDefault = (c.default_language || 'pl').toLowerCase()
 
@@ -160,37 +151,69 @@ export default async function SettingsPage() {
         <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'settings.save_languages', 'Save languages')}</button>
       </form>
 
-      <form action={saveFeatures} className="card space-y-3">
-        <h2 className="text-base font-bold text-techbay-blue">{getTranslation(locale, 'settings.features', 'Features')}</h2>
-        <div className="space-y-2">
-          {FEATURE_KEYS.map((key) => (
-            <label key={key} className="flex items-center gap-2 text-sm text-neutral-700">
-              <input type="checkbox" name={key} defaultChecked={isOn(settingMap.get(key)?.is_enabled)} className="rounded accent-brand" />
-              {FEATURE_LABELS[key] ?? key}
-            </label>
-          ))}
+      <form action={saveFeatures} className="card space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-techbay-blue">{getTranslation(locale, 'settings.features', 'Features')}</h2>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            {locale === 'pl'
+              ? 'Włącz lub wyłącz poszczególne moduły w aplikacji klienta (zamawianie QR) oraz na stacji odbioru.'
+              : 'Enable or disable individual features in the customer ordering app and pickup counter.'}
+          </p>
+        </div>
+
+        <div className="space-y-3 pt-1">
+          {FEATURE_KEYS.map((key) => {
+            const label = FEATURE_LABELS[key]?.[locale as 'pl' | 'en' | 'de'] || FEATURE_LABELS[key]?.pl || key
+            const desc = FEATURE_DESCRIPTIONS[key]?.[locale as 'pl' | 'en' | 'de'] || FEATURE_DESCRIPTIONS[key]?.pl
+            const checked = settingMap.has(key) ? isOn(settingMap.get(key)?.is_enabled) : true
+
+            return (
+              <label
+                key={key}
+                className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-white p-3 hover:border-neutral-300 transition-colors cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  name={key}
+                  defaultChecked={checked}
+                  className="mt-0.5 h-4 w-4 rounded accent-brand shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-neutral-800">{label}</span>
+                  {desc && <span className="block text-xs text-neutral-500 mt-0.5">{desc}</span>}
+                </div>
+              </label>
+            )
+          })}
         </div>
         <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'settings.save_features', 'Save features')}</button>
       </form>
 
-      {/* Tax rates */}
-      <form action={saveTaxRates} className="card space-y-3">
-        <h2 className="text-base font-bold text-techbay-blue">{getTranslation(locale, 'settings.tax_rates', 'Tax rates')}</h2>
-        <Field name="rates" label="Rates % (comma-separated)" defaultValue={taxRates.join(', ')} placeholder="0, 5, 8, 23" />
-        <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'settings.save_tax', 'Save tax rates')}</button>
-      </form>
-
-      {/* Payment gateway (read-only) */}
-      <div className="card space-y-1">
-        <h2 className="text-base font-bold text-techbay-blue">{getTranslation(locale, 'settings.payment_gateway', 'Payment gateway')}</h2>
-        {gateway ? (
-          <div className="text-sm text-neutral-600">
-            <p><span className="text-neutral-400">Provider:</span> {gateway.gateway_name || gateway.type || '—'}</p>
-            <p className="text-xs text-neutral-400">Gateway credentials are managed by 100k-RYCOS. Contact support to change them.</p>
-          </div>
-        ) : (
-          <p className="text-sm text-neutral-400">No payment gateway configured.</p>
-        )}
+      {/* Payment gateway redirect card */}
+      <div className="card space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-techbay-blue">{getTranslation(locale, 'settings.payment_gateway', 'Payment gateway')}</h2>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+            SaferPay Worldline
+          </span>
+        </div>
+        <p className="text-xs text-neutral-500">
+          {locale === 'pl'
+            ? 'Konfiguracja bramki płatności (karty, BLIK, Google Pay, Apple Pay) oraz trybu Test/Produkcja znajduje się w dedykowanej sekcji panelu.'
+            : 'Payment gateway credentials (cards, BLIK, Google Pay, Apple Pay) and Sandbox/Live mode are managed in the dedicated section.'}
+        </p>
+        <div className="pt-2">
+          <Link
+            href="/dashboard/payment-gateways"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-red hover:underline"
+          >
+            <span>
+              {locale === 'pl'
+                ? 'Przejdź do konfiguracji bramki płatności →'
+                : 'Go to payment gateway configuration →'}
+            </span>
+          </Link>
+        </div>
       </div>
     </div>
   )

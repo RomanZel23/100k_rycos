@@ -1,4 +1,4 @@
-import { getDatabase, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, contentTranslations, locations, eq, inArray, and } from '@rycos/database';
+import { getDatabase, companies, companySettings, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, contentTranslations, locations, eq, inArray, and } from '@rycos/database';
 import { BrandInfo, MenuResponse, Product, AddonGroup } from '@rycos/shared';
 import { Redis } from 'ioredis';
 import { env } from '../config/env.js';
@@ -100,6 +100,41 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
   const row = rows[0];
   const brandColors = parseBrandColors(row.style);
 
+  let comp: any = null;
+  let settingRows: any[] = [];
+  try {
+    const comps = await db
+      .select({
+        isAcceptingOrders: companies.isAcceptingOrders,
+        termsAndConditions: companies.termsAndConditions,
+        privacyPolicy: companies.privacyPolicy,
+      })
+      .from(companies)
+      .where(eq(companies.id, row.companyId))
+      .limit(1);
+    comp = comps[0] || null;
+
+    settingRows = await db
+      .select({
+        featureKey: companySettings.featureKey,
+        isEnabled: companySettings.isEnabled,
+      })
+      .from(companySettings)
+      .where(eq(companySettings.companyId, row.companyId));
+  } catch (err) {
+    console.warn('[Catalog] Error querying company settings:', err);
+  }
+
+  const settingsMap: Record<string, boolean> = {
+    show_sharing: true,
+    show_tnc: true,
+    show_pp: true,
+    show_receipt_qr: true,
+  };
+  for (const s of settingRows) {
+    settingsMap[s.featureKey] = s.isEnabled;
+  }
+
   return {
     id: row.id,
     companyId: row.companyId,
@@ -109,13 +144,16 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
     bannerUrl: row.bannerUrl,
     footerUrl: row.footerUrl,
     currency: row.currency || 'PLN',
-    isAcceptingOrders: true,
+    isAcceptingOrders: comp ? comp.isAcceptingOrders : true,
     locationId: row.locationId,
     locationName: row.locationName,
     style: row.style,
     buttonColor: brandColors.buttonColor,
     buttonTextColor: brandColors.buttonTextColor,
     backgroundColor: brandColors.backgroundColor,
+    termsAndConditions: comp?.termsAndConditions || null,
+    privacyPolicy: comp?.privacyPolicy || null,
+    settings: settingsMap,
   };
 }
 
@@ -160,6 +198,41 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
   if (brandRows.length === 0) return null;
   const b = brandRows[0];
 
+  let comp: any = null;
+  let settingRows: any[] = [];
+  try {
+    const comps = await db
+      .select({
+        isAcceptingOrders: companies.isAcceptingOrders,
+        termsAndConditions: companies.termsAndConditions,
+        privacyPolicy: companies.privacyPolicy,
+      })
+      .from(companies)
+      .where(eq(companies.id, companyId))
+      .limit(1);
+    comp = comps[0] || null;
+
+    settingRows = await db
+      .select({
+        featureKey: companySettings.featureKey,
+        isEnabled: companySettings.isEnabled,
+      })
+      .from(companySettings)
+      .where(eq(companySettings.companyId, companyId));
+  } catch (err) {
+    console.warn('[Catalog] Error querying company settings in getMenuByBrandId:', err);
+  }
+
+  const settingsMap: Record<string, boolean> = {
+    show_sharing: true,
+    show_tnc: true,
+    show_pp: true,
+    show_receipt_qr: true,
+  };
+  for (const s of settingRows) {
+    settingsMap[s.featureKey] = s.isEnabled;
+  }
+
   const brandColors = parseBrandColors(b.style);
 
   const brandInfo: BrandInfo = {
@@ -171,13 +244,16 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
     bannerUrl: b.bannerUrl,
     footerUrl: (b as any).footerUrl ?? null,
     currency: (b as any).currency || 'PLN',
-    isAcceptingOrders: b.isActive,
+    isAcceptingOrders: comp ? comp.isAcceptingOrders : b.isActive,
     locationId: b.locationId,
     locationName: null,
     style: b.style ?? null,
     buttonColor: brandColors.buttonColor,
     buttonTextColor: brandColors.buttonTextColor,
     backgroundColor: brandColors.backgroundColor,
+    termsAndConditions: comp?.termsAndConditions || null,
+    privacyPolicy: comp?.privacyPolicy || null,
+    settings: settingsMap,
   };
 
   // 3. Fetch Categories

@@ -77,6 +77,7 @@ export const OrderDetailSchema = z.object({
   fiscalStatus: z.enum(['none', 'pending', 'issued', 'failed']).default('none'),
   fiscalReceiptNumber: z.string().nullable().optional(),
   fiscalPdfUrl: z.string().nullable().optional(),
+  showReceiptQr: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

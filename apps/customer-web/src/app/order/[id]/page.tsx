@@ -37,6 +37,7 @@ function OrderTrackingContent() {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [receiptQrDataUrl, setReceiptQrDataUrl] = useState<string | null>(null);
 
   // Generate collection QR code
   useEffect(() => {
@@ -54,6 +55,23 @@ function OrderTrackingContent() {
         .catch(console.error);
     }
   }, [order?.orderNumber, order?.collectionPin]);
+
+  // Generate e-receipt QR code (controlled by show_receipt_qr feature)
+  useEffect(() => {
+    const receiptTarget = order?.fiscalPdfUrl || (order?.fiscalReceiptNumber ? `${window.location.origin}/order/${order.id}#receipt` : null);
+    if (receiptTarget && order?.showReceiptQr !== false) {
+      QRCode.toDataURL(receiptTarget, {
+        width: 180,
+        margin: 1,
+        color: {
+          dark: '#090d16',
+          light: '#ffffff',
+        },
+      })
+        .then(setReceiptQrDataUrl)
+        .catch(console.error);
+    }
+  }, [order?.fiscalPdfUrl, order?.fiscalReceiptNumber, order?.showReceiptQr, order?.id]);
 
   // Initial Fetch & Live WebSocket connection
   useEffect(() => {
@@ -403,29 +421,42 @@ function OrderTrackingContent() {
 
       {/* E-Receipt / RYCOS Fiscal Card */}
       {order.fiscalReceiptNumber && (
-        <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
-              <Receipt size={20} />
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                <Receipt size={20} />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-500 block">{t.fiscalReceiptTitle}</span>
+                <span className="text-sm font-mono font-bold text-slate-900">
+                  Nr: {order.fiscalReceiptNumber}
+                </span>
+              </div>
             </div>
-            <div>
-              <span className="text-xs font-bold text-slate-500 block">{t.fiscalReceiptTitle}</span>
-              <span className="text-sm font-mono font-bold text-slate-900">
-                Nr: {order.fiscalReceiptNumber}
-              </span>
-            </div>
+
+            {order.fiscalPdfUrl && (
+              <a
+                href={order.fiscalPdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm"
+              >
+                <Download size={14} />
+                <span>{t.downloadPdf}</span>
+              </a>
+            )}
           </div>
 
-          {order.fiscalPdfUrl && (
-            <a
-              href={order.fiscalPdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm"
-            >
-              <Download size={14} />
-              <span>{t.downloadPdf}</span>
-            </a>
+          {order.showReceiptQr !== false && receiptQrDataUrl && (
+            <div className="pt-3 border-t border-slate-100 flex flex-col items-center text-center">
+              <span className="text-[11px] font-bold text-slate-500 mb-2">
+                {lang === 'de' ? 'QR-Code für eParagon / Quittung:' : lang === 'en' ? 'Scan for e-receipt:' : 'Zeskanuj kod QR e-paragonu:'}
+              </span>
+              <div className="p-2 bg-slate-50 rounded-2xl border border-slate-100">
+                <img src={receiptQrDataUrl} alt="eParagon QR" className="w-28 h-28 object-contain" />
+              </div>
+            </div>
           )}
         </div>
       )}

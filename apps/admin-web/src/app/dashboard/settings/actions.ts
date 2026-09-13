@@ -39,15 +39,3 @@ export async function saveLanguages(formData: FormData): Promise<void> {
   })
   revalidatePath('/dashboard/settings')
 }
-
-export async function saveTaxRates(formData: FormData): Promise<void> {
-  const rates = String(formData.get('rates') || '')
-    .split(',')
-    .map((s) => parseInt(s.trim()))
-    .filter((n) => !Number.isNaN(n) && n >= 0 && n <= 100)
-  await adminApi('/companies/settings/tax_rates', {
-    method: 'PUT',
-    body: JSON.stringify({ is_enabled: true, config: { rates } }),
-  })
-  revalidatePath('/dashboard/settings')
-}

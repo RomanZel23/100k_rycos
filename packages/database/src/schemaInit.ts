@@ -298,6 +298,24 @@ CREATE TABLE IF NOT EXISTS "storage_files" (
 );
 CREATE INDEX IF NOT EXISTS "idx_storage_files_bucket_name" ON "storage_files" ("bucket", "name");
 
+CREATE TABLE IF NOT EXISTS "company_settings" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+	"feature_key" varchar(64) NOT NULL,
+	"is_enabled" boolean DEFAULT false NOT NULL,
+	"config" jsonb,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "company_settings_company_feature_unique" UNIQUE("company_id", "feature_key")
+);
+
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "address" text;
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "phone" varchar(64);
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "business_type" varchar(64) DEFAULT 'product';
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "default_language" varchar(8) DEFAULT 'pl';
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "terms_and_conditions" text;
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "privacy_policy" text;
+
 ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
 ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "footer_url" text;
 ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "menu_layout" varchar(32) DEFAULT 'list';
@@ -405,6 +423,24 @@ export async function ensureDatabaseSchema() {
             "created_at" timestamp DEFAULT now() NOT NULL
           );
           CREATE UNIQUE INDEX IF NOT EXISTS "uq_terminal_fiscal_device" ON "terminal_fiscal_devices" ("terminal_id", "fiscal_device_id");
+
+          CREATE TABLE IF NOT EXISTS "company_settings" (
+            "id" serial PRIMARY KEY NOT NULL,
+            "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+            "feature_key" varchar(64) NOT NULL,
+            "is_enabled" boolean DEFAULT false NOT NULL,
+            "config" jsonb,
+            "created_at" timestamp DEFAULT now() NOT NULL,
+            "updated_at" timestamp DEFAULT now() NOT NULL,
+            CONSTRAINT "company_settings_company_feature_unique" UNIQUE("company_id", "feature_key")
+          );
+
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "address" text;
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "phone" varchar(64);
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "business_type" varchar(64) DEFAULT 'product';
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "default_language" varchar(8) DEFAULT 'pl';
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "terms_and_conditions" text;
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "privacy_policy" text;
         `);
       }
 

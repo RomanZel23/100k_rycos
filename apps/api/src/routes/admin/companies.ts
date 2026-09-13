@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, getRawClient, companies, brands, brandProducts, eq, and, desc, inArray } from '@rycos/database';
+import { getDatabase, getRawClient, companies, companySettings, brands, brandProducts, eq, and, desc, inArray } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
@@ -12,6 +12,22 @@ async function ensureBrandColumns() {
   if (!raw) return;
   try {
     await raw.unsafe(`
+      CREATE TABLE IF NOT EXISTS "company_settings" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+        "feature_key" varchar(64) NOT NULL,
+        "is_enabled" boolean DEFAULT false NOT NULL,
+        "config" jsonb,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL,
+        CONSTRAINT "company_settings_company_feature_unique" UNIQUE("company_id", "feature_key")
+      );
+      ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "address" text;
+      ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "phone" varchar(64);
+      ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "business_type" varchar(64) DEFAULT 'product';
+      ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "default_language" varchar(8) DEFAULT 'pl';
+      ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "terms_and_conditions" text;
+      ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "privacy_policy" text;
       ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "menu_layout" varchar(32) DEFAULT 'list';
       ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "language" varchar(8) DEFAULT 'pl';
       ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "currency" varchar(8) DEFAULT 'PLN';
@@ -27,9 +43,8 @@ async function ensureBrandColumns() {
 export async function adminCompaniesRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
 
-  const inMemoryCompanyProfiles: Record<number, Record<string, any>> = {};
-
   const getCompanyHandler = async (req: any, reply: any) => {
+    await ensureBrandColumns();
     const db = getDatabase();
     const companyId = getCompanyId(req);
 
@@ -43,16 +58,15 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'Company not found');
     }
 
-    const compProfile = inMemoryCompanyProfiles[companyId] ?? {};
     return success(reply, {
       ...company,
       is_accepting_orders: company.isAcceptingOrders,
-      business_type: compProfile.business_type || 'product',
-      address: compProfile.address || '',
-      phone: compProfile.phone || '',
-      default_language: compProfile.default_language || 'pl',
-      terms_and_conditions: compProfile.terms_and_conditions || null,
-      privacy_policy: compProfile.privacy_policy || null,
+      business_type: company.businessType || 'product',
+      address: company.address || '',
+      phone: company.phone || '',
+      default_language: company.defaultLanguage || 'pl',
+      terms_and_conditions: company.termsAndConditions || null,
+      privacy_policy: company.privacyPolicy || null,
     });
   };
 
@@ -62,17 +76,10 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
   fastify.get('/v1/admin/companies/details', getCompanyHandler);
 
   const updateCompanyHandler = async (req: any, reply: any) => {
+    await ensureBrandColumns();
     const db = getDatabase();
     const companyId = getCompanyId(req);
     const body = req.body as any;
-
-    inMemoryCompanyProfiles[companyId] ??= {};
-    if (body.default_language !== undefined) inMemoryCompanyProfiles[companyId].default_language = String(body.default_language).trim().toLowerCase();
-    if (body.address !== undefined) inMemoryCompanyProfiles[companyId].address = String(body.address).trim();
-    if (body.phone !== undefined) inMemoryCompanyProfiles[companyId].phone = String(body.phone).trim();
-    if (body.business_type !== undefined) inMemoryCompanyProfiles[companyId].business_type = String(body.business_type).trim();
-    if (body.terms_and_conditions !== undefined) inMemoryCompanyProfiles[companyId].terms_and_conditions = String(body.terms_and_conditions);
-    if (body.privacy_policy !== undefined) inMemoryCompanyProfiles[companyId].privacy_policy = String(body.privacy_policy);
 
     const updateData: any = {
       updatedAt: new Date(),
@@ -82,6 +89,12 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     if (body.email !== undefined) updateData.email = body.email;
     if (body.currency !== undefined) updateData.currency = body.currency;
     if (body.country !== undefined) updateData.country = body.country;
+    if (body.address !== undefined) updateData.address = String(body.address).trim();
+    if (body.phone !== undefined) updateData.phone = String(body.phone).trim();
+    if (body.business_type !== undefined) updateData.businessType = String(body.business_type).trim();
+    if (body.default_language !== undefined) updateData.defaultLanguage = String(body.default_language).trim().toLowerCase();
+    if (body.terms_and_conditions !== undefined) updateData.termsAndConditions = String(body.terms_and_conditions);
+    if (body.privacy_policy !== undefined) updateData.privacyPolicy = String(body.privacy_policy);
     if (body.isAcceptingOrders !== undefined || body.is_accepting_orders !== undefined) {
       updateData.isAcceptingOrders = Boolean(body.isAcceptingOrders ?? body.is_accepting_orders);
     }
@@ -93,16 +106,15 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
         .where(eq(companies.id, companyId))
         .returning();
 
-      const compProfile = inMemoryCompanyProfiles[companyId] ?? {};
       return success(reply, {
         ...updated,
         is_accepting_orders: updated.isAcceptingOrders,
-        business_type: compProfile.business_type || 'product',
-        address: compProfile.address || '',
-        phone: compProfile.phone || '',
-        default_language: compProfile.default_language || 'pl',
-        terms_and_conditions: compProfile.terms_and_conditions || null,
-        privacy_policy: compProfile.privacy_policy || null,
+        business_type: updated.businessType || 'product',
+        address: updated.address || '',
+        phone: updated.phone || '',
+        default_language: updated.defaultLanguage || 'pl',
+        terms_and_conditions: updated.termsAndConditions || null,
+        privacy_policy: updated.privacyPolicy || null,
       }, 'Company updated');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update company');
@@ -132,17 +144,27 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     }, 'Order acceptance updated');
   });
 
-  // Settings in-memory / company storage
-  const inMemorySettings: Record<number, Record<string, boolean>> = {};
-
   // GET /v1/admin/companies/settings - List company feature settings
   fastify.get('/v1/admin/companies/settings', async (req, reply) => {
+    await ensureBrandColumns();
+    const db = getDatabase();
     const companyId = getCompanyId(req);
-    const compSettings = inMemorySettings[companyId] ?? {
-      onboarding_locations_ack: false,
-      onboarding_team_ack: false,
-    };
-    const list = Object.entries(compSettings).map(([k, v]) => ({
+    const rows = await db
+      .select()
+      .from(companySettings)
+      .where(eq(companySettings.companyId, companyId));
+
+    const existingMap = new Map(rows.map((r) => [r.featureKey, r.isEnabled]));
+
+    // Core feature keys default to true if not yet explicitly saved
+    const CORE_KEYS = ['show_sharing', 'show_tnc', 'show_pp', 'show_receipt_qr'];
+    for (const k of CORE_KEYS) {
+      if (!existingMap.has(k)) {
+        existingMap.set(k, true);
+      }
+    }
+
+    const list = Array.from(existingMap.entries()).map(([k, v]) => ({
       feature_key: k,
       is_enabled: v,
     }));
@@ -151,24 +173,52 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
   // GET /v1/admin/companies/settings/:featureKey
   fastify.get('/v1/admin/companies/settings/:featureKey', async (req, reply) => {
+    await ensureBrandColumns();
+    const db = getDatabase();
     const { featureKey } = req.params as { featureKey: string };
     const companyId = getCompanyId(req);
-    const compSettings = inMemorySettings[companyId] ?? {};
+    const [row] = await db
+      .select()
+      .from(companySettings)
+      .where(and(eq(companySettings.companyId, companyId), eq(companySettings.featureKey, featureKey)))
+      .limit(1);
+
     return success(reply, {
       feature_key: featureKey,
-      is_enabled: compSettings[featureKey] ?? false,
+      is_enabled: row ? row.isEnabled : true,
     });
   });
 
   // PUT /v1/admin/companies/settings/:featureKey
   fastify.put('/v1/admin/companies/settings/:featureKey', async (req, reply) => {
+    await ensureBrandColumns();
+    const db = getDatabase();
     const { featureKey } = req.params as { featureKey: string };
     const companyId = getCompanyId(req);
     const body = (req.body ?? {}) as any;
     const isEnabled = Boolean(body.is_enabled ?? body.isEnabled);
 
-    inMemorySettings[companyId] ??= {};
-    inMemorySettings[companyId][featureKey] = isEnabled;
+    const raw = getRawClient();
+    if (raw) {
+      await raw.unsafe(`
+        INSERT INTO company_settings (company_id, feature_key, is_enabled, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (company_id, feature_key) DO UPDATE SET
+          is_enabled = EXCLUDED.is_enabled,
+          updated_at = NOW()
+      `, [companyId, featureKey, isEnabled]);
+    }
+
+    // Invalidate brand menus cache
+    try {
+      const companyBrands = await db
+        .select({ id: brands.id })
+        .from(brands)
+        .where(eq(brands.companyId, companyId));
+      for (const b of companyBrands) {
+        await invalidateBrandMenuCache(b.id);
+      }
+    } catch {}
 
     return success(reply, {
       feature_key: featureKey,

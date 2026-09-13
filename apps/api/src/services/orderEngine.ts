@@ -1,4 +1,4 @@
-import { getDatabase, orders, orderItems, orderEvents, outboxEvents, idempotencyKeys, products, brands, eq, and, inArray, sql } from '@rycos/database';
+import { getDatabase, orders, orderItems, orderEvents, outboxEvents, idempotencyKeys, products, brands, companySettings, eq, and, inArray, sql } from '@rycos/database';
 import { CreateOrderRequest, OrderDetail, OrderStatus } from '@rycos/shared';
 import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
 
@@ -206,6 +206,7 @@ export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeade
     paymentMethod: createdOrder.paymentMethod,
     paymentStatus: createdOrder.paymentStatus as any,
     fiscalStatus: createdOrder.fiscalStatus as any,
+    showReceiptQr: true,
     createdAt: createdOrder.createdAt.toISOString(),
     updatedAt: createdOrder.updatedAt.toISOString(),
   };
@@ -256,6 +257,18 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId));
 
+  let showReceiptQr = true;
+  try {
+    const [st] = await db
+      .select({ isEnabled: companySettings.isEnabled })
+      .from(companySettings)
+      .where(and(eq(companySettings.companyId, orderRow.order.companyId), eq(companySettings.featureKey, 'show_receipt_qr')))
+      .limit(1);
+    if (st) {
+      showReceiptQr = st.isEnabled;
+    }
+  } catch {}
+
   return {
     id: orderRow.order.id,
     companyId: orderRow.order.companyId,
@@ -288,6 +301,7 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
     fiscalStatus: orderRow.order.fiscalStatus as any,
     fiscalReceiptNumber: orderRow.order.fiscalReceiptNumber,
     fiscalPdfUrl: orderRow.order.fiscalPdfUrl,
+    showReceiptQr,
     createdAt: orderRow.order.createdAt.toISOString(),
     updatedAt: orderRow.order.updatedAt.toISOString(),
   };

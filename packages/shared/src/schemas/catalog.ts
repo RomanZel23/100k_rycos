@@ -71,6 +71,9 @@ export const BrandInfoSchema = z.object({
   buttonColor: z.string().nullable().optional(),
   buttonTextColor: z.string().nullable().optional(),
   backgroundColor: z.string().nullable().optional(),
+  termsAndConditions: z.string().nullable().optional(),
+  privacyPolicy: z.string().nullable().optional(),
+  settings: z.record(z.string(), z.boolean()).optional(),
 });
 export type BrandInfo = z.infer<typeof BrandInfoSchema>;
 
