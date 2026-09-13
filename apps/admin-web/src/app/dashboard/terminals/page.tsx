@@ -195,23 +195,23 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
 
       {/* Quick Add Workstation */}
       <div className="card bg-white border border-neutral-200/80 shadow-sm p-6">
-        <h2 className="text-base font-bold text-neutral-900">Dodaj nowe stanowisko pracy</h2>
+        <h2 className="text-base font-bold text-neutral-900">Dodaj nowe stanowisko pracy (BYOD / POS)</h2>
         <p className="mt-0.5 text-xs text-neutral-500">
-          Wybierz rolę operacyjną. Jeśli urządzeniem jest tablet z aplikacją SolutionsBay, możesz od razu podać jego identyfikator sprzętowy <span className="font-mono">SBR-*</span>.
+          Wprowadź nazwę i profil operacyjny. System automatycznie wygeneruje unikalny wewnętrzny kod parowania oraz kod QR dla smartfona lub tabletu.
         </p>
 
         <form action={createTerminal} className="mt-5 space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="sm:col-span-1">
               <label className="label" htmlFor="name">Nazwa stanowiska</label>
-              <input id="name" name="name" required placeholder="np. Lada Główna, Grill Wydawka" className="input" />
+              <input id="name" name="name" required placeholder="np. Kelner Bartek (A55), Kasa 1, Grill KDS" className="input" />
             </div>
 
             <div className="sm:col-span-1">
               <label className="label" htmlFor="role">Profil operacyjny</label>
               <select id="role" name="role" defaultValue="all_in_one" className="input font-medium">
                 <option value="all_in_one">⚡ All-in-One Foodtruck Master</option>
-                <option value="pos">🖥️ Kasa na Ladzie (POS)</option>
+                <option value="pos">🖥️ Kasa na Ladzie / Kelner (POS)</option>
                 <option value="kds">🍳 Kuchnia (KDS)</option>
                 <option value="pickup">📱 Skaner Wydań (BYOD)</option>
                 <option value="kiosk">🛎️ Kiosk Samoobsługowy</option>
@@ -220,16 +220,9 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
             </div>
 
             <div className="sm:col-span-1">
-              <label className="label" htmlFor="terminal_id">
-                ID Terminala <span className="font-normal text-neutral-400">(opcjonalny SBR-*)</span>
-              </label>
-              <input id="terminal_id" name="terminal_id" placeholder="np. SBR-C5N34S (lub puste)" className="input font-mono" />
-            </div>
-
-            <div className="sm:col-span-1">
-              <label className="label" htmlFor="location_id">Lokalizacja</label>
+              <label className="label" htmlFor="location_id">Lokalizacja / Foodtruck</label>
               <select id="location_id" name="location_id" className="input">
-                <option value="">— brak —</option>
+                <option value="">— brak przypisania —</option>
                 {(locations ?? []).map((l) => (
                   <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
@@ -239,7 +232,7 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
 
           <div className="flex justify-end pt-2 border-t border-neutral-100">
             <button className="btn-brand">
-              Utwórz stanowisko & otwórz konfigurator ➔
+              Utwórz stanowisko & wygeneruj kod parowania ➔
             </button>
           </div>
         </form>

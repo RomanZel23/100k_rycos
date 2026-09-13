@@ -120,17 +120,17 @@ export default async function TerminalEditPage({
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-white/10 text-amber-300 font-mono text-xs font-semibold uppercase tracking-wider">
-                Kod Identyfikatora / Parowania
+                Wewnętrzny Kod Stanowiska (BYOD / POS)
               </span>
               {isCurrentSbr && (
                 <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono text-xs font-semibold">
-                  SolutionsBay SBR
+                  Sprzęt SolutionsBay SBR
                 </span>
               )}
             </div>
             <p className="font-mono text-3xl font-black tracking-widest text-white">{terminal.terminal_id}</p>
             <p className="text-xs text-neutral-300 max-w-md">
-              Zeskanuj ten kod smartfonem pracownika lub wpisz go w aplikacji SolutionsBay / POS, aby natychmiast uruchomić ten profil na urządzeniu.
+              Zeskanuj ten kod smartfonem pracownika (BYOD) lub wpisz go na ekranie logowania, aby przypisać urządzenie do tego profilu.
             </p>
           </div>
 
@@ -336,9 +336,15 @@ export default async function TerminalEditPage({
           {/* Section 4: Hardware Routing & Peripherals (SBR-*) */}
           <div className="card bg-white border border-neutral-200/80 shadow-sm p-6 space-y-4">
             <div>
-              <h2 className="text-base font-bold text-neutral-900">4. Peryferia i sprzęt (Hardware Routing)</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-neutral-900">4. Peryferia sprzętowe SolutionsBay / SBR-*</h2>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600">
+                  Opcjonalne
+                </span>
+              </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Wskaż urządzenia fizyczne odpowiedzialne za wydruki Bluetooth, płatności SoftPOS i fiskalizację. Wpisz <span className="font-mono font-semibold">self</span>, jeśli to urządzenie posiada podłączony sprzęt.
+                Dla smartfonów i tabletów pracowników (BYOD) pola te mogą pozostać <strong>puste</strong> (system działa w 100% cyfrowo).
+                Wypełnij je tylko wtedy, gdy chcesz przekierować wydruki lub płatności do zewnętrznego terminala SolutionsBay w lokalu.
               </p>
             </div>
 
@@ -346,34 +352,48 @@ export default async function TerminalEditPage({
               {/* Printer Routing */}
               <div>
                 <label className="label" htmlFor="printer_device_id">
-                  🖨️ Drukarka bonów (ESC/POS)
+                  🖨️ Drukarka bonowa / SBR-*
                 </label>
                 <input
                   id="printer_device_id"
                   name="printer_device_id"
+                  list="printer-device-options"
                   defaultValue={terminal.printer_device_id ?? (isCurrentSbr ? 'self' : '')}
-                  placeholder="self lub np. SBR-C5N34S"
+                  placeholder="— puste (brak) lub SBR-* —"
                   className="input font-mono text-xs"
                 />
+                <datalist id="printer-device-options">
+                  <option value="self">self (wbudowana w to urządzenie)</option>
+                  {sbrDevices.map((d) => (
+                    <option key={d.id} value={d.terminal_id}>{d.terminal_id} ({d.name})</option>
+                  ))}
+                </datalist>
                 <p className="text-[11px] text-neutral-400 mt-1">
-                  Urządzenie wysyłające komendy Bluetooth do drukarki kuchennej/bonowej.
+                  Zostaw puste, jeśli używasz ekranu kuchennego KDS zamiast papieru.
                 </p>
               </div>
 
               {/* SoftPOS Tap Routing */}
               <div>
                 <label className="label" htmlFor="tap_device_id">
-                  💳 Terminal SoftPOS (Karta)
+                  💳 Terminal płatniczy / SoftPOS
                 </label>
                 <input
                   id="tap_device_id"
                   name="tap_device_id"
+                  list="tap-device-options"
                   defaultValue={terminal.tap_device_id ?? (isCurrentSbr ? 'self' : '')}
-                  placeholder="self lub np. SBR-C5N34S"
+                  placeholder="— puste (brak) lub SBR-* —"
                   className="input font-mono text-xs"
                 />
+                <datalist id="tap-device-options">
+                  <option value="self">self (wbudowany SoftPOS)</option>
+                  {sbrDevices.map((d) => (
+                    <option key={d.id} value={d.terminal_id}>{d.terminal_id} ({d.name})</option>
+                  ))}
+                </datalist>
                 <p className="text-[11px] text-neutral-400 mt-1">
-                  Urządzenie z licencją SoftPOS (Worldline Tap on Mobile).
+                  Zostaw puste przy płatnościach gotówką lub na zwykłym terminalu bankowym.
                 </p>
               </div>
 
@@ -385,24 +405,35 @@ export default async function TerminalEditPage({
                 <input
                   id="fiscal_device_id"
                   name="fiscal_device_id"
+                  list="fiscal-device-options"
                   defaultValue={terminal.fiscal_device_id ?? ''}
-                  placeholder="np. SBF-14d68457 lub SBR-*"
+                  placeholder="— puste (brak) lub SBF-* —"
                   className="input font-mono text-xs"
                 />
+                <datalist id="fiscal-device-options">
+                  {options.fiscal_devices?.map((f) => (
+                    <option key={f.id} value={f.device_id}>{f.device_id} ({f.name})</option>
+                  ))}
+                </datalist>
                 <p className="text-[11px] text-neutral-400 mt-1">
-                  Wirtualny Hub Fiskalny lub lokalna kasa rejestrująca e-paragony.
+                  Opcjonalna kasa wirtualna / hub do rejestracji e-paragonów.
                 </p>
               </div>
             </div>
 
             {sbrDevices.length > 0 && (
               <div className="pt-2 text-xs text-neutral-500 bg-neutral-50 p-3 rounded-lg border border-neutral-200/60">
-                <span className="font-semibold text-neutral-700 block mb-1">Wykryte urządzenia fizyczne w Twojej firmie:</span>
+                <span className="font-semibold text-neutral-700 block mb-1">Dostępne fizyczne urządzenia SBR-* w Twojej firmie:</span>
                 <div className="flex flex-wrap gap-2 mt-1">
                   {sbrDevices.map((d) => (
-                    <span key={d.id} className="font-mono text-[11px] bg-white px-2 py-0.5 rounded border border-neutral-200">
+                    <button
+                      type="button"
+                      key={d.id}
+                      onClick={undefined}
+                      className="font-mono text-[11px] bg-white px-2 py-0.5 rounded border border-neutral-200 text-neutral-700"
+                    >
                       {d.terminal_id} ({d.name})
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>

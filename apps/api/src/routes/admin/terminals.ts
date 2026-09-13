@@ -135,13 +135,24 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
     }, 'Options retrieved');
   });
 
-  function generateSetupCode(): string {
-    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+  const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+  async function generateSetupCode(db: any): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let code = '';
+      for (let i = 0; i < 8; i++) {
+        code += CODE_CHARS.charAt(Math.floor(Math.random() * CODE_CHARS.length));
+      }
+      const existing = await db
+        .select({ id: terminals.id })
+        .from(terminals)
+        .where(eq(terminals.terminalId, code))
+        .limit(1);
+      if (!existing || existing.length === 0) {
+        return code;
+      }
     }
-    return code;
+    return 'TRM' + Math.random().toString(36).substring(2, 7).toUpperCase();
   }
 
   // POST /v1/admin/terminals - Create terminal / workstation
@@ -156,7 +167,8 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       });
     }
 
-    const terminalId = String(body.terminalId || body.terminal_id || generateSetupCode()).trim();
+    const customId = body.terminalId || body.terminal_id;
+    const terminalId = customId ? String(customId).trim().toUpperCase() : await generateSetupCode(db);
     const locationId = body.locationId || body.location_id ? parseInt(String(body.locationId || body.location_id), 10) : null;
     const role = String(body.role || 'all_in_one').trim();
     const assignedBrandIds = Array.isArray(body.assignedBrandIds || body.assigned_brand_ids)
