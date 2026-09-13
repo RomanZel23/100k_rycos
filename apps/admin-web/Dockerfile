@@ -33,4 +33,7 @@ COPY --from=builder /app/apps/admin-web/.next/static ./apps/admin-web/.next/stat
 
 EXPOSE 3000
 
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+
 CMD ["node", "apps/admin-web/server.js"]
