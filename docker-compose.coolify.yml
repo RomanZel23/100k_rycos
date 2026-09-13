@@ -9,7 +9,6 @@ services:
     ports:
       - "${API_HOST_PORT:-8008}:8000"
     environment:
-      - NODE_ENV=production
       - PORT=8000
       - HOST=0.0.0.0
       - DATABASE_URL=${DATABASE_URL}
@@ -40,7 +39,6 @@ services:
       dockerfile: apps/worker/Dockerfile
     restart: unless-stopped
     environment:
-      - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - RYCOS_MQTT_HOST=${RYCOS_MQTT_HOST:-rycos.eu}
@@ -64,7 +62,6 @@ services:
     ports:
       - "${WEB_HOST_PORT:-3000}:3000"
     environment:
-      - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://100k-api.rycos.eu}
@@ -91,7 +88,6 @@ services:
     ports:
       - "${ADMIN_HOST_PORT:-9505}:3000"
     environment:
-      - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://57.128.250.200:8000}
