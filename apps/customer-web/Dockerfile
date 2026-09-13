@@ -8,7 +8,6 @@ ARG NEXT_PUBLIC_API_URL=https://100k-api.rycos.eu
 ARG NEXT_PUBLIC_WS_URL=wss://100k-api.rycos.eu/v1/ws
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
-ENV NODE_ENV=development
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* tsconfig.base.json ./
 COPY packages/ ./packages/
