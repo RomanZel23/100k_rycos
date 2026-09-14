@@ -15,10 +15,12 @@ import {
   ChevronRight,
   Volume2,
   VolumeX,
-  History
+  History,
+  PackageCheck
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { getApiBaseUrl } from '../../lib/api';
+import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
 
 interface CompletedOrderLog {
   orderNumber: number;
@@ -26,7 +28,8 @@ interface CompletedOrderLog {
   itemsCount?: number;
 }
 
-export default function PickupPage() {
+function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }) {
+  const [terminal, setTerminal] = useState<PairedTerminal>(initialTerminal);
   const [activeTab, setActiveTab] = useState<'camera' | 'pin'>('camera');
   const [pin, setPin] = useState('');
   const [orderNumberInput, setOrderNumberInput] = useState('');
@@ -161,24 +164,33 @@ export default function PickupPage() {
 
     try {
       const apiBase = getApiBaseUrl();
+      const companyId = terminal?.company_id || 1;
       const payload = {
         pin: params.pin,
         orderNumber: params.orderNumber,
         qrData: params.qrData,
-        companyId: 1,
+        companyId: companyId,
       };
 
       // Try public verify-pin endpoint first, fallback to admin endpoint
       let res = await fetch(`${apiBase}/v1/orders/verify-pin`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+        },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         res = await fetch(`${apiBase}/v1/admin/orders/verify-pin`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-company-id': '1' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-company-id': String(companyId),
+            ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          },
           body: JSON.stringify(payload),
         });
       }
@@ -502,5 +514,13 @@ export default function PickupPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function PickupPage() {
+  return (
+    <TerminalGuard requiredRole="pickup" roleName="Skaner Wydań (Pickup)" roleIcon={<PackageCheck size={14} />}>
+      {(terminal) => <PickupPageContent initialTerminal={terminal} />}
+    </TerminalGuard>
   );
 }

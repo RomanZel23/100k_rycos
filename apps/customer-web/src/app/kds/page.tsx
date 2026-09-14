@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell, Camera, KeyRound, QrCode, Download, Smartphone } from 'lucide-react';
 import { getApiBaseUrl } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
+import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
 
 interface ServiceCallNotification {
   id: string;
@@ -41,14 +42,14 @@ const getWsBaseUrl = () => {
   return apiBase.replace(/^http/, 'ws') + '/v1/ws';
 };
 
-export default function KitchenDisplayPage() {
+function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }) {
   const [orders, setOrders] = useState<KdsOrder[]>([]);
   const [serviceCalls, setServiceCalls] = useState<ServiceCallNotification[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState('');
-  const [terminal, setTerminal] = useState<{ id: number; terminal_id: string; name: string; role?: string } | null>(null);
+  const [terminal, setTerminal] = useState<PairedTerminal>(initialTerminal);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Mobile tab state
@@ -158,8 +159,12 @@ export default function KitchenDisplayPage() {
   // Fetch initial orders
   const loadOrders = async () => {
     try {
+      const companyId = terminal?.company_id || 1;
       const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders`, {
-        headers: { 'x-company-id': '1' },
+        headers: {
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+        },
       });
       if (res.ok) {
         const json = await res.json();
@@ -180,7 +185,7 @@ export default function KitchenDisplayPage() {
     loadOrders();
     const pollInterval = setInterval(loadOrders, 10000); // Poll backup every 10s
     return () => clearInterval(pollInterval);
-  }, []);
+  }, [terminal?.company_id]);
 
   // Connect WebSocket
   useEffect(() => {
@@ -264,11 +269,13 @@ export default function KitchenDisplayPage() {
     );
 
     try {
+      const companyId = terminal?.company_id || 1;
       const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-company-id': '1',
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
         },
         body: JSON.stringify({ status: canonicalStatus }),
       });
@@ -742,5 +749,13 @@ export default function KitchenDisplayPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function KitchenDisplayPage() {
+  return (
+    <TerminalGuard requiredRole="kds" roleName="Kuchnia Live (KDS)" roleIcon={<ChefHat size={14} />}>
+      {(terminal) => <KitchenDisplayPageContent initialTerminal={terminal} />}
+    </TerminalGuard>
   );
 }

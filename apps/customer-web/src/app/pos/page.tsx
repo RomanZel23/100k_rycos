@@ -27,6 +27,7 @@ import {
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
+import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
 
 interface PosCartItem {
   id: string; // unique key
@@ -324,7 +325,7 @@ function PosTicketContent({
   );
 }
 
-export default function PosPage() {
+function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }) {
   const [menu, setMenu] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
@@ -364,7 +365,7 @@ export default function PosPage() {
   const [currentTime, setCurrentTime] = useState('');
 
   // Paired Workstation Terminal
-  const [terminal, setTerminal] = useState<{ id: number; terminal_id: string; name: string; role?: string } | null>(null);
+  const [terminal, setTerminal] = useState<PairedTerminal>(initialTerminal);
 
   // Open tickets (Otwarte rachunki / stoliki) state
   const [isOpenTicketsModalOpen, setIsOpenTicketsModalOpen] = useState(false);
@@ -398,9 +399,11 @@ export default function PosPage() {
   const loadOpenOrders = async () => {
     try {
       setOpenOrdersLoading(true);
+      const companyId = terminal?.company_id || menu?.brand?.companyId || 1;
       const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders?limit=50`, {
         headers: {
-          'x-company-id': String(menu?.brand?.companyId || 1),
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
         },
       });
       if (res.ok) {
@@ -424,15 +427,17 @@ export default function PosPage() {
   const handleSettleOpenOrder = async (order: any, method: 'cash' | 'card') => {
     setSettlingOrderId(order.id);
     try {
+      const companyId = terminal?.company_id || menu?.brand.companyId || 1;
       const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders/${order.id}/pay`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-company-id': String(menu?.brand.companyId || 1),
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
         },
         body: JSON.stringify({
           paymentMethod: method,
-          terminalId: terminal?.id ? String(terminal.id) : undefined,
+          terminalId: terminal?.terminal_id || (terminal?.id ? String(terminal.id) : undefined),
         }),
       });
 
@@ -688,15 +693,17 @@ export default function PosPage() {
       // Szybka sprzedaż przy kasie: Gotówka lub Karta natychmiast rejestruje płatność i fiskalizuje
       if (action === 'cash' || action === 'card') {
         try {
+          const companyId = terminal?.company_id || menu.brand.companyId || 1;
           await fetch(`${getApiBaseUrl()}/v1/admin/orders/${placed.id}/pay`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-company-id': String(menu.brand.companyId || 1),
+              'x-company-id': String(companyId),
+              ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
             },
             body: JSON.stringify({
               paymentMethod: action,
-              terminalId: terminal?.id ? String(terminal.id) : undefined,
+              terminalId: terminal?.terminal_id || (terminal?.id ? String(terminal.id) : undefined),
             }),
           });
         } catch (e) {
@@ -1495,5 +1502,13 @@ export default function PosPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function PosPage() {
+  return (
+    <TerminalGuard requiredRole="pos" roleName="Kasa Kelnerska (POS)" roleIcon={<CreditCard size={14} />}>
+      {(terminal) => <PosPageContent initialTerminal={terminal} />}
+    </TerminalGuard>
   );
 }
