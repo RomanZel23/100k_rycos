@@ -19,7 +19,8 @@ import {
   Camera,
   KeyRound,
   QrCode,
-  Smartphone
+  Smartphone,
+  Download
 } from 'lucide-react';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
@@ -87,19 +88,19 @@ function PosTicketContent({
       {/* Table / Order Type Header */}
       <div className="p-3 bg-slate-800/60 border-b border-slate-800 space-y-2.5 shrink-0">
         {/* Dine In vs Takeaway */}
-        <div className="grid grid-cols-2 gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-700/60 text-xs font-bold">
+        <div className="grid grid-cols-2 gap-2 bg-slate-900 p-1.5 rounded-2xl border border-slate-700/60 text-sm font-black">
           <button
             onClick={() => setOrderType('dine_in')}
-            className={`py-2 rounded-lg transition-all cursor-pointer ${
-              orderType === 'dine_in' ? 'bg-amber-500 text-slate-950 shadow-sm font-black' : 'text-slate-400 hover:text-white'
+            className={`py-2.5 sm:py-2 rounded-xl transition-all cursor-pointer ${
+              orderType === 'dine_in' ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-white'
             }`}
           >
             Na Miejscu (Stolik)
           </button>
           <button
             onClick={() => setOrderType('takeaway')}
-            className={`py-2 rounded-lg transition-all cursor-pointer ${
-              orderType === 'takeaway' ? 'bg-amber-500 text-slate-950 shadow-sm font-black' : 'text-slate-400 hover:text-white'
+            className={`py-2.5 sm:py-2 rounded-xl transition-all cursor-pointer ${
+              orderType === 'takeaway' ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-white'
             }`}
           >
             Na Wynos (Takeaway)
@@ -109,20 +110,20 @@ function PosTicketContent({
         {/* Quick Table Buttons (if dine_in) */}
         {orderType === 'dine_in' && (
           <div className="space-y-1.5">
-            <div className="text-[11px] font-semibold text-slate-400 flex items-center justify-between">
+            <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
               <span>Wybierz stolik:</span>
-              <span className="text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded">
+              <span className="text-amber-400 font-black bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
                 Wybrano: {selectedTable}
               </span>
             </div>
-            <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
               {QUICK_TABLES.map((t) => (
                 <button
                   key={t}
                   onClick={() => setSelectedTable(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                  className={`px-4 py-2 sm:px-3 sm:py-1.5 rounded-xl text-sm sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer min-w-[56px] text-center ${
                     selectedTable === t
-                      ? 'bg-amber-400 text-slate-950 shadow-xs'
+                      ? 'bg-amber-400 text-slate-950 shadow-md scale-[1.03]'
                       : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
@@ -135,16 +136,16 @@ function PosTicketContent({
       </div>
 
       {/* Cart Items List */}
-      <div className="flex-1 p-3 overflow-y-auto space-y-2">
+      <div className="flex-1 p-3 overflow-y-auto space-y-2.5">
         {cart.length === 0 ? (
-          <div className="h-full min-h-[160px] flex flex-col items-center justify-center text-slate-500 text-xs text-center p-6 space-y-2">
-            <Receipt size={36} className="text-slate-600" />
-            <span className="font-bold text-slate-400">Rachunek jest pusty</span>
-            <span>Wybierz dania z katalogu menu, aby dodać je do zamówienia kelnerskiego.</span>
+          <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-slate-400 text-sm text-center p-6 space-y-3">
+            <Receipt size={44} className="text-slate-600" />
+            <span className="font-extrabold text-slate-300 text-base">Rachunek jest pusty</span>
+            <span className="text-xs text-slate-500 max-w-xs">Wybierz dania z menu, aby dodać je do rachunku kelnerskiego.</span>
             {isMobileDrawer && onCloseMobileDrawer && (
               <button
                 onClick={onCloseMobileDrawer}
-                className="mt-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                className="mt-3 px-5 py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 font-black rounded-2xl text-sm transition-colors cursor-pointer shadow-md"
               >
                 ← Przejdź do wyboru dań
               </button>
@@ -156,54 +157,54 @@ function PosTicketContent({
             return (
               <div
                 key={item.id}
-                className="bg-slate-800/70 border border-slate-700/60 rounded-xl p-2.5 flex flex-col gap-1.5 shadow-xs"
+                className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 sm:p-3 flex flex-col gap-2 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-white leading-tight">
+                    <div className="font-bold text-base sm:text-sm text-white leading-tight">
                       {item.product.name}
                     </div>
                     {item.selectedAddons.length > 0 && (
-                      <div className="text-[11px] text-amber-400/90 mt-0.5">
+                      <div className="text-xs sm:text-[11px] text-amber-400 font-semibold mt-0.5">
                         + {item.selectedAddons.map((a) => a.name).join(', ')}
                       </div>
                     )}
                     {item.specialInstructions && (
-                      <div className="text-[10px] text-slate-400 italic mt-0.5">
+                      <div className="text-xs sm:text-[10px] text-amber-200/90 bg-amber-500/10 p-1.5 rounded-lg mt-1 italic font-medium">
                         &ldquo;{item.specialInstructions}&rdquo;
                       </div>
                     )}
                   </div>
-                  <span className="font-bold text-sm text-white font-mono shrink-0 ml-2">
+                  <span className="font-black text-base sm:text-sm text-amber-400 font-mono shrink-0 ml-2">
                     {itemTotal.toFixed(2)} zł
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between pt-1 border-t border-slate-700/40">
-                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-lg p-0.5">
+                <div className="flex items-center justify-between pt-1.5 border-t border-slate-700/50">
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl p-1">
                     <button
                       onClick={() => updateQuantity(item.id, -1)}
-                      className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
                     >
-                      <Minus size={13} />
+                      <Minus size={15} />
                     </button>
-                    <span className="w-7 text-center font-bold text-xs text-amber-400 font-mono">
+                    <span className="w-8 text-center font-mono font-black text-sm sm:text-xs text-amber-400">
                       {item.quantity}
                     </span>
                     <button
                       onClick={() => updateQuantity(item.id, 1)}
-                      className="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
                     >
-                      <Plus size={13} />
+                      <Plus size={15} />
                     </button>
                   </div>
 
                   <button
                     onClick={() => removeItem(item.id)}
-                    className="text-slate-500 hover:text-red-400 p-1.5 transition-colors cursor-pointer"
+                    className="p-2 text-slate-400 hover:text-red-400 rounded-xl hover:bg-slate-750 transition-colors cursor-pointer"
                     title="Usuń pozycję"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={18} />
                   </button>
                 </div>
               </div>
@@ -213,25 +214,22 @@ function PosTicketContent({
       </div>
 
       {/* Ticket Footer / Checkout Actions */}
-      <div className="p-3 bg-slate-900 border-t border-slate-800 space-y-2.5 shrink-0">
+      <div className="p-3 bg-slate-900 border-t border-slate-800 space-y-3 shrink-0">
         {/* Note & NIP Toggles */}
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <div className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Uwagi do kuchni (np. bez soli)..."
+              placeholder="Uwagi do zamówienia..."
               value={customerNote}
               onChange={(e) => setCustomerNote(e.target.value)}
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400"
             />
             <button
               onClick={() => setShowNip(!showNip)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                showNip
-                  ? 'bg-amber-500 text-slate-950 border-amber-400'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                showNip ? 'bg-amber-500 text-slate-950 border-amber-400 font-black' : 'bg-slate-800 border-slate-700 text-slate-300'
               }`}
-              title="Faktura na NIP"
             >
               NIP
             </button>
@@ -240,39 +238,39 @@ function PosTicketContent({
           {showNip && (
             <input
               type="text"
-              placeholder="Wpisz NIP firmy do faktury..."
+              placeholder="Wprowadź 10-cyfrowy NIP do faktury..."
               value={customerNip}
               onChange={(e) => setCustomerNip(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400 animate-in slide-in-from-top-1 duration-150"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400 animate-in slide-in-from-top-1 duration-150 font-mono"
             />
           )}
         </div>
 
         {/* Total Summary */}
-        <div className="bg-slate-800/80 rounded-xl p-2.5 border border-slate-700/60 flex items-center justify-between">
+        <div className="bg-slate-800/90 rounded-2xl p-3 border border-slate-700/80 flex items-center justify-between shadow-sm">
           <div>
-            <span className="text-xs text-slate-400">Pozycji: {totalItemsCount}</span>
-            <div className="text-xs font-bold text-slate-300">Do zapłaty brutto:</div>
+            <span className="text-xs text-slate-400 font-bold">Pozycji: {totalItemsCount}</span>
+            <div className="text-xs sm:text-sm font-black text-slate-200">Do zapłaty brutto:</div>
           </div>
           <div className="text-right">
-            <span className="font-black text-2xl text-amber-400 tracking-tight font-mono">
+            <span className="font-black text-3xl sm:text-2xl text-amber-400 tracking-tight font-mono">
               {totalAmount.toFixed(2)} zł
             </span>
           </div>
         </div>
 
         {/* Action Buttons Grid */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
           {/* Cash Button */}
           <button
             onClick={() => handleProcessOrder('cash')}
             disabled={submitting || cart.length === 0}
-            className="py-3 px-1.5 sm:px-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-xl text-white font-extrabold text-xs flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-900/20 transition-all cursor-pointer"
+            className="py-4 sm:py-3.5 px-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-sm sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-emerald-900/30 transition-all cursor-pointer min-h-[64px]"
           >
-            <Banknote size={18} />
+            <Banknote size={22} />
             <span>Gotówka</span>
-            <span className="text-[10px] font-normal text-emerald-100 flex items-center gap-0.5">
-              <Printer size={10} /> Drukuj
+            <span className="text-xs sm:text-[10px] font-semibold text-emerald-100 flex items-center gap-0.5">
+              <Printer size={12} /> Drukuj
             </span>
           </button>
 
@@ -280,12 +278,12 @@ function PosTicketContent({
           <button
             onClick={() => handleProcessOrder('card')}
             disabled={submitting || cart.length === 0}
-            className="py-3 px-1.5 sm:px-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-xl text-white font-extrabold text-xs flex flex-col items-center justify-center gap-1 shadow-lg shadow-blue-900/20 transition-all cursor-pointer"
+            className="py-4 sm:py-3.5 px-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-sm sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-blue-900/30 transition-all cursor-pointer min-h-[64px]"
           >
-            <CreditCard size={18} />
+            <CreditCard size={22} />
             <span>Karta</span>
-            <span className="text-[10px] font-normal text-blue-100 flex items-center gap-0.5">
-              <Printer size={10} /> Drukuj
+            <span className="text-xs sm:text-[10px] font-semibold text-blue-100 flex items-center gap-0.5">
+              <Printer size={12} /> Drukuj
             </span>
           </button>
 
@@ -293,20 +291,20 @@ function PosTicketContent({
           <button
             onClick={() => handleProcessOrder('kitchen')}
             disabled={submitting || cart.length === 0}
-            className="py-3 px-1.5 sm:px-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-xl text-white font-extrabold text-xs flex flex-col items-center justify-center gap-1 shadow-lg shadow-amber-900/20 transition-all cursor-pointer"
+            className="py-4 sm:py-3.5 px-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-sm sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-amber-900/30 transition-all cursor-pointer min-h-[64px]"
           >
-            <Send size={18} />
+            <Send size={22} />
             <span>Do kuchni</span>
-            <span className="text-[10px] font-normal text-amber-100">Otwarty</span>
+            <span className="text-xs sm:text-[10px] font-semibold text-amber-100">Otwarty</span>
           </button>
         </div>
 
         {!isMobileDrawer && cart.length > 0 && (
           <button
             onClick={clearCart}
-            className="w-full py-1.5 text-xs text-slate-500 hover:text-red-400 font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+            className="w-full py-2 text-xs text-slate-500 hover:text-red-400 font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
           >
-            <RotateCcw size={12} />
+            <RotateCcw size={14} />
             <span>Wyczyść bieżący rachunek</span>
           </button>
         )}
@@ -314,7 +312,7 @@ function PosTicketContent({
         {isMobileDrawer && onCloseMobileDrawer && (
           <button
             onClick={onCloseMobileDrawer}
-            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-amber-400 font-black rounded-2xl text-sm flex items-center justify-center gap-2 transition-colors cursor-pointer min-h-[48px]"
           >
             <span>← Kontynuuj dodawanie dań</span>
           </button>
@@ -370,6 +368,29 @@ export default function PosPage() {
   const [openOrders, setOpenOrders] = useState<any[]>([]);
   const [openOrdersLoading, setOpenOrdersLoading] = useState(false);
   const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
+
+  // PWA Install Prompt
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+    }
+  };
 
   const loadOpenOrders = async () => {
     try {
@@ -839,6 +860,18 @@ export default function PosPage() {
             <span className="hidden sm:inline">Skanuj QR / Wydaj</span>
           </button>
 
+          {/* PWA Install Button */}
+          {isInstallable && (
+            <button
+              onClick={handleInstallClick}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer shrink-0"
+              title="Zainstaluj aplikację POS na ekranie głównym telefonu"
+            >
+              <Smartphone size={14} />
+              <span className="hidden xs:inline">Instaluj PWA</span>
+            </button>
+          )}
+
           <div className="hidden sm:block bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl font-mono font-bold text-amber-400 text-sm">
             {currentTime}
           </div>
@@ -884,10 +917,10 @@ export default function PosPage() {
         {/* Product Catalog: Full width on mobile (< lg), 65% on desktop (lg:) */}
         <div className="flex-1 lg:flex-[65] flex flex-col bg-slate-900/40 overflow-hidden">
           {/* Categories Bar */}
-          <div className="bg-slate-900/80 border-b border-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+          <div className="bg-slate-900/80 border-b border-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 overflow-x-auto no-scrollbar shrink-0">
             <button
               onClick={() => setActiveCategory(null)}
-              className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+              className={`px-4 sm:px-4 py-2.5 sm:py-2 rounded-xl text-sm sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer min-h-[44px] sm:min-h-0 flex items-center ${
                 activeCategory === null
                   ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
@@ -899,7 +932,7 @@ export default function PosPage() {
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-4 sm:px-4 py-2.5 sm:py-2 rounded-xl text-sm sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer min-h-[44px] sm:min-h-0 flex items-center ${
                   activeCategory === cat.id
                     ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
                     : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
@@ -911,7 +944,7 @@ export default function PosPage() {
           </div>
 
           {/* Products Grid */}
-          <div className="flex-1 p-2.5 sm:p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3 content-start pb-28 lg:pb-4">
+          <div className="flex-1 p-3 sm:p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3 content-start pb-28 lg:pb-4">
             {filteredProducts.map((prod) => {
               const countInCart = cart
                 .filter((i) => i.product.id === prod.id)
@@ -921,37 +954,37 @@ export default function PosPage() {
                 <button
                   key={prod.id}
                   onClick={() => handleProductClick(prod)}
-                  className={`relative bg-slate-800/80 hover:bg-slate-800 active:scale-[0.98] border rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between text-left transition-all group shadow-md hover:shadow-amber-500/5 cursor-pointer ${
+                  className={`relative bg-slate-800/80 hover:bg-slate-800 active:scale-[0.98] border rounded-2xl p-3.5 sm:p-3.5 flex flex-col justify-between text-left transition-all group shadow-md hover:shadow-amber-500/5 cursor-pointer min-h-[135px] sm:min-h-0 ${
                     countInCart > 0 ? 'border-amber-500/60 bg-slate-800/95 ring-1 ring-amber-500/30' : 'border-slate-700/80 hover:border-amber-500/50'
                   }`}
                 >
                   {countInCart > 0 && (
-                    <span className="absolute -top-2 -right-1.5 bg-amber-500 text-slate-950 font-black text-[11px] px-2 py-0.5 rounded-full shadow-md z-10 border border-slate-950 flex items-center gap-0.5">
+                    <span className="absolute -top-2 -right-1.5 bg-amber-500 text-slate-950 font-black text-xs sm:text-[11px] px-2.5 py-0.5 rounded-full shadow-md z-10 border border-slate-950 flex items-center gap-0.5">
                       {countInCart}×
                     </span>
                   )}
                   <div className="w-full">
                     <div className="flex items-start justify-between gap-1 mb-1">
-                      <h3 className="font-bold text-xs sm:text-sm text-white group-hover:text-amber-300 transition-colors line-clamp-2 leading-tight">
+                      <h3 className="font-bold text-sm sm:text-sm text-white group-hover:text-amber-300 transition-colors line-clamp-2 leading-tight">
                         {prod.name}
                       </h3>
-                      <span className="text-[9px] sm:text-[10px] font-mono text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded shrink-0">
+                      <span className="text-[10px] sm:text-[10px] font-mono text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded shrink-0">
                         PTU {prod.ptuCode?.toUpperCase() || 'B'}
                       </span>
                     </div>
                     {prod.description && (
-                      <p className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
+                      <p className="text-xs sm:text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                         {prod.description}
                       </p>
                     )}
                   </div>
 
-                  <div className="w-full mt-2.5 sm:mt-3 pt-2 border-t border-slate-700/60 flex items-center justify-between">
-                    <span className="font-black text-amber-400 text-sm sm:text-base whitespace-nowrap font-mono">
+                  <div className="w-full mt-3 sm:mt-3 pt-2.5 border-t border-slate-700/60 flex items-center justify-between">
+                    <span className="font-black text-amber-400 text-base sm:text-base whitespace-nowrap font-mono">
                       {Number(prod.price).toFixed(2)} zł
                     </span>
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center transition-all shrink-0">
-                      <Plus size={15} />
+                    <div className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl bg-amber-500/15 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center transition-all shrink-0">
+                      <Plus size={18} />
                     </div>
                   </div>
                 </button>
@@ -988,22 +1021,22 @@ export default function PosPage() {
       </div>
 
       {/* Mobile Floating Sticky Bottom Bar */}
-      <div className="lg:hidden shrink-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-3.5 py-2.5 flex items-center justify-between z-20 shadow-2xl safe-area-pb">
+      <div className="lg:hidden shrink-0 bg-slate-900/98 backdrop-blur-md border-t border-slate-800 px-4 py-3 flex items-center justify-between z-20 shadow-2xl safe-area-pb">
         <div 
           onClick={() => setIsMobileCartOpen(true)}
-          className="flex items-center gap-2.5 cursor-pointer select-none"
+          className="flex items-center gap-3 cursor-pointer select-none"
         >
-          <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
-            <Receipt size={18} />
+          <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+            <Receipt size={22} />
           </div>
           <div className="flex flex-col">
-            <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-              <span className="bg-slate-800 px-1.5 py-0.5 rounded text-amber-400 font-extrabold">
+            <div className="text-xs font-black text-slate-300 flex items-center gap-1.5">
+              <span className="bg-slate-800 px-2 py-0.5 rounded-md text-amber-400 font-black">
                 {orderType === 'dine_in' ? `Stół ${selectedTable}` : 'Na wynos'}
               </span>
               <span className="text-slate-400">· {totalItemsCount} poz.</span>
             </div>
-            <div className="font-black text-base text-white font-mono leading-tight">
+            <div className="font-black text-xl text-amber-400 font-mono leading-tight mt-0.5">
               {totalAmount.toFixed(2)} zł
             </div>
           </div>
@@ -1011,12 +1044,12 @@ export default function PosPage() {
 
         <button
           onClick={() => setIsMobileCartOpen(true)}
-          className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+          className="min-h-[50px] py-3 px-5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
         >
-          <Receipt size={16} />
+          <Receipt size={18} />
           <span>Rachunek</span>
           {totalItemsCount > 0 && (
-            <span className="bg-slate-950 text-amber-400 px-1.5 py-0.5 rounded-full text-[10px] font-black min-w-[18px] text-center">
+            <span className="bg-slate-950 text-amber-400 px-2 py-0.5 rounded-full text-xs font-black min-w-[20px] text-center">
               {totalItemsCount}
             </span>
           )}

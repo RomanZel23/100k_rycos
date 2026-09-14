@@ -1,10 +1,20 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { PwaRegister } from '../components/PwaRegister';
 
 export const metadata: Metadata = {
-  title: '100k-RYCOS - Skanuj, Zamawiaj, Odbieraj',
-  description: 'Błyskawiczne zamawianie jedzenia przez kod QR przy stoliku i na parkingu',
+  title: 'RYCOS - POS & KDS Gastro',
+  description: 'System POS i KDS Live dla gastronomii oraz zamawianie QR',
   manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'RYCOS',
+  },
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export const viewport: Viewport = {
@@ -13,6 +23,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
+  themeColor: '#f59e0b',
 };
 
 export default function RootLayout({
@@ -22,7 +33,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pl">
-      <body className="antialiased min-h-screen bg-slate-50 text-slate-900 pb-20">
+      <body className="antialiased min-h-screen bg-slate-950 text-slate-100">
+        <PwaRegister />
         {children}
       </body>
     </html>

@@ -1,14 +1,30 @@
 {
-  "name": "100k-RYCOS",
-  "short_name": "100k-RYCOS",
-  "start_url": "/",
+  "name": "RYCOS - POS & KDS Gastro",
+  "short_name": "RYCOS",
+  "description": "System POS i KDS Live dla gastronomii",
+  "start_url": "/pos",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#f97316",
+  "orientation": "any",
+  "background_color": "#020617",
+  "theme_color": "#f59e0b",
+  "categories": ["food", "business", "productivity"],
   "icons": [
     {
-      "src": "/icon.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
       "type": "image/png"
     }
   ]
