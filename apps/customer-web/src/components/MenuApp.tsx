@@ -278,10 +278,10 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
     : menu?.products || [];
 
   return (
-    <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col">
+    <div className="w-full max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col overflow-x-hidden">
       {/* Brand Hero Banner */}
       {menu?.brand.bannerUrl && (
-        <div className="relative w-full h-48 sm:h-56 bg-white overflow-hidden shrink-0 flex items-center justify-center pb-8 sm:pb-10 pt-3 px-4 border-b border-slate-100">
+        <div className="relative w-full h-44 sm:h-56 bg-white overflow-hidden shrink-0 flex items-center justify-center pb-8 sm:pb-10 pt-3 px-3 sm:px-4 border-b border-slate-100">
           {/* Main banner image: clean object-contain without ghost blur, padded from bottom so card does not clip text */}
           <img
             src={menu.brand.bannerUrl}
@@ -296,18 +296,18 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
       <div
         className={`${
           menu?.brand.bannerUrl
-            ? 'relative z-20 -mt-7 sm:-mt-9 mx-3 sm:mx-4 rounded-3xl bg-white p-4 sm:p-5 shadow-lg shadow-slate-200/50 border border-slate-100'
-            : 'bg-white px-5 pt-5 pb-4 border-b border-slate-100 shadow-2xs'
+            ? 'relative z-20 -mt-7 sm:-mt-9 mx-2.5 sm:mx-4 rounded-2xl sm:rounded-3xl bg-white p-3 sm:p-5 shadow-lg shadow-slate-200/50 border border-slate-100'
+            : 'bg-white px-3 sm:px-5 pt-3.5 sm:pt-5 pb-3 sm:pb-4 border-b border-slate-100 shadow-2xs'
         }`}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {menu?.brand.logoUrl ? (
               <div
                 className={`${
                   menu?.brand.bannerUrl
-                    ? 'w-20 h-20 sm:w-22 sm:h-22 -mt-12 sm:-mt-14 rounded-2xl border-4 border-white shadow-md bg-white p-1.5 flex items-center justify-center shrink-0 overflow-hidden'
-                    : 'w-14 h-14 rounded-2xl border border-slate-200 shadow-xs bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden'
+                    ? 'w-14 h-14 sm:w-20 sm:h-20 -mt-10 sm:-mt-14 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-white shadow-md bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden'
+                    : 'w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden'
                 }`}
               >
                 <img
@@ -318,21 +318,21 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                 />
               </div>
             ) : menu?.brand.bannerUrl ? (
-              <div className="w-16 h-16 -mt-12 rounded-2xl border-4 border-white shadow-md bg-slate-900 text-white font-black text-xl flex items-center justify-center shrink-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 -mt-10 sm:-mt-12 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-white shadow-md bg-slate-900 text-white font-black text-base sm:text-xl flex items-center justify-center shrink-0">
                 {menu?.brand.name?.charAt(0) || '🍽️'}
               </div>
             ) : null}
 
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="font-extrabold text-xl sm:text-2xl text-slate-900 tracking-tight truncate">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h1 className="font-extrabold text-base sm:text-2xl text-slate-900 tracking-tight truncate">
                   {menu?.brand.name}
                 </h1>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Otwarte" />
+                <span className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Otwarte" />
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                <div className="flex items-center gap-1">
-                  <MapPin size={13} className="text-brand-500 shrink-0" />
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5 sm:mt-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  <MapPin size={12} className="text-brand-500 shrink-0" />
                   <span className="truncate">
                     {tableLabel
                       ? `${t.table}: ${tableLabel}`
@@ -346,32 +346,32 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           </div>
 
           {/* Right actions: Share, History Button & Language Switcher */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             {menu?.brand.settings?.show_sharing !== false && (
               <button
                 onClick={() => setIsShareOpen(true)}
-                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
+                className="p-1.5 sm:p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
                 title={lang === 'de' ? 'Menü teilen' : lang === 'en' ? 'Share menu' : 'Udostępnij menu'}
               >
-                <Share2 size={16} />
+                <Share2 size={14} className="sm:w-4 sm:h-4" />
               </button>
             )}
 
             <button
               onClick={() => setIsHistoryOpen(true)}
-              className="relative p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
+              className="relative p-1.5 sm:p-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
               title={t.orderHistory}
             >
-              <Clock size={16} />
+              <Clock size={14} className="sm:w-4 sm:h-4" />
               {hasActiveOrders && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse" />
+                <span className="absolute -top-1 -right-1 w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse" />
               )}
             </button>
 
-            <div className="flex items-center gap-0.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
+            <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 sm:p-1 rounded-xl border border-slate-200 text-[10px] sm:text-xs font-bold shrink-0">
               <button
                 onClick={() => handleSelectLanguage('pl')}
-                className={`px-2 py-1 rounded-lg transition-all ${
+                className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg transition-all ${
                   lang === 'pl' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
                 }`}
                 title="Polski"
@@ -380,7 +380,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
               </button>
               <button
                 onClick={() => handleSelectLanguage('en')}
-                className={`px-2 py-1 rounded-lg transition-all ${
+                className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg transition-all ${
                   lang === 'en' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
                 }`}
                 title="English"
@@ -389,7 +389,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
               </button>
               <button
                 onClick={() => handleSelectLanguage('de')}
-                className={`px-2 py-1 rounded-lg transition-all ${
+                className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg transition-all ${
                   lang === 'de' ? 'bg-white text-slate-900 shadow-xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
                 }`}
                 title="Deutsch"
@@ -402,11 +402,11 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
         {/* Service Call / Status row */}
         {(tableLabel || parkingSpot) && (
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-medium">Potrzebujesz pomocy obsługi?</span>
+          <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[11px] sm:text-xs text-slate-400 font-medium">Potrzebujesz pomocy obsługi?</span>
             <button
               onClick={() => setIsServiceCallOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1 rounded-full transition-colors shadow-2xs"
+              className="flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 sm:px-3 py-1 rounded-full transition-colors shadow-2xs"
               title={t.callWaiter}
             >
               <Bell size={12} className="animate-pulse text-amber-600" />

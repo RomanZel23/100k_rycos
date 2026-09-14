@@ -46,8 +46,8 @@ export function CartDrawer({
   const tipOptions = [0, Math.round(subtotal * 0.1), Math.round(subtotal * 0.15)];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm animate-fade-in overflow-x-hidden">
+      <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden min-w-0">
         {/* Drawer Header */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
           <div>

@@ -46,8 +46,8 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount, lang = 'pl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in overflow-x-hidden">
+      <div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-5 min-w-0">
         {/* Header */}
         <div className="flex items-center justify-between">
           <h3 className="font-extrabold text-slate-900 text-lg">{t.selectPaymentMethod}</h3>

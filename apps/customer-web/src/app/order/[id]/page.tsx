@@ -220,7 +220,7 @@ function OrderTrackingContent() {
   };
 
   return (
-    <div className="max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col p-4 space-y-4">
+    <div className="w-full max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col p-4 space-y-4 overflow-x-hidden">
       {/* Top Bar: Back to Menu & Language Switcher */}
       <div className="flex items-center justify-between">
         <Link
