@@ -104,6 +104,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             logoUrl: null,
             bannerUrl: null,
             footerUrl: null,
+            allowPayAtCounter: true,
             currency: 'PLN',
             isAcceptingOrders: true,
             locationId: 1,
@@ -585,6 +586,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           onClose={() => setIsPaymentOpen(false)}
           orderId={placedOrderId}
           totalAmount={subtotal + tipAmount}
+          allowPayAtCounter={menu?.brand.allowPayAtCounter ?? false}
           lang={lang}
         />
       )}

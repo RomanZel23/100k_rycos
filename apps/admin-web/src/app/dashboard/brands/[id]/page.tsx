@@ -16,6 +16,7 @@ interface Brand {
   menu_layout: string; language: string; currency: string
   style: string | null
   is_active: boolean
+  allow_pay_at_counter?: boolean
   product_ids: number[]; images: { header: string | null; logo: string | null; footer: string | null }
 }
 
@@ -132,17 +133,37 @@ export default async function EditBrandPage({
           <Select name="currency" label="Waluta" options={CURRENCIES} value={brand.currency} />
         </div>
 
-        <div className="pt-3 border-t border-neutral-100 flex items-center gap-3">
-          <input
-            type="checkbox"
-            id="is_active"
-            name="is_active"
-            defaultChecked={brand.is_active !== false}
-            className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand cursor-pointer"
-          />
-          <label htmlFor="is_active" className="text-sm font-semibold text-neutral-800 cursor-pointer">
-            Marka aktywna (klienci mogą składać zamówienia przez kod QR)
-          </label>
+        <div className="pt-3 border-t border-neutral-100 space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="is_active"
+              name="is_active"
+              defaultChecked={brand.is_active !== false}
+              className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand cursor-pointer"
+            />
+            <label htmlFor="is_active" className="text-sm font-semibold text-neutral-800 cursor-pointer">
+              Marka aktywna (klienci mogą składać zamówienia przez kod QR)
+            </label>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="allow_pay_at_counter"
+              name="allow_pay_at_counter"
+              defaultChecked={Boolean((brand as any).allow_pay_at_counter ?? (brand as any).allowPayAtCounter)}
+              className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand cursor-pointer mt-0.5"
+            />
+            <div>
+              <label htmlFor="allow_pay_at_counter" className="text-sm font-semibold text-neutral-800 cursor-pointer block">
+                Zezwalaj na płatność przy odbiorze (Gotówka / Kasa u obsługi)
+              </label>
+              <p className="text-xs text-neutral-500">
+                Gdy włączone, klienci w menu QR mogą wybrać opcję zapłaty gotówką lub kartą przy ladzie / u kelnera. Gdy wyłączone, wymagana jest natychmiastowa płatność online (BLIK / Apple Pay / Karta).
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="pt-3 border-t border-neutral-100">

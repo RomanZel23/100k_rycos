@@ -35,6 +35,7 @@ export async function updateBrand(formData: FormData): Promise<void> {
   if (formData.has('is_active')) {
     body.is_active = formData.get('is_active') === 'on' || formData.get('is_active') === 'true'
   }
+  body.allow_pay_at_counter = formData.get('allow_pay_at_counter') === 'on' || formData.get('allow_pay_at_counter') === 'true'
   const res = await adminApi(`/brands/${id}`, { method: 'PUT', body: JSON.stringify(body) })
   if (!res.ok) await failTo(`/dashboard/brands/${id}`, res, 'Failed to save brand details')
   revalidatePath('/dashboard/brands')

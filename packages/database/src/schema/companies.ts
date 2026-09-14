@@ -40,6 +40,7 @@ export const brands = pgTable('brands', {
   logoUrl: text('logo_url'),
   bannerUrl: text('banner_url'),
   footerUrl: text('footer_url'),
+  allowPayAtCounter: boolean('allow_pay_at_counter').default(false).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

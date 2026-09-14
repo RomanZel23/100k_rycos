@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { OrderDetail, OrderStatus } from '@rycos/shared';
 import { fetchOrder, getApiBaseUrl } from '../../../lib/api';
-import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode, ArrowLeft, Banknote } from 'lucide-react';
 import QRCode from 'qrcode';
 import { PaymentModal } from '../../../components/PaymentModal';
 import { saveStoredOrder, updateStoredOrderStatus } from '../../../store/orderStorage';
@@ -304,32 +304,58 @@ function OrderTrackingContent() {
         )}
       </div>
 
-      {/* Payment Error Alert */}
-      {paymentErrorParam && isPending && (
+      {/* Cash / Pay at Counter Banner (when paymentStatus === 'pending') */}
+      {order.paymentMethod === 'cash' && order.paymentStatus === 'pending' && !['completed', 'cancelled'].includes(order.status) && (
+        <div className="bg-slate-900 text-white p-5 rounded-3xl shadow-lg border border-slate-800 space-y-3 animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+              <Banknote size={22} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base text-white">{t.orderPayAtCounterBanner}</h3>
+              <p className="text-xs text-slate-300 mt-0.5">
+                {t.orderPayAtCounterSub}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsPaymentOpen(true)}
+            className="w-full py-3 bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-900 font-extrabold rounded-2xl shadow-sm transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <CreditCard size={16} className="text-brand-500" />
+            <span>{t.orderPayOnlineOption} ({order.totalAmount.toFixed(2)} {order.currency || 'zł'})</span>
+          </button>
+        </div>
+      )}
+
+      {/* Online Payment Error Alert */}
+      {paymentErrorParam && order.paymentMethod !== 'cash' && isPending && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
           <AlertCircle size={18} className="shrink-0" />
           <span>{t.paymentFailedBanner}</span>
         </div>
       )}
 
-      {/* Pending Payment CTA Banner */}
-      {isPending && (
+      {/* Pending Online Payment CTA Banner */}
+      {order.paymentMethod !== 'cash' && isPending && (
         <div className="bg-amber-500 text-white p-5 rounded-3xl shadow-lg shadow-amber-500/20 space-y-3 animate-fade-in">
           <div className="flex items-center gap-3">
             <Clock size={24} className="text-white shrink-0" />
             <div>
               <h3 className="font-extrabold text-base">{t.orderPendingBanner}</h3>
               <p className="text-xs text-white/90">
-                {t.paymentFailedBanner}
+                {paymentErrorParam ? t.paymentFailedBanner : 'Opłać zamówienie, aby przekazać je do realizacji w kuchni.'}
               </p>
             </div>
           </div>
           <button
             onClick={() => setIsPaymentOpen(true)}
-            className="w-full py-3.5 bg-white text-slate-900 font-extrabold rounded-2xl shadow-md hover:bg-slate-50 active:scale-[0.98] transition-all text-sm flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-white text-slate-900 font-extrabold rounded-2xl shadow-md hover:bg-slate-50 active:scale-[0.98] transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
           >
             <CreditCard size={18} className="text-brand-500" />
-            <span>{t.retryPayment} ({order.totalAmount.toFixed(2)} {order.currency || 'zł'})</span>
+            <span>
+              {paymentErrorParam ? t.retryPayment : t.orderPayNow} ({order.totalAmount.toFixed(2)} {order.currency || 'zł'})
+            </span>
           </button>
         </div>
       )}

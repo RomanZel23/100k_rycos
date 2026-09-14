@@ -106,6 +106,10 @@ export interface Translations {
   backToMenu: string;
   paymentFailedBanner: string;
   retryPayment: string;
+  orderPayAtCounterBanner: string;
+  orderPayAtCounterSub: string;
+  orderPayOnlineOption: string;
+  orderPayNow: string;
   orderWord: string;
   orderPreparing: string;
   orderReadyBanner: string;
@@ -209,6 +213,10 @@ export const i18n: Record<Language, Translations> = {
     backToMenu: 'Wróć do menu',
     paymentFailedBanner: 'Płatność nie powiodła się. Możesz spróbować ponownie.',
     retryPayment: 'Spróbuj zapłacić ponownie',
+    orderPayAtCounterBanner: 'Płatność przy odbiorze / u obsługi',
+    orderPayAtCounterSub: 'Opłać zamówienie gotówką lub kartą przy odbiorze u obsługi.',
+    orderPayOnlineOption: 'Zapłać online (BLIK / Apple Pay / Karta)',
+    orderPayNow: 'Opłać zamówienie',
     orderWord: 'Zamówienie',
     orderPreparing: 'Kuchnia przygotowuje Twoje dania',
     orderReadyBanner: 'Zamówienie jest GOTOWE do odbioru!',
@@ -311,6 +319,10 @@ export const i18n: Record<Language, Translations> = {
     backToMenu: 'Back to Menu',
     paymentFailedBanner: 'Payment failed. You can try again.',
     retryPayment: 'Try payment again',
+    orderPayAtCounterBanner: 'Payment upon pickup / with staff',
+    orderPayAtCounterSub: 'Please pay with cash or card upon pickup with staff.',
+    orderPayOnlineOption: 'Pay online (BLIK / Apple Pay / Card)',
+    orderPayNow: 'Pay now',
     orderWord: 'Order',
     orderPreparing: 'Kitchen is preparing your meal',
     orderReadyBanner: 'Order is READY for pickup!',
@@ -413,6 +425,10 @@ export const i18n: Record<Language, Translations> = {
     backToMenu: 'Zurück zur Speisekarte',
     paymentFailedBanner: 'Zahlung fehlgeschlagen. Bitte versuchen Sie es erneut.',
     retryPayment: 'Zahlung erneut versuchen',
+    orderPayAtCounterBanner: 'Zahlung bei Abholung / beim Personal',
+    orderPayAtCounterSub: 'Bitte bezahlen Sie bar oder mit Karte bei der Abholung.',
+    orderPayOnlineOption: 'Online bezahlen (BLIK / Apple Pay / Karte)',
+    orderPayNow: 'Jetzt bezahlen',
     orderWord: 'Bestellung',
     orderPreparing: 'Küche bereitet Ihre Speisen zu',
     orderReadyBanner: 'Bestellung ist ABHOLBEREIT!',

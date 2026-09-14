@@ -2,6 +2,7 @@ import { getDatabase, orders, companyPaymentGateways, eq, and } from '@rycos/dat
 import { InitiatePaymentRequest, InitiatePaymentResponse } from '@rycos/shared';
 import { updateOrderStatus } from './orderEngine.js';
 import { initializePaymentPage, assertPaymentPage, captureTransaction, SaferpayCredentials } from './saferpayClient.js';
+import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
 import { getRedis } from '../config/redis.js';
 import { env } from '../config/env.js';
 
@@ -57,19 +58,47 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
 
   // Płatność gotówką / przy kasie
   if (input.method === 'cash') {
-    await db
+    const [updatedOrder] = await db
       .update(orders)
       .set({
         paymentMethod: 'cash',
+        status: 'in_progress', // Przekaż zamówienie do kuchni / realizacji
         updatedAt: new Date(),
       })
-      .where(eq(orders.id, order.id));
+      .where(eq(orders.id, order.id))
+      .returning();
+
+    // Powiadom personel i KDS przez WebSocket o nowym zamówieniu
+    try {
+      await broadcastToStaff(order.companyId, {
+        type: 'order.created',
+        data: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: 'in_progress',
+          paymentStatus: 'pending',
+          paymentMethod: 'cash',
+        },
+      } as any);
+
+      await broadcastToOrder(order.id, {
+        type: 'order.status_updated',
+        data: {
+          orderId: order.id,
+          status: 'in_progress',
+          paymentStatus: 'pending',
+          paymentMethod: 'cash',
+        },
+      } as any);
+    } catch (e) {
+      console.warn('[PaymentService] Failed to broadcast cash order:', e);
+    }
 
     return {
       success: true,
       paymentId: order.id,
       status: 'pending_user_action',
-      message: 'Prosimy o uregulowanie płatności przy odbiorze / u obsługi.',
+      message: 'Zamówienie przekazane do realizacji w kuchni. Płatność przy odbiorze.',
     };
   }
 

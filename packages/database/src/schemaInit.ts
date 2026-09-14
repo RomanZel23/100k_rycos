@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS "brands" (
 	"logo_url" text,
 	"banner_url" text,
 	"footer_url" text,
+	"allow_pay_at_counter" boolean DEFAULT false NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "brands_slug_unique" UNIQUE("slug")

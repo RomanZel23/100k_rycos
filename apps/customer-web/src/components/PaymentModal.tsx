@@ -11,10 +11,18 @@ interface PaymentModalProps {
   onClose: () => void;
   orderId: string;
   totalAmount: number;
+  allowPayAtCounter?: boolean;
   lang?: Language;
 }
 
-export function PaymentModal({ isOpen, onClose, orderId, totalAmount, lang = 'pl' }: PaymentModalProps) {
+export function PaymentModal({
+  isOpen,
+  onClose,
+  orderId,
+  totalAmount,
+  allowPayAtCounter = false,
+  lang = 'pl',
+}: PaymentModalProps) {
   const router = useRouter();
   const t = i18n[lang] || i18n.pl;
   const [selectedMethod, setSelectedMethod] = useState<'blik' | 'apple_pay' | 'card' | 'cash'>('blik');
@@ -54,7 +62,7 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount, lang = 'pl
           <button
             onClick={onClose}
             disabled={isProcessing}
-            className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900"
+            className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-900 cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -70,81 +78,87 @@ export function PaymentModal({ isOpen, onClose, orderId, totalAmount, lang = 'pl
         <div className="grid grid-cols-1 gap-2.5">
           {/* BLIK */}
           <button
+            type="button"
             onClick={() => setSelectedMethod('blik')}
-            className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all text-left ${
+            className={`p-3.5 rounded-2xl border-2 flex items-center justify-between transition-all text-left cursor-pointer ${
               selectedMethod === 'blik'
-                ? 'border-brand-500 bg-brand-50/50 shadow-sm'
-                : 'border-slate-200 text-slate-700'
+                ? 'border-brand-500 bg-brand-50/70 shadow-xs'
+                : 'border-slate-200 hover:border-slate-300 bg-white'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <span className="font-extrabold text-xs px-2 py-1 rounded bg-black text-white tracking-widest">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="font-extrabold text-xs px-2 py-1 rounded bg-black text-white tracking-widest shrink-0">
                 BLIK
               </span>
-              <div>
-                <span className="font-bold text-sm block">BLIK</span>
-                <span className="text-[11px] text-slate-500">{t.blikFast}</span>
+              <div className="min-w-0">
+                <span className="font-bold text-sm text-slate-900 block truncate">BLIK</span>
+                <span className="text-[11px] text-slate-600 font-medium block truncate">{t.blikFast}</span>
               </div>
             </div>
-            {selectedMethod === 'blik' && <CheckCircle2 size={18} className="text-brand-500" />}
+            {selectedMethod === 'blik' && <CheckCircle2 size={20} className="text-brand-500 shrink-0" />}
           </button>
 
           {/* Apple / Google Pay */}
           <button
+            type="button"
             onClick={() => setSelectedMethod('apple_pay')}
-            className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all text-left ${
+            className={`p-3.5 rounded-2xl border-2 flex items-center justify-between transition-all text-left cursor-pointer ${
               selectedMethod === 'apple_pay'
-                ? 'border-brand-500 bg-brand-50/50 shadow-sm'
-                : 'border-slate-200 text-slate-700'
+                ? 'border-brand-500 bg-brand-50/70 shadow-xs'
+                : 'border-slate-200 hover:border-slate-300 bg-white'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <Smartphone size={20} className="text-slate-800" />
-              <div>
-                <span className="font-bold text-sm block">Apple Pay / Google Pay</span>
-                <span className="text-[11px] text-slate-500">{t.cardWallet}</span>
+            <div className="flex items-center gap-3 min-w-0">
+              <Smartphone size={22} className="text-slate-800 shrink-0" />
+              <div className="min-w-0">
+                <span className="font-bold text-sm text-slate-900 block truncate">Apple Pay / Google Pay</span>
+                <span className="text-[11px] text-slate-600 font-medium block truncate">{t.cardWallet}</span>
               </div>
             </div>
-            {selectedMethod === 'apple_pay' && <CheckCircle2 size={18} className="text-brand-500" />}
+            {selectedMethod === 'apple_pay' && <CheckCircle2 size={20} className="text-brand-500 shrink-0" />}
           </button>
 
           {/* Karta płatnicza */}
           <button
+            type="button"
             onClick={() => setSelectedMethod('card')}
-            className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all text-left ${
+            className={`p-3.5 rounded-2xl border-2 flex items-center justify-between transition-all text-left cursor-pointer ${
               selectedMethod === 'card'
-                ? 'border-brand-500 bg-brand-50/50 shadow-sm'
-                : 'border-slate-200 text-slate-700'
+                ? 'border-brand-500 bg-brand-50/70 shadow-xs'
+                : 'border-slate-200 hover:border-slate-300 bg-white'
             }`}
           >
-            <div className="flex items-center gap-3">
-              <CreditCard size={20} className="text-slate-800" />
-              <div>
-                <span className="font-bold text-sm block">{t.payCard}</span>
-                <span className="text-[11px] text-slate-500">Visa, Mastercard</span>
+            <div className="flex items-center gap-3 min-w-0">
+              <CreditCard size={22} className="text-slate-800 shrink-0" />
+              <div className="min-w-0">
+                <span className="font-bold text-sm text-slate-900 block truncate">{t.payCard}</span>
+                <span className="text-[11px] text-slate-600 font-medium block truncate">Visa, Mastercard</span>
               </div>
             </div>
-            {selectedMethod === 'card' && <CheckCircle2 size={18} className="text-brand-500" />}
+            {selectedMethod === 'card' && <CheckCircle2 size={20} className="text-brand-500 shrink-0" />}
           </button>
 
-          {/* Gotówka / u kelnera */}
-          <button
-            onClick={() => setSelectedMethod('cash')}
-            className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all text-left ${
-              selectedMethod === 'cash'
-                ? 'border-brand-500 bg-brand-50/50 shadow-sm'
-                : 'border-slate-200 text-slate-700'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Banknote size={20} className="text-slate-800" />
-              <div>
-                <span className="font-bold text-sm block">{t.payAtCounterTitle}</span>
-                <span className="text-[11px] text-slate-500">{t.payAtCounterSub}</span>
+          {/* Gotówka / u kelnera (tylko gdy włączona w adminie) */}
+          {allowPayAtCounter && (
+            <button
+              type="button"
+              onClick={() => setSelectedMethod('cash')}
+              className={`p-3.5 rounded-2xl border-2 flex items-center justify-between transition-all text-left cursor-pointer ${
+                selectedMethod === 'cash'
+                  ? 'border-brand-500 bg-brand-50/70 shadow-xs'
+                  : 'border-slate-200 hover:border-slate-300 bg-white'
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <Banknote size={22} className="text-slate-800 shrink-0" />
+                <div className="min-w-0">
+                  <span className="font-bold text-sm text-slate-900 block truncate">{t.payAtCounterTitle}</span>
+                  <span className="text-[11px] text-slate-600 font-medium block truncate">{t.payAtCounterSub}</span>
+                </div>
               </div>
-            </div>
-            {selectedMethod === 'cash' && <CheckCircle2 size={18} className="text-brand-500" />}
-          </button>
+              {selectedMethod === 'cash' && <CheckCircle2 size={20} className="text-brand-500 shrink-0" />}
+            </button>
+          )}
         </div>
 
         {errorMessage && (

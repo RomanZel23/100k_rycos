@@ -511,6 +511,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             logoUrl: null,
             bannerUrl: null,
             footerUrl: null,
+            allowPayAtCounter: true,
             currency: 'PLN',
             isAcceptingOrders: true,
             locationId: 1,

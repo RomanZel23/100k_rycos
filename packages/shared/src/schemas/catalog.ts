@@ -63,6 +63,7 @@ export const BrandInfoSchema = z.object({
   logoUrl: z.string().nullable().default(null),
   bannerUrl: z.string().nullable().default(null),
   footerUrl: z.string().nullable().optional().default(null),
+  allowPayAtCounter: z.boolean().default(false),
   currency: z.string().default('PLN'),
   isAcceptingOrders: z.boolean().default(true),
   locationId: z.number().nullable().default(null),

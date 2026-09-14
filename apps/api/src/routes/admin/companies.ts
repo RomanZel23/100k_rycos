@@ -33,6 +33,7 @@ async function ensureBrandColumns() {
       ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "currency" varchar(8) DEFAULT 'PLN';
       ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "style" text;
       ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "footer_url" text;
+      ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "allow_pay_at_counter" boolean DEFAULT false;
     `);
     brandsColumnsChecked = true;
   } catch (err) {
@@ -288,6 +289,7 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
       menu_layout: (r as any).menuLayout || 'list',
       language: (r as any).language || 'pl',
       currency: (r as any).currency || 'PLN',
+      allow_pay_at_counter: (r as any).allowPayAtCounter ?? false,
       product_count: productsCountMap[r.id] || 0,
     }));
 
@@ -321,6 +323,8 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
       ...brand,
       is_active: brand.isActive !== false,
       isActive: brand.isActive !== false,
+      allow_pay_at_counter: (brand as any).allowPayAtCounter ?? false,
+      allowPayAtCounter: (brand as any).allowPayAtCounter ?? false,
       qr_slug: brand.slug,
       menu_layout: (brand as any).menuLayout || 'list',
       language: (brand as any).language || 'pl',
@@ -500,6 +504,9 @@ function generateShortSlug(length = 5): string {
     if (body.is_active !== undefined || body.isActive !== undefined) {
       updateData.isActive = Boolean(body.is_active ?? body.isActive);
     }
+    if (body.allow_pay_at_counter !== undefined || body.allowPayAtCounter !== undefined) {
+      updateData.allowPayAtCounter = Boolean(body.allow_pay_at_counter ?? body.allowPayAtCounter);
+    }
 
     const [updated] = await db
       .update(brands)
@@ -517,6 +524,8 @@ function generateShortSlug(length = 5): string {
       ...updated,
       is_active: updated.isActive !== false,
       isActive: updated.isActive !== false,
+      allow_pay_at_counter: (updated as any).allowPayAtCounter ?? false,
+      allowPayAtCounter: (updated as any).allowPayAtCounter ?? false,
       qr_slug: updated.slug,
       menu_layout: updated.menuLayout,
       language: updated.language,
