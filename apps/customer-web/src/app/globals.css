@@ -19,3 +19,7 @@ body {
 * {
   -webkit-overflow-scrolling: touch;
 }
+
+input, textarea, select {
+  color: #0f172a;
+}

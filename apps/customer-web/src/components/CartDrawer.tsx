@@ -154,14 +154,19 @@ export function CartDrawer({
                 </button>
 
                 {showNipInput && (
-                  <input
-                    type="text"
-                    maxLength={10}
-                    placeholder={t.nipPlaceholder}
-                    value={customerNip || ''}
-                    onChange={(e) => onSetCustomerNip(e.target.value.replace(/\D/g, ''))}
-                    className="mt-2 w-full p-2.5 rounded-xl border border-slate-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
+                  <div className="mt-2 space-y-1">
+                    <input
+                      type="text"
+                      maxLength={10}
+                      placeholder={t.nipPlaceholder}
+                      value={customerNip || ''}
+                      onChange={(e) => onSetCustomerNip(e.target.value.replace(/\D/g, ''))}
+                      className="w-full p-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm"
+                    />
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      Wpisz 10 cyfr NIP bez kresek i spacji
+                    </p>
+                  </div>
                 )}
               </div>
             </>
