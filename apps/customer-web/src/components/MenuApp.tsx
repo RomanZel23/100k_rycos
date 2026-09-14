@@ -50,6 +50,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [tipAmount, setTipAmount] = useState(0);
   const [customerNip, setCustomerNip] = useState<string | undefined>(undefined);
+  const [ageConsentAccepted, setAgeConsentAccepted] = useState(false);
 
   // Modals
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -207,6 +208,12 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const handleCheckout = async () => {
     if (!menu || cartItems.length === 0) return;
 
+    const hasAgeRestricted = cartItems.some((i) => i.product.isAgeRestricted);
+    if (hasAgeRestricted && !ageConsentAccepted) {
+      setIsCartOpen(true);
+      return;
+    }
+
     try {
       const orderPayload = {
         brandId: menu.brand.id,
@@ -214,7 +221,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         tableLabel: tableLabel || null,
         parkingSpot: parkingSpot || null,
         customerNip: customerNip || null,
-        ageConsentAccepted: true,
+        ageConsentAccepted: hasAgeRestricted ? ageConsentAccepted : true,
         items: cartItems.map((item) => ({
           productId: item.product.id,
           name: item.product.name,
@@ -561,11 +568,13 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         parkingSpot={parkingSpot}
         tipAmount={tipAmount}
         customerNip={customerNip}
+        ageConsentAccepted={ageConsentAccepted}
         lang={lang}
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onSetTip={setTipAmount}
         onSetCustomerNip={setCustomerNip}
+        onSetAgeConsentAccepted={setAgeConsentAccepted}
         onCheckout={handleCheckout}
       />
 

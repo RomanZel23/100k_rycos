@@ -13,11 +13,13 @@ interface CartDrawerProps {
   parkingSpot?: string;
   tipAmount: number;
   customerNip?: string;
+  ageConsentAccepted?: boolean;
   lang?: Language;
   onUpdateQuantity: (id: string, qty: number) => void;
   onRemoveItem: (id: string) => void;
   onSetTip: (tip: number) => void;
   onSetCustomerNip: (nip: string) => void;
+  onSetAgeConsentAccepted?: (accepted: boolean) => void;
   onCheckout: () => void;
 }
 
@@ -29,11 +31,13 @@ export function CartDrawer({
   parkingSpot,
   tipAmount,
   customerNip,
+  ageConsentAccepted = false,
   lang = 'pl',
   onUpdateQuantity,
   onRemoveItem,
   onSetTip,
   onSetCustomerNip,
+  onSetAgeConsentAccepted,
   onCheckout,
 }: CartDrawerProps) {
   if (!isOpen) return null;
@@ -169,6 +173,41 @@ export function CartDrawer({
                   </div>
                 )}
               </div>
+
+              {/* 18+ Age Restriction Consent */}
+              {items.some((i) => i.product.isAgeRestricted) && (
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-2.5 shadow-2xs">
+                    <div className="flex items-start gap-2.5">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-600 text-white font-black text-xs tracking-wider shrink-0 mt-0.5 shadow-2xs">
+                        18+
+                      </span>
+                      <div className="text-xs leading-snug flex-1 min-w-0">
+                        <span className="font-extrabold text-amber-950 block">{t.ageRestrictedTitle}</span>
+                        <span className="text-amber-900 font-medium text-[11px] block mt-0.5">
+                          {t.ageRestrictedCartNotice}
+                        </span>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white border border-amber-300 cursor-pointer select-none active:scale-[0.99] transition-all">
+                      <input
+                        type="checkbox"
+                        checked={ageConsentAccepted}
+                        onChange={(e) => onSetAgeConsentAccepted?.(e.target.checked)}
+                        className="w-4 h-4 rounded text-brand-500 focus:ring-brand-500 border-slate-300 accent-brand-500 cursor-pointer shrink-0"
+                      />
+                      <span className="text-xs font-bold text-slate-900 leading-tight flex-1">
+                        {t.ageConsentCheckbox}
+                      </span>
+                    </label>
+
+                    <p className="text-[10px] text-amber-800/80 font-medium">
+                      ⚠️ {t.ageRestrictedPickupNotice}
+                    </p>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -183,7 +222,12 @@ export function CartDrawer({
 
             <button
               onClick={onCheckout}
-              className="w-full py-4 bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-brand-text font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-brand-500/25 text-base"
+              disabled={items.some((i) => i.product.isAgeRestricted) && !ageConsentAccepted}
+              className={`w-full py-4 transition-all text-brand-text font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-lg text-base ${
+                items.some((i) => i.product.isAgeRestricted) && !ageConsentAccepted
+                  ? 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed opacity-75'
+                  : 'bg-brand-500 hover:bg-brand-600 active:scale-[0.98] shadow-brand-500/25 cursor-pointer'
+              }`}
             >
               <CreditCard size={18} />
               <span>{t.proceedToPayment}</span>

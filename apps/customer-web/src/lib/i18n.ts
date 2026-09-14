@@ -67,6 +67,14 @@ export interface Translations {
   specialInstructionsPlaceholder: string;
   addToOrder: string;
 
+  // Age restriction (18+)
+  ageRestrictedBadge: string;
+  ageRestrictedTitle: string;
+  ageRestrictedDisclaimer: string;
+  ageRestrictedPickupNotice: string;
+  ageConsentCheckbox: string;
+  ageRestrictedCartNotice: string;
+
   // Payment Modal
   selectPaymentMethod: string;
   amountToPay: string;
@@ -162,6 +170,14 @@ export const i18n: Record<Language, Translations> = {
     specialInstructionsPlaceholder: 'np. bez cebuli, sos osobno...',
     addToOrder: 'Dodaj do zamówienia',
 
+    // Age restriction (18+)
+    ageRestrictedBadge: '18+',
+    ageRestrictedTitle: 'Produkt tylko dla pełnoletnich (18+)',
+    ageRestrictedDisclaimer: 'Ten produkt zawiera alkohol lub podlega ograniczeniom wiekowym. Składając zamówienie, oświadczasz, że masz ukończone 18 lat.',
+    ageRestrictedPickupNotice: 'Przy odbiorze obsługa może poprosić o okazanie ważnego dokumentu tożsamości ze zdjęciem.',
+    ageConsentCheckbox: 'Potwierdzam, że mam ukończone 18 lat i akceptuję regulamin.',
+    ageRestrictedCartNotice: 'W Twoim koszyku znajdują się napoje alkoholowe lub artykuły 18+.',
+
     // Payment Modal
     selectPaymentMethod: 'Wybierz metodę płatności',
     amountToPay: 'Kwota do zapłaty:',
@@ -256,6 +272,14 @@ export const i18n: Record<Language, Translations> = {
     specialInstructionsPlaceholder: 'e.g. no onions, sauce on the side...',
     addToOrder: 'Add to order',
 
+    // Age restriction (18+)
+    ageRestrictedBadge: '18+',
+    ageRestrictedTitle: 'Adults Only (18+)',
+    ageRestrictedDisclaimer: 'This product contains alcohol or is age-restricted. By placing an order, you declare that you are 18 or older.',
+    ageRestrictedPickupNotice: 'Staff may require a valid photo ID upon pickup or delivery.',
+    ageConsentCheckbox: 'I confirm I am 18 or over and accept the terms and conditions.',
+    ageRestrictedCartNotice: 'Your cart contains alcoholic beverages or 18+ items.',
+
     // Payment Modal
     selectPaymentMethod: 'Select payment method',
     amountToPay: 'Amount to pay:',
@@ -349,6 +373,14 @@ export const i18n: Record<Language, Translations> = {
     specialInstructionsLabel: 'Besondere Hinweise',
     specialInstructionsPlaceholder: 'z.B. ohne Zwiebeln, Sauce separat...',
     addToOrder: 'Zur Bestellung hinzufügen',
+
+    // Age restriction (18+)
+    ageRestrictedBadge: '18+',
+    ageRestrictedTitle: 'Nur für Erwachsene (18+)',
+    ageRestrictedDisclaimer: 'Dieses Produkt enthält Alkohol oder unterliegt Altersbeschränkungen. Mit der Bestellung erklären Sie, dass Sie mindestens 18 Jahre alt sind.',
+    ageRestrictedPickupNotice: 'Das Personal kann bei der Abholung einen gültigen Lichtbildausweis verlangen.',
+    ageConsentCheckbox: 'Ich bestätige, dass ich mindestens 18 Jahre alt bin und akzeptiere die Bedingungen.',
+    ageRestrictedCartNotice: 'Ihr Warenkorb enthält alkoholische Getränke oder 18+ Artikel.',
 
     // Payment Modal
     selectPaymentMethod: 'Zahlungsmethode wählen',

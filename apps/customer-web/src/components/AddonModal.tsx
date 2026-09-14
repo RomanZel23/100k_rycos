@@ -58,6 +58,26 @@ export function AddonModal({ product, onClose, lang = 'pl', onAddToCart }: Addon
             <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">{product.description}</p>
           )}
 
+          {/* Age Restriction 18+ Disclaimer Banner */}
+          {product.isAgeRestricted && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-1.5 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-md bg-amber-600 text-white font-black text-xs tracking-wider shadow-2xs">
+                  18+
+                </span>
+                <span className="font-extrabold text-xs sm:text-sm text-amber-950">
+                  {t.ageRestrictedTitle}
+                </span>
+              </div>
+              <p className="text-xs text-amber-900 leading-relaxed font-medium">
+                {t.ageRestrictedDisclaimer}
+              </p>
+              <p className="text-[11px] text-amber-800/90 font-medium pt-1 border-t border-amber-200/60">
+                ⚠️ {t.ageRestrictedPickupNotice}
+              </p>
+            </div>
+          )}
+
           {/* Add-on Groups */}
           {product.addonGroups.map((group) => (
             <div key={group.id} className="space-y-2.5">
