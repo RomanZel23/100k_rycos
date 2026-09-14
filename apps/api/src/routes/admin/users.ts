@@ -128,6 +128,26 @@ async function ensureAuthenticatedUserInCompany(db: any, authUser: any, companyI
 }
 
 export async function adminUsersRoutes(fastify: FastifyInstance) {
+  try {
+    const db = getDatabase();
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "users" (
+        "id" varchar(64) PRIMARY KEY NOT NULL,
+        "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+        "email" varchar(255) NOT NULL,
+        "name" varchar(128),
+        "role" varchar(32) DEFAULT 'staff' NOT NULL,
+        "password_hash" text,
+        "is_active" boolean DEFAULT true NOT NULL,
+        "created_at" timestamp DEFAULT now() NOT NULL,
+        "updated_at" timestamp DEFAULT now() NOT NULL
+      );
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
+    `);
+  } catch (err: any) {
+    console.warn('[Users] Self-healing schema warning:', err?.message);
+  }
+
   fastify.addHook('preHandler', requireAdminAuth);
 
   // GET /v1/admin/users/me - Current user profile

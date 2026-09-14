@@ -372,10 +372,12 @@ export async function ensureDatabaseSchema() {
             "email" varchar(255) NOT NULL,
             "name" varchar(128),
             "role" varchar(32) DEFAULT 'staff' NOT NULL,
+            "password_hash" text,
             "is_active" boolean DEFAULT true NOT NULL,
             "created_at" timestamp DEFAULT now() NOT NULL,
             "updated_at" timestamp DEFAULT now() NOT NULL
           );
+          ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
           CREATE TABLE IF NOT EXISTS "company_payment_gateways" (
             "id" serial PRIMARY KEY NOT NULL,
             "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
