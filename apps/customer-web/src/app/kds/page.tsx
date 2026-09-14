@@ -321,24 +321,28 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
 
         {/* Workstation Quick Switcher */}
         <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
-          <a
-            href="/pos"
-            className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
-          >
-            <span>💳</span>
-            <span className="hidden xs:inline">POS</span>
-          </a>
+          {(terminal.role === 'all_in_one' || terminal.role === 'pos' || terminal.capabilities?.can_sell) && (
+            <a
+              href="/pos"
+              className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
+            >
+              <span>💳</span>
+              <span className="hidden xs:inline">POS</span>
+            </a>
+          )}
           <span className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1">
             <span>🍳</span>
             <span className="text-xs font-black">KDS</span>
           </span>
-          <a
-            href="/pickup"
-            className="hidden sm:flex px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors items-center gap-1"
-          >
-            <span>📦</span>
-            <span className="hidden sm:inline">Wydawka</span>
-          </a>
+          {(terminal.role === 'all_in_one' || terminal.role === 'pickup' || terminal.capabilities?.can_pickup) && (
+            <a
+              href="/pickup"
+              className="hidden sm:flex px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors items-center gap-1"
+            >
+              <span>📦</span>
+              <span className="hidden sm:inline">Wydawka</span>
+            </a>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">

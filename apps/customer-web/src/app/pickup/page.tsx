@@ -275,22 +275,26 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
           </div>
         </div>
 
-        {/* Quick Mode Switcher for All-in-One Terminals */}
+        {/* Quick Mode Switcher for Multi-Role / All-in-One Terminals */}
         <div className="flex items-center gap-1 bg-neutral-800/80 p-1 rounded-xl border border-neutral-700/60 text-xs shrink-0">
-          <Link
-            href="/pos"
-            className="px-2 sm:px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-bold transition-colors flex items-center gap-1"
-          >
-            <span>💳</span>
-            <span className="hidden sm:inline">POS</span>
-          </Link>
-          <Link
-            href="/kds"
-            className="px-2 sm:px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-bold transition-colors flex items-center gap-1"
-          >
-            <span>🍳</span>
-            <span className="hidden sm:inline">KDS</span>
-          </Link>
+          {(terminal.role === 'all_in_one' || terminal.role === 'pos' || terminal.capabilities?.can_sell) && (
+            <Link
+              href="/pos"
+              className="px-2 sm:px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-bold transition-colors flex items-center gap-1"
+            >
+              <span>💳</span>
+              <span className="hidden sm:inline">POS</span>
+            </Link>
+          )}
+          {(terminal.role === 'all_in_one' || terminal.role === 'kds' || terminal.capabilities?.can_kds) && (
+            <Link
+              href="/kds"
+              className="px-2 sm:px-2.5 py-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-700/60 font-bold transition-colors flex items-center gap-1"
+            >
+              <span>🍳</span>
+              <span className="hidden sm:inline">KDS</span>
+            </Link>
+          )}
           <span className="px-2 sm:px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold shadow-sm flex items-center gap-1">
             <span>📦</span>
             <span className="hidden sm:inline">Wydawka</span>

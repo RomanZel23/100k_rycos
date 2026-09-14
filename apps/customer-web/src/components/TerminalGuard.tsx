@@ -26,7 +26,56 @@ export interface PairedTerminal {
   location_id?: number | null;
   location_name?: string | null;
   assigned_brand_ids?: number[];
+  capabilities?: {
+    can_sell?: boolean;
+    can_kds?: boolean;
+    can_pickup?: boolean;
+    has_softpos?: boolean;
+    has_printer?: boolean;
+  };
   status: string;
+}
+
+export const ROLE_INFO: Record<string, { label: string; icon: string; defaultPath: string }> = {
+  all_in_one: { label: 'All-in-One Foodtruck Master', icon: '⚡', defaultPath: '/pos' },
+  pos: { label: 'Kasa na Ladzie (POS)', icon: '🖥️', defaultPath: '/pos' },
+  kds: { label: 'Kuchnia (KDS)', icon: '🍳', defaultPath: '/kds' },
+  pickup: { label: 'Skaner Wydań (BYOD)', icon: '📱', defaultPath: '/pickup' },
+  kiosk: { label: 'Kiosk Samoobsługowy', icon: '🛎️', defaultPath: '/pos' },
+  fiscal_hub: { label: 'Hub Fiskalny', icon: '🏢', defaultPath: '/pos' },
+};
+
+export function canTerminalAccessRole(
+  terminal: PairedTerminal,
+  requiredRole?: 'pos' | 'kds' | 'pickup' | 'all_in_one'
+): boolean {
+  if (!requiredRole || requiredRole === 'all_in_one') return true;
+
+  const role = terminal.role || 'all_in_one';
+  const caps = terminal.capabilities;
+
+  // Master All-in-One role has full access to all views
+  if (role === 'all_in_one') return true;
+
+  if (requiredRole === 'pos') {
+    if (role === 'pos' || role === 'kiosk') return true;
+    if (role === 'pickup' || role === 'kds' || role === 'fiscal_hub') return false;
+    return Boolean(caps?.can_sell);
+  }
+
+  if (requiredRole === 'kds') {
+    if (role === 'kds') return true;
+    if (role === 'pickup' || role === 'kiosk' || role === 'fiscal_hub' || role === 'pos') return false;
+    return Boolean(caps?.can_kds);
+  }
+
+  if (requiredRole === 'pickup') {
+    // Pickup scanner, POS, and KDS can access pickup verification
+    if (role === 'pickup' || role === 'pos' || role === 'kds') return true;
+    return Boolean(caps?.can_pickup);
+  }
+
+  return false;
 }
 
 interface TerminalGuardProps {
@@ -100,6 +149,15 @@ export function TerminalGuard({
     }
   };
 
+  const handleUnpair = () => {
+    if (confirm('Czy na pewno chcesz rozłączyć to urządzenie?')) {
+      localStorage.removeItem('rycos_terminal');
+      setTerminal(null);
+      setCode('');
+      setError(null);
+    }
+  };
+
   if (checkingAuth) {
     return (
       <div className="h-[100dvh] w-screen bg-slate-950 text-slate-400 flex flex-col items-center justify-center space-y-3 font-sans select-none">
@@ -109,7 +167,7 @@ export function TerminalGuard({
     );
   }
 
-  // Not paired -> Show security lock screen
+  // 1. Not paired -> Show security lock screen
   if (!terminal) {
     return (
       <div className="min-h-[100dvh] w-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 font-sans select-none overflow-y-auto">
@@ -213,6 +271,81 @@ export function TerminalGuard({
     );
   }
 
-  // Paired and authorized -> Render application view
+  // 2. Paired, but role does NOT permit accessing this screen -> Show Role Mismatch Screen
+  const hasAccess = canTerminalAccessRole(terminal, requiredRole);
+  if (!hasAccess) {
+    const currentMeta = ROLE_INFO[terminal.role] || { label: terminal.role, icon: '📱', defaultPath: '/pickup' };
+    const targetUrl = currentMeta.defaultPath;
+
+    return (
+      <div className="min-h-[100dvh] w-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 font-sans select-none overflow-y-auto">
+        <div className="w-full max-w-md bg-slate-900 border-2 border-red-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200">
+          
+          {/* Header & Lock Icon */}
+          <div className="text-center space-y-3">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-red-500/10 border-2 border-red-500/30 text-red-400 flex items-center justify-center shadow-lg shadow-red-500/10">
+              <ShieldAlert size={32} />
+            </div>
+            
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-400 text-xs font-black uppercase tracking-wider">
+                <span>Brak uprawnień</span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                Moduł niedostępny
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1 leading-relaxed">
+                To urządzenie jest skonfigurowane jako <strong className="text-slate-200">{currentMeta.icon} {currentMeta.label}</strong> i nie ma uprawnień do modułu <strong className="text-amber-400">{roleName}</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Device Profile Details Box */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Nazwa stanowiska:</span>
+              <span className="font-bold text-white">{terminal.name}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Kod / ID urządzenia:</span>
+              <span className="font-mono font-bold text-amber-400">{terminal.terminal_id}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Profil operacyjny:</span>
+              <span className="font-semibold text-emerald-400">{currentMeta.icon} {currentMeta.label}</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-3 pt-1">
+            <button
+              onClick={() => router.push(targetUrl)}
+              className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black rounded-2xl text-sm sm:text-base flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 transition-all cursor-pointer min-h-[52px]"
+            >
+              <span>Przejdź do: {currentMeta.label}</span>
+              <span>→</span>
+            </button>
+
+            <button
+              onClick={handleUnpair}
+              className="w-full py-3 bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors border border-slate-700 cursor-pointer"
+            >
+              <span>Rozłącz to urządzenie i sparuj z innym kodem</span>
+            </button>
+          </div>
+
+          {/* Manager link */}
+          <div className="pt-2 border-t border-slate-800/80 text-center">
+            <p className="text-[11px] text-slate-500">
+              Aby zmienić rolę lub włączyć dodatkowe uprawnienia, przejdź do <a href="https://admin.100k.rycos.eu/login" target="_blank" rel="noreferrer" className="text-amber-400 hover:underline">Panelu Menadżera</a>.
+            </p>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Paired and authorized -> Render application view
   return <>{children(terminal)}</>;
 }

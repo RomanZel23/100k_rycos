@@ -758,20 +758,24 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
               <span>💳</span>
               <span className="text-xs font-black">POS</span>
             </span>
-            <a
-              href="/kds"
-              className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
-            >
-              <span>🍳</span>
-              <span className="hidden xs:inline">KDS</span>
-            </a>
-            <a
-              href="/pickup"
-              className="hidden sm:flex px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors items-center gap-1"
-            >
-              <span>📦</span>
-              <span>Wydawka</span>
-            </a>
+            {(terminal.role === 'all_in_one' || terminal.role === 'kds' || terminal.capabilities?.can_kds) && (
+              <a
+                href="/kds"
+                className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
+              >
+                <span>🍳</span>
+                <span className="hidden xs:inline">KDS</span>
+              </a>
+            )}
+            {(terminal.role === 'all_in_one' || terminal.role === 'pickup' || terminal.capabilities?.can_pickup) && (
+              <a
+                href="/pickup"
+                className="hidden sm:flex px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors items-center gap-1"
+              >
+                <span>📦</span>
+                <span>Wydawka</span>
+              </a>
+            )}
           </div>
 
           {/* Terminal Badge (Desktop) */}

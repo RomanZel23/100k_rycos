@@ -7,9 +7,20 @@ import { adminApi } from '@/lib/api'
 export async function createTerminal(formData: FormData): Promise<void> {
   const customId = String(formData.get('terminal_id') || '').trim()
   const role = String(formData.get('role') || 'all_in_one').trim()
+  
+  const roleDefaults: Record<string, any> = {
+    all_in_one: { can_sell: true, can_kds: true, can_pickup: true, has_softpos: true, has_printer: true },
+    pos: { can_sell: true, can_kds: false, can_pickup: true, has_softpos: true, has_printer: true },
+    kds: { can_sell: false, can_kds: true, can_pickup: true, has_softpos: false, has_printer: false },
+    pickup: { can_sell: false, can_kds: false, can_pickup: true, has_softpos: false, has_printer: false },
+    kiosk: { can_sell: true, can_kds: false, can_pickup: false, has_softpos: false, has_printer: false },
+    fiscal_hub: { can_sell: false, can_kds: false, can_pickup: false, has_softpos: false, has_printer: false },
+  }
+
   const body = {
     name: String(formData.get('name') || '').trim(),
     role,
+    capabilities: roleDefaults[role] || roleDefaults.all_in_one,
     location_id: formData.get('location_id') ? Number(formData.get('location_id')) : null,
     printer_device_id: formData.get('printer_device_id') ? String(formData.get('printer_device_id')).trim() : null,
     tap_device_id: formData.get('tap_device_id') ? String(formData.get('tap_device_id')).trim() : null,
