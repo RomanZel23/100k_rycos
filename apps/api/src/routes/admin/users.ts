@@ -82,7 +82,49 @@ async function syncSupabaseAuthUser(opts: {
 function sanitizeUser(userRow: any) {
   if (!userRow) return userRow;
   const { passwordHash, ...safeUser } = userRow;
-  return safeUser;
+  return {
+    ...safeUser,
+    company_id: userRow.companyId ?? userRow.company_id,
+    is_active: userRow.isActive ?? userRow.is_active ?? true,
+    created_at: userRow.createdAt ? new Date(userRow.createdAt).toISOString() : (userRow.created_at || new Date().toISOString()),
+    updated_at: userRow.updatedAt ? new Date(userRow.updatedAt).toISOString() : (userRow.updated_at || new Date().toISOString()),
+    last_sign_in_at: userRow.lastSignInAt || userRow.last_sign_in_at || userRow.updatedAt || userRow.createdAt || null,
+  };
+}
+
+async function ensureAuthenticatedUserInCompany(db: any, authUser: any, companyId: number) {
+  if (!authUser?.email) return null;
+  const userId = authUser.id || 'usr-admin';
+  try {
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.companyId, companyId), eq(users.email, authUser.email.toLowerCase())))
+      .limit(1);
+
+    if (existing) return existing;
+
+    const [created] = await db
+      .insert(users)
+      .values({
+        id: userId,
+        companyId,
+        email: authUser.email.toLowerCase(),
+        name: authUser.name || (authUser.user_metadata as any)?.name || 'Administrator',
+        role: authUser.role || (authUser.user_metadata as any)?.role || 'super_admin',
+        isActive: true,
+      })
+      .onConflictDoUpdate({
+        target: users.id,
+        set: { companyId, isActive: true, updatedAt: new Date() },
+      })
+      .returning();
+
+    return created || null;
+  } catch (err: any) {
+    console.warn('[Users] Auto-sync current user failed:', err?.message);
+    return null;
+  }
 }
 
 export async function adminUsersRoutes(fastify: FastifyInstance) {
@@ -102,7 +144,7 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
         .limit(1);
 
       if (existing) {
-        return success(reply, existing);
+        return success(reply, sanitizeUser(existing));
       }
     }
 
@@ -120,11 +162,16 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
     const db = getDatabase();
     const companyId = getCompanyId(req);
 
-    const rows = await db
+    let rows = await db
       .select()
       .from(users)
       .where(eq(users.companyId, companyId))
       .orderBy(desc(users.createdAt));
+
+    if (rows.length === 0) {
+      const seeded = await ensureAuthenticatedUserInCompany(db, getAuthUser(req), companyId);
+      if (seeded) rows = [seeded];
+    }
 
     return success(reply, rows.map(sanitizeUser), 'Users retrieved');
   });
@@ -137,6 +184,17 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
 
     if (!body.email) {
       return validationError(reply, { email: 'Email is required' });
+    }
+
+    const normalizedEmail = String(body.email).trim().toLowerCase();
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.companyId, companyId), eq(users.email, normalizedEmail)))
+      .limit(1);
+
+    if (existing) {
+      return validationError(reply, { email: 'Użytkownik o tym adresie email już istnieje w firmie' });
     }
 
     const rawPassword = body.password ? String(body.password).trim() : '';
@@ -253,6 +311,11 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
   fastify.delete('/v1/admin/users/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const companyId = getCompanyId(req);
+    const authUser = getAuthUser(req);
+    if (authUser?.id && authUser.id === id) {
+      return error(reply, 'Nie możesz usunąć swojego własnego konta', 400);
+    }
+
     const db = getDatabase();
 
     try {
@@ -275,11 +338,17 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
   fastify.get('/v1/admin/team', async (req, reply) => {
     const db = getDatabase();
     const companyId = getCompanyId(req);
-    const rows = await db
+    let rows = await db
       .select()
       .from(users)
       .where(eq(users.companyId, companyId))
       .orderBy(desc(users.createdAt));
+
+    if (rows.length === 0) {
+      const seeded = await ensureAuthenticatedUserInCompany(db, getAuthUser(req), companyId);
+      if (seeded) rows = [seeded];
+    }
+
     return success(reply, rows.map(sanitizeUser), 'Team retrieved');
   });
 
@@ -290,6 +359,17 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
 
     if (!body.email) {
       return validationError(reply, { email: 'Email is required' });
+    }
+
+    const normalizedEmail = String(body.email).trim().toLowerCase();
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.companyId, companyId), eq(users.email, normalizedEmail)))
+      .limit(1);
+
+    if (existing) {
+      return validationError(reply, { email: 'Użytkownik o tym adresie email już istnieje w firmie' });
     }
 
     const rawPassword = body.password ? String(body.password).trim() : '';
@@ -306,7 +386,7 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
         .values({
           id: userId,
           companyId,
-          email: String(body.email).trim().toLowerCase(),
+          email: normalizedEmail,
           name: body.name ? String(body.name).trim() : null,
           role: body.role ? String(body.role).trim() : 'staff',
           passwordHash,
@@ -388,6 +468,11 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
   fastify.delete('/v1/admin/team/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const companyId = getCompanyId(req);
+    const authUser = getAuthUser(req);
+    if (authUser?.id && authUser.id === id) {
+      return error(reply, 'Nie możesz usunąć swojego własnego konta', 400);
+    }
+
     const db = getDatabase();
 
     try {
