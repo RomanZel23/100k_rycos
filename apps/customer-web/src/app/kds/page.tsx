@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell, Camera, KeyRound, QrCode, Download } from 'lucide-react';
+import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell, Camera, KeyRound, QrCode, Download, Smartphone } from 'lucide-react';
 import { getApiBaseUrl } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
 
@@ -294,17 +294,17 @@ export default function KitchenDisplayPage() {
   const readyOrders = orders.filter((o) => o.status === 'ready_to_collect' || o.status === 'ready_for_pickup');
 
   return (
-    <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
       {/* Top Bar */}
-      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between shadow-md shrink-0 gap-2">
+      <header className="bg-slate-900 border-b border-slate-800 px-2.5 sm:px-6 py-2 sm:py-3 flex items-center justify-between shadow-md shrink-0 gap-1.5 sm:gap-2 min-h-[52px]">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shrink-0">
-            <ChefHat size={18} />
+            <ChefHat size={20} />
           </div>
           <div className="min-w-0">
             <h1 className="font-extrabold text-sm sm:text-lg text-white tracking-tight flex items-center gap-1.5 sm:gap-2 truncate">
-              <span>KDS · Kuchnia Live</span>
-              <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+              <span>KDS · Kuchnia</span>
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
             </h1>
             <p className="hidden sm:block text-xs text-slate-400 truncate">
               {isConnected ? 'Połączono live z systemem' : 'Łączenie z WebSocket...'}
@@ -313,21 +313,21 @@ export default function KitchenDisplayPage() {
         </div>
 
         {/* Workstation Quick Switcher */}
-        <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700 text-xs shrink-0">
+        <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
           <a
             href="/pos"
-            className="px-2 sm:px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
+            className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
           >
             <span>💳</span>
-            <span className="hidden sm:inline">POS</span>
+            <span className="hidden xs:inline">POS</span>
           </a>
-          <span className="px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1">
+          <span className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1">
             <span>🍳</span>
-            <span className="hidden sm:inline">KDS</span>
+            <span className="text-xs font-black">KDS</span>
           </span>
           <a
             href="/pickup"
-            className="px-2 sm:px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
+            className="hidden sm:flex px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors items-center gap-1"
           >
             <span>📦</span>
             <span className="hidden sm:inline">Wydawka</span>
@@ -336,43 +336,19 @@ export default function KitchenDisplayPage() {
 
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           {terminal ? (
-            <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
               <span className="truncate max-w-[80px] xs:max-w-[120px]">{terminal.name}</span>
-              <button
-                onClick={() => {
-                  if (confirm(`Czy chcesz odłączyć to urządzenie od stanowiska "${terminal.name}"?`)) {
-                    localStorage.removeItem('rycos_terminal');
-                    setTerminal(null);
-                  }
-                }}
-                className="text-slate-500 hover:text-red-400 ml-0.5 text-sm leading-none cursor-pointer"
-                title="Odłącz stanowisko"
-              >
-                ×
-              </button>
             </div>
           ) : (
             <a
               href="/pair"
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors shrink-0"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-black transition-colors shrink-0"
               title="Sparuj to urządzenie ze stanowiskiem w lokalu"
             >
-              <QrCode size={13} className="text-amber-400" />
+              <QrCode size={14} className="text-amber-400" />
               <span className="hidden xs:inline">Paruj</span>
             </a>
-          )}
-
-          {/* PWA Install Button */}
-          {isInstallable && (
-            <button
-              onClick={handleInstallClick}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer shrink-0"
-              title="Zainstaluj aplikację na telefonie"
-            >
-              <Download size={14} />
-              <span className="hidden xs:inline">Instaluj PWA</span>
-            </button>
           )}
 
           {/* Quick QR & PIN pickup buttons */}
@@ -381,32 +357,42 @@ export default function KitchenDisplayPage() {
               setPinModalTargetOrder(null);
               setIsPinModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer"
+            className="min-h-[40px] px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
             title="Weryfikuj odbiór (Skaner QR / PIN)"
           >
-            <Camera size={15} />
-            <span className="hidden sm:inline">Weryfikuj Odbiór</span>
+            <Camera size={16} />
+            <span className="hidden sm:inline">Weryfikuj</span>
           </button>
+
+          {/* PWA Install Button */}
+          {isInstallable && (
+            <button
+              onClick={handleInstallClick}
+              className="w-10 h-10 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-slate-950 flex items-center justify-center font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer shrink-0"
+              title="Zainstaluj aplikację na telefonie"
+            >
+              <Smartphone size={18} />
+            </button>
+          )}
 
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+            className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
               soundEnabled
                 ? 'bg-slate-800 border-slate-700 text-emerald-400'
                 : 'bg-slate-800 border-slate-700 text-slate-500'
             }`}
             title={soundEnabled ? 'Dźwięk włączony' : 'Wyciszony'}
           >
-            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-            <span className="hidden md:inline ml-1.5">{soundEnabled ? 'Dźwięk' : 'Wyciszony'}</span>
+            {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
           </button>
 
           <button
             onClick={loadOrders}
-            className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+            className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 hover:text-white flex items-center justify-center transition-all cursor-pointer"
             title="Odśwież"
           >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
 
           <div className="hidden sm:block px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 font-mono text-sm font-bold text-amber-400">
@@ -456,14 +442,14 @@ export default function KitchenDisplayPage() {
       <div className="md:hidden flex items-center gap-2 p-2.5 sm:p-3 bg-slate-900/95 border-b border-slate-800 shrink-0">
         <button
           onClick={() => setActiveMobileTab('new')}
-          className={`flex-1 py-3 px-2 rounded-2xl text-sm sm:text-base font-black flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[50px] ${
+          className={`flex-1 py-3.5 px-3 rounded-2xl text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer min-h-[56px] ${
             activeMobileTab === 'new'
-              ? 'bg-amber-500 text-slate-950 shadow-lg font-black scale-[1.02]'
+              ? 'bg-amber-400 text-slate-950 shadow-xl font-black scale-[1.02]'
               : 'bg-slate-800/90 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <span>Nowe</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
+          <span className={`px-2.5 py-0.5 rounded-full text-sm font-black ${
             activeMobileTab === 'new' ? 'bg-slate-950 text-amber-400' : 'bg-slate-700 text-amber-300'
           }`}>
             {newOrders.length}
@@ -472,14 +458,14 @@ export default function KitchenDisplayPage() {
 
         <button
           onClick={() => setActiveMobileTab('preparing')}
-          className={`flex-1 py-3 px-2 rounded-2xl text-sm sm:text-base font-black flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[50px] ${
+          className={`flex-1 py-3.5 px-3 rounded-2xl text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer min-h-[56px] ${
             activeMobileTab === 'preparing'
-              ? 'bg-blue-600 text-white shadow-lg font-black scale-[1.02]'
+              ? 'bg-blue-500 text-white shadow-xl font-black scale-[1.02]'
               : 'bg-slate-800/90 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <span>W kuchni</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
+          <span className={`px-2.5 py-0.5 rounded-full text-sm font-black ${
             activeMobileTab === 'preparing' ? 'bg-slate-950 text-blue-300' : 'bg-slate-700 text-blue-300'
           }`}>
             {preparingOrders.length}
@@ -488,14 +474,14 @@ export default function KitchenDisplayPage() {
 
         <button
           onClick={() => setActiveMobileTab('ready')}
-          className={`flex-1 py-3 px-2 rounded-2xl text-sm sm:text-base font-black flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[50px] ${
+          className={`flex-1 py-3.5 px-3 rounded-2xl text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer min-h-[56px] ${
             activeMobileTab === 'ready'
-              ? 'bg-emerald-600 text-white shadow-lg font-black scale-[1.02]'
+              ? 'bg-emerald-500 text-slate-950 shadow-xl font-black scale-[1.02]'
               : 'bg-slate-800/90 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <span>Gotowe</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
+          <span className={`px-2.5 py-0.5 rounded-full text-sm font-black ${
             activeMobileTab === 'ready' ? 'bg-slate-950 text-emerald-300' : 'bg-slate-700 text-emerald-300'
           }`}>
             {readyOrders.length}
@@ -519,51 +505,51 @@ export default function KitchenDisplayPage() {
             </span>
           </div>
 
-          <div className="flex-1 space-y-3.5 overflow-y-auto pr-1">
+          <div className="flex-1 space-y-4 overflow-y-auto pr-1">
             {newOrders.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-slate-500 text-sm font-bold">
+              <div className="h-48 flex items-center justify-center text-slate-500 text-base font-bold">
                 Brak oczekujących zamówień
               </div>
             ) : (
               newOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-slate-850 border-2 border-amber-500/60 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between animate-in fade-in zoom-in duration-200"
+                  className="bg-slate-900 border-2 border-amber-400/80 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col justify-between animate-in fade-in zoom-in duration-200 space-y-4"
                 >
                   <div>
-                    <div className="flex items-center justify-between border-b border-slate-750 pb-2.5 mb-2.5">
-                      <span className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">#{order.orderNumber}</span>
-                      <span className="font-mono text-base sm:text-sm px-3 py-1 rounded-xl bg-slate-800 text-amber-300 font-black">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+                      <span className="text-3xl sm:text-3xl font-black text-amber-400 tracking-tight">#{order.orderNumber}</span>
+                      <span className="font-mono text-lg sm:text-sm px-3.5 py-1.5 rounded-2xl bg-slate-800 text-amber-300 font-black border border-slate-700">
                         PIN: {order.collectionPin}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm text-slate-300 mb-3.5 font-bold">
-                      <span className="flex items-center gap-1.5 text-base sm:text-sm font-black text-white">
-                        <MapPin size={16} className="text-amber-400 shrink-0" />
+                    <div className="flex items-center justify-between text-base text-slate-200 mb-3.5 font-black">
+                      <span className="flex items-center gap-2 text-lg sm:text-sm font-black text-white">
+                        <MapPin size={20} className="text-amber-400 shrink-0" />
                         {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos / Bar'}
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-slate-400">
+                      <span className="flex items-center gap-1.5 text-xs text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded-lg">
                         <Clock size={14} />
                         {getMinutesAgo(order.createdAt)}
                       </span>
                     </div>
 
                     {/* Pozycje menu */}
-                    <div className="space-y-2.5 py-1">
+                    <div className="space-y-3 py-1">
                       {order.items?.map((item, idx) => (
-                        <div key={idx} className="text-base sm:text-sm">
-                          <div className="flex items-start gap-2.5 font-black text-slate-100 leading-snug">
-                            <span className="text-amber-400 font-mono text-lg sm:text-base">{item.quantity}x</span>
-                            <span>{item.name}</span>
+                        <div key={idx} className="border-b border-slate-800/60 pb-2.5 last:border-0 last:pb-0">
+                          <div className="flex items-start gap-3 font-black text-white leading-snug">
+                            <span className="text-amber-400 font-mono text-2xl sm:text-base min-w-[36px]">{item.quantity}x</span>
+                            <span className="text-lg sm:text-base">{item.name}</span>
                           </div>
                           {item.addons && item.addons.length > 0 && (
-                            <div className="text-sm sm:text-xs text-slate-300 pl-7 font-medium mt-0.5">
+                            <div className="text-sm sm:text-xs text-amber-300/90 pl-11 font-bold mt-1">
                               + {item.addons.map((a) => a.name).join(', ')}
                             </div>
                           )}
                           {item.specialInstructions && (
-                            <div className="text-sm sm:text-xs text-amber-200 bg-amber-500/10 p-2 rounded-xl mt-1.5 italic font-semibold pl-7">
+                            <div className="text-sm sm:text-xs text-amber-100 bg-amber-500/20 border border-amber-500/30 p-2.5 rounded-2xl mt-1.5 italic font-bold pl-11">
                               „{item.specialInstructions}”
                             </div>
                           )}
@@ -574,10 +560,10 @@ export default function KitchenDisplayPage() {
 
                   <button
                     onClick={() => updateStatus(order.id, 'in_progress')}
-                    className="mt-4 w-full py-4 sm:py-3.5 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-base sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-amber-500/20 min-h-[56px] flex items-center justify-center gap-2"
+                    className="w-full py-4 sm:py-3.5 bg-amber-400 hover:bg-amber-300 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-amber-500/25 min-h-[64px] flex items-center justify-center gap-2.5"
                   >
                     <span>Rozpocznij przygotowanie</span>
-                    <span className="text-lg">→</span>
+                    <span className="text-xl">→</span>
                   </button>
                 </div>
               ))
@@ -599,50 +585,50 @@ export default function KitchenDisplayPage() {
             </span>
           </div>
 
-          <div className="flex-1 space-y-3.5 overflow-y-auto pr-1">
+          <div className="flex-1 space-y-4 overflow-y-auto pr-1">
             {preparingOrders.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-slate-500 text-sm font-bold">
+              <div className="h-48 flex items-center justify-center text-slate-500 text-base font-bold">
                 Kuchnia wolna
               </div>
             ) : (
               preparingOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-slate-850 border-2 border-blue-500/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between animate-in fade-in duration-150"
+                  className="bg-slate-900 border-2 border-blue-400/80 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col justify-between animate-in fade-in duration-150 space-y-4"
                 >
                   <div>
-                    <div className="flex items-center justify-between border-b border-slate-750 pb-2.5 mb-2.5">
-                      <span className="text-2xl sm:text-3xl font-black text-blue-400 tracking-tight">#{order.orderNumber}</span>
-                      <span className="font-mono text-base sm:text-sm px-3 py-1 rounded-xl bg-slate-800 text-blue-300 font-black">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+                      <span className="text-3xl sm:text-3xl font-black text-blue-400 tracking-tight">#{order.orderNumber}</span>
+                      <span className="font-mono text-lg sm:text-sm px-3.5 py-1.5 rounded-2xl bg-slate-800 text-blue-300 font-black border border-slate-700">
                         PIN: {order.collectionPin}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm text-slate-300 mb-3.5 font-bold">
-                      <span className="flex items-center gap-1.5 text-base sm:text-sm font-black text-white">
-                        <MapPin size={16} className="text-blue-400 shrink-0" />
+                    <div className="flex items-center justify-between text-base text-slate-200 mb-3.5 font-black">
+                      <span className="flex items-center gap-2 text-lg sm:text-sm font-black text-white">
+                        <MapPin size={20} className="text-blue-400 shrink-0" />
                         {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-slate-400">
+                      <span className="flex items-center gap-1.5 text-xs text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded-lg">
                         <Clock size={14} />
                         {getMinutesAgo(order.createdAt)}
                       </span>
                     </div>
 
-                    <div className="space-y-2.5 py-1">
+                    <div className="space-y-3 py-1">
                       {order.items?.map((item, idx) => (
-                        <div key={idx} className="text-base sm:text-sm">
-                          <div className="flex items-start gap-2.5 font-black text-slate-100 leading-snug">
-                            <span className="text-blue-400 font-mono text-lg sm:text-base">{item.quantity}x</span>
-                            <span>{item.name}</span>
+                        <div key={idx} className="border-b border-slate-800/60 pb-2.5 last:border-0 last:pb-0">
+                          <div className="flex items-start gap-3 font-black text-white leading-snug">
+                            <span className="text-blue-400 font-mono text-2xl sm:text-base min-w-[36px]">{item.quantity}x</span>
+                            <span className="text-lg sm:text-base">{item.name}</span>
                           </div>
                           {item.addons && item.addons.length > 0 && (
-                            <div className="text-sm sm:text-xs text-slate-300 pl-7 font-medium mt-0.5">
+                            <div className="text-sm sm:text-xs text-blue-300/90 pl-11 font-bold mt-1">
                               + {item.addons.map((a) => a.name).join(', ')}
                             </div>
                           )}
                           {item.specialInstructions && (
-                            <div className="text-sm sm:text-xs text-amber-200 bg-amber-500/10 p-2 rounded-xl mt-1.5 italic font-semibold pl-7">
+                            <div className="text-sm sm:text-xs text-amber-100 bg-amber-500/20 border border-amber-500/30 p-2.5 rounded-2xl mt-1.5 italic font-bold pl-11">
                               „{item.specialInstructions}”
                             </div>
                           )}
@@ -653,10 +639,10 @@ export default function KitchenDisplayPage() {
 
                   <button
                     onClick={() => updateStatus(order.id, 'ready_to_collect')}
-                    className="mt-4 w-full py-4 sm:py-3.5 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white font-black rounded-2xl text-base sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-blue-600/20 min-h-[56px] flex items-center justify-center gap-2"
+                    className="w-full py-4 sm:py-3.5 bg-blue-500 hover:bg-blue-400 active:scale-[0.98] text-white font-black rounded-2xl text-lg sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-blue-500/25 min-h-[64px] flex items-center justify-center gap-2.5"
                   >
                     <span>Oznacz jako Gotowe</span>
-                    <span className="text-lg">✓</span>
+                    <span className="text-xl">✓</span>
                   </button>
                 </div>
               ))
@@ -678,60 +664,60 @@ export default function KitchenDisplayPage() {
             </span>
           </div>
 
-          <div className="flex-1 space-y-3.5 overflow-y-auto pr-1">
+          <div className="flex-1 space-y-4 overflow-y-auto pr-1">
             {readyOrders.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-slate-500 text-sm font-bold">
+              <div className="h-48 flex items-center justify-center text-slate-500 text-base font-bold">
                 Brak gotowych dań do wydania
               </div>
             ) : (
               readyOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="bg-slate-850 border-2 border-emerald-500/50 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col justify-between animate-in fade-in duration-150"
+                  className="bg-slate-900 border-2 border-emerald-400/80 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col justify-between animate-in fade-in duration-150 space-y-4"
                 >
                   <div>
-                    <div className="flex items-center justify-between border-b border-slate-750 pb-2.5 mb-2.5">
-                      <span className="text-2xl sm:text-3xl font-black text-emerald-400 tracking-tight">#{order.orderNumber}</span>
-                      <span className="font-mono text-base sm:text-sm px-3 py-1 rounded-xl bg-emerald-950 text-emerald-300 font-black border border-emerald-500/40">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+                      <span className="text-3xl sm:text-3xl font-black text-emerald-400 tracking-tight">#{order.orderNumber}</span>
+                      <span className="font-mono text-lg sm:text-sm px-3.5 py-1.5 rounded-2xl bg-emerald-950 text-emerald-300 font-black border border-emerald-500/40">
                         PIN: {order.collectionPin}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm text-slate-300 mb-3.5 font-bold">
-                      <span className="flex items-center gap-1.5 text-base sm:text-sm font-black text-white">
-                        <MapPin size={16} className="text-emerald-400 shrink-0" />
+                    <div className="flex items-center justify-between text-base text-slate-200 mb-3.5 font-black">
+                      <span className="flex items-center gap-2 text-lg sm:text-sm font-black text-white">
+                        <MapPin size={20} className="text-emerald-400 shrink-0" />
                         {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
                       </span>
-                      <span className="text-emerald-400 font-black bg-emerald-500/15 px-2 py-0.5 rounded-lg text-xs">
+                      <span className="text-emerald-300 font-black bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 rounded-xl text-xs">
                         Czeka na klienta
                       </span>
                     </div>
 
-                    <div className="space-y-2 py-1">
+                    <div className="space-y-3 py-1">
                       {order.items?.map((item, idx) => (
-                        <div key={idx} className="text-base sm:text-sm font-black text-slate-100 flex items-center gap-2.5">
-                          <span className="text-emerald-400 font-mono text-lg sm:text-base">{item.quantity}x</span>
-                          <span>{item.name}</span>
+                        <div key={idx} className="text-base sm:text-sm font-black text-slate-100 flex items-center gap-3">
+                          <span className="text-emerald-400 font-mono text-2xl sm:text-base min-w-[36px]">{item.quantity}x</span>
+                          <span className="text-lg sm:text-base">{item.name}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={() => {
                         setPinModalTargetOrder(order);
                         setIsPinModalOpen(true);
                       }}
-                      className="py-4 sm:py-3.5 bg-slate-800 hover:bg-slate-750 active:scale-[0.98] border border-emerald-500/40 text-emerald-300 font-black rounded-2xl text-base sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[56px] shadow-md"
+                      className="py-4 sm:py-3.5 bg-slate-800 hover:bg-slate-750 active:scale-[0.98] border-2 border-emerald-500/40 text-emerald-300 font-black rounded-2xl text-lg sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[64px] shadow-lg"
                       title="Weryfikuj kod PIN lub QR"
                     >
-                      <KeyRound size={18} />
+                      <KeyRound size={20} />
                       <span>PIN / QR</span>
                     </button>
                     <button
                       onClick={() => updateStatus(order.id, 'completed')}
-                      className="py-4 sm:py-3.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-black rounded-2xl text-base sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-emerald-600/20 min-h-[56px] flex items-center justify-center gap-2"
+                      className="py-4 sm:py-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-emerald-500/25 min-h-[64px] flex items-center justify-center gap-2"
                     >
                       <span>Wydano ✓</span>
                     </button>

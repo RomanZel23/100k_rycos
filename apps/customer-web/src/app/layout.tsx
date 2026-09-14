@@ -33,7 +33,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pl">
-      <body className="antialiased min-h-screen bg-slate-950 text-slate-100">
+      <body className="antialiased min-h-[100dvh] bg-slate-950 text-slate-100 flex flex-col">
         <PwaRegister />
         {children}
       </body>

@@ -20,7 +20,9 @@ import {
   KeyRound,
   QrCode,
   Smartphone,
-  Download
+  Download,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
@@ -328,9 +330,10 @@ export default function PosPage() {
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Mobile drawer & search state
+  // Mobile drawer, search & layout state
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileLayout, setMobileLayout] = useState<'list' | 'grid'>('list');
 
   // Cart & Order State
   const [cart, setCart] = useState<PosCartItem[]>([]);
@@ -733,26 +736,44 @@ export default function PosPage() {
   }) || [];
 
   return (
-    <div className="h-screen w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
       {/* Top Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between z-10 shrink-0 gap-2">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md shrink-0">
+      <header className="bg-slate-900 border-b border-slate-800 px-2.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between z-10 shrink-0 gap-1.5 sm:gap-2 min-h-[52px]">
+        {/* Left: Workstation Switcher & Brand */}
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+          <div className="hidden xs:flex w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 items-center justify-center font-black shadow-md shrink-0">
             <Utensils size={16} />
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="font-extrabold text-white text-sm sm:text-base tracking-tight truncate max-w-[110px] xs:max-w-[150px] sm:max-w-none">
-                {menu?.brand.name || 'RYCOS POS'}
-              </span>
-              <span className="hidden sm:inline text-[10px] uppercase font-bold tracking-widest bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 shrink-0">
-                Live POS
-              </span>
-            </div>
-            <div className="hidden md:block text-[11px] text-slate-400 truncate">
-              Terminal Kelnerski · Szybka sprzedaż i fiskalizacja
-            </div>
+
+          {/* Workstation Quick Switcher */}
+          <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
+            <span className="px-2.5 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1">
+              <span>💳</span>
+              <span className="text-xs font-black">POS</span>
+            </span>
+            <a
+              href="/kds"
+              className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
+            >
+              <span>🍳</span>
+              <span className="hidden xs:inline">KDS</span>
+            </a>
+            <a
+              href="/pickup"
+              className="hidden sm:flex px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors items-center gap-1"
+            >
+              <span>📦</span>
+              <span>Wydawka</span>
+            </a>
           </div>
+
+          {/* Terminal Badge (Desktop) */}
+          {terminal && (
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="truncate max-w-[100px]">{terminal.name}</span>
+            </div>
+          )}
         </div>
 
         {/* Search Bar (Desktop) */}
@@ -775,77 +796,44 @@ export default function PosPage() {
           )}
         </div>
 
-        {/* Workstation Quick Switcher */}
-        <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700 text-xs shrink-0">
-          <span className="px-2 sm:px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black shadow-xs flex items-center gap-1">
-            <span>💳</span>
-            <span className="hidden sm:inline">POS</span>
-          </span>
-          <a
-            href="/kds"
-            className="px-2 sm:px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
-          >
-            <span>🍳</span>
-            <span className="hidden sm:inline">KDS</span>
-          </a>
-          <a
-            href="/pickup"
-            className="px-2 sm:px-2.5 py-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 font-bold transition-colors flex items-center gap-1"
-          >
-            <span>📦</span>
-            <span className="hidden sm:inline">Wydawka</span>
-          </a>
-        </div>
-
         {/* Right Info & Action */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {terminal ? (
-            <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="truncate max-w-[80px] xs:max-w-[120px]">{terminal.name}</span>
-              <button
-                onClick={() => {
-                  if (confirm(`Czy chcesz odłączyć to urządzenie od stanowiska "${terminal.name}"?`)) {
-                    localStorage.removeItem('rycos_terminal');
-                    setTerminal(null);
-                  }
-                }}
-                className="text-slate-500 hover:text-red-400 ml-0.5 text-sm leading-none cursor-pointer"
-                title="Odłącz stanowisko"
-              >
-                ×
-              </button>
+            <div className="md:hidden flex items-center gap-1 px-2 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span className="truncate max-w-[70px]">{terminal.name}</span>
             </div>
           ) : (
             <a
               href="/pair"
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors shrink-0"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-black transition-colors shrink-0"
               title="Sparuj to urządzenie ze stanowiskiem w lokalu"
             >
-              <QrCode size={13} className="text-amber-400" />
+              <QrCode size={14} className="text-amber-400" />
               <span className="hidden xs:inline">Paruj</span>
             </a>
           )}
 
           <button
             onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-            className="md:hidden p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="md:hidden w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             title="Szukaj dania"
           >
-            <Search size={15} />
+            <Search size={18} />
           </button>
+
           <button
             onClick={() => {
               loadOpenOrders();
               setIsOpenTicketsModalOpen(true);
             }}
-            className="flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
+            className="flex items-center gap-1.5 text-xs font-black text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 px-3 py-2 rounded-xl transition-all active:scale-95 cursor-pointer shrink-0 min-h-[40px]"
             title="Otwarte rachunki stolikowe do rozliczenia"
           >
-            <Clock size={14} />
-            <span className="hidden sm:inline">Otwarte</span>
+            <Clock size={16} className="text-amber-400" />
+            <span>Otwarte</span>
             {openOrders.length > 0 && (
-              <span className="bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded-full text-[10px] font-black">
+              <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full text-xs font-black min-w-[18px] text-center">
                 {openOrders.length}
               </span>
             )}
@@ -853,22 +841,20 @@ export default function PosPage() {
 
           <button
             onClick={() => setIsPinModalOpen(true)}
-            className="flex items-center gap-1.5 text-xs font-black text-slate-950 bg-emerald-500 hover:bg-emerald-400 px-2.5 sm:px-3 py-1.5 rounded-xl transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
+            className="w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center font-black transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0"
             title="Weryfikacja odbioru zamówienia kodem QR lub PIN"
           >
-            <Camera size={14} />
-            <span className="hidden sm:inline">Skanuj QR / Wydaj</span>
+            <Camera size={18} />
           </button>
 
           {/* PWA Install Button */}
           {isInstallable && (
             <button
               onClick={handleInstallClick}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer shrink-0"
+              className="w-10 h-10 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 text-slate-950 flex items-center justify-center font-black transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer shrink-0"
               title="Zainstaluj aplikację POS na ekranie głównym telefonu"
             >
-              <Smartphone size={14} />
-              <span className="hidden xs:inline">Instaluj PWA</span>
+              <Smartphone size={18} />
             </button>
           )}
 
@@ -916,35 +902,136 @@ export default function PosPage() {
       <div className="flex-1 flex overflow-hidden relative">
         {/* Product Catalog: Full width on mobile (< lg), 65% on desktop (lg:) */}
         <div className="flex-1 lg:flex-[65] flex flex-col bg-slate-900/40 overflow-hidden">
-          {/* Categories Bar */}
-          <div className="bg-slate-900/80 border-b border-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center gap-2.5 overflow-x-auto no-scrollbar shrink-0">
-            <button
-              onClick={() => setActiveCategory(null)}
-              className={`px-4 sm:px-4 py-2.5 sm:py-2 rounded-xl text-sm sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer min-h-[44px] sm:min-h-0 flex items-center ${
-                activeCategory === null
-                  ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-              }`}
-            >
-              Wszystkie
-            </button>
-            {menu?.categories.map((cat) => (
+          {/* Categories Bar & Mobile Layout Toggle */}
+          <div className="bg-slate-900/90 border-b border-slate-800 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0">
               <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-4 sm:px-4 py-2.5 sm:py-2 rounded-xl text-sm sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer min-h-[44px] sm:min-h-0 flex items-center ${
-                  activeCategory === cat.id
-                    ? 'bg-amber-500 text-slate-950 shadow-md scale-[1.02]'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                onClick={() => setActiveCategory(null)}
+                className={`px-4 sm:px-4 py-2.5 sm:py-2 rounded-2xl text-base sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer min-h-[48px] sm:min-h-0 flex items-center ${
+                  activeCategory === null
+                    ? 'bg-amber-400 text-slate-950 shadow-lg scale-[1.02]'
+                    : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 hover:bg-slate-700 hover:text-white'
                 }`}
               >
-                {cat.name}
+                Wszystkie
               </button>
-            ))}
+              {menu?.categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`px-4 sm:px-4 py-2.5 sm:py-2 rounded-2xl text-base sm:text-xs font-black whitespace-nowrap transition-all cursor-pointer min-h-[48px] sm:min-h-0 flex items-center ${
+                    activeCategory === cat.id
+                      ? 'bg-amber-400 text-slate-950 shadow-lg scale-[1.02]'
+                      : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Mobile View Toggle (List vs 2-col Grid) */}
+            <div className="sm:hidden flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 shrink-0">
+              <button
+                onClick={() => setMobileLayout('list')}
+                className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                  mobileLayout === 'list'
+                    ? 'bg-amber-400 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Widok listy (duży tekst i przyciski)"
+              >
+                <List size={18} />
+              </button>
+              <button
+                onClick={() => setMobileLayout('grid')}
+                className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                  mobileLayout === 'grid'
+                    ? 'bg-amber-400 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Widok siatki kafelków"
+              >
+                <LayoutGrid size={18} />
+              </button>
+            </div>
           </div>
 
-          {/* Products Grid */}
-          <div className="flex-1 p-3 sm:p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3 content-start pb-28 lg:pb-4">
+          {/* Products View: Mobile List View (Default on phone) */}
+          {mobileLayout === 'list' && (
+            <div className="sm:hidden flex-1 p-3 overflow-y-auto space-y-3 pb-32">
+              {filteredProducts.map((prod) => {
+                const cartItem = cart.find((i) => i.product.id === prod.id);
+                const countInCart = cart
+                  .filter((i) => i.product.id === prod.id)
+                  .reduce((sum, i) => sum + i.quantity, 0);
+
+                return (
+                  <div
+                    key={prod.id}
+                    className={`bg-slate-900 border-2 rounded-3xl p-4 flex items-center justify-between gap-3 shadow-xl transition-all ${
+                      countInCart > 0
+                        ? 'border-amber-400 bg-slate-850 ring-2 ring-amber-400/40'
+                        : 'border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => handleProductClick(prod)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-lg text-white leading-snug">
+                          {prod.name}
+                        </h3>
+                        <span className="text-[11px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md shrink-0">
+                          PTU {prod.ptuCode?.toUpperCase() || 'B'}
+                        </span>
+                      </div>
+                      {prod.description && (
+                        <p className="text-xs text-slate-300 font-medium line-clamp-2 mt-1 leading-relaxed">
+                          {prod.description}
+                        </p>
+                      )}
+                      <div className="font-black text-2xl text-amber-400 font-mono mt-2">
+                        {Number(prod.price).toFixed(2)} zł
+                      </div>
+                    </div>
+
+                    {/* Stepper or Add button on list row */}
+                    {countInCart > 0 && cartItem ? (
+                      <div className="flex items-center gap-1.5 bg-slate-800/90 p-1.5 rounded-2xl border border-amber-400/60 shadow-md shrink-0">
+                        <button
+                          onClick={() => updateQuantity(cartItem.id, -1)}
+                          className="w-11 h-11 rounded-xl bg-slate-700 active:bg-slate-600 text-white font-black text-xl flex items-center justify-center cursor-pointer active:scale-95"
+                        >
+                          -
+                        </button>
+                        <span className="font-black text-2xl text-amber-400 font-mono px-2.5 min-w-[32px] text-center">
+                          {countInCart}
+                        </span>
+                        <button
+                          onClick={() => handleProductClick(prod)}
+                          className="w-11 h-11 rounded-xl bg-amber-400 active:bg-amber-300 text-slate-950 font-black text-xl flex items-center justify-center cursor-pointer active:scale-95"
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleProductClick(prod)}
+                        className="w-14 h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-90 text-slate-950 flex items-center justify-center font-black shadow-xl shadow-amber-500/30 cursor-pointer shrink-0 transition-transform"
+                      >
+                        <Plus size={28} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Products View: Grid View (Desktop / Tablet or Mobile Grid mode) */}
+          <div className={`${mobileLayout === 'list' ? 'hidden sm:grid' : 'grid'} flex-1 p-3 sm:p-4 overflow-y-auto grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3.5 content-start pb-32 lg:pb-4`}>
             {filteredProducts.map((prod) => {
               const countInCart = cart
                 .filter((i) => i.product.id === prod.id)
@@ -954,37 +1041,39 @@ export default function PosPage() {
                 <button
                   key={prod.id}
                   onClick={() => handleProductClick(prod)}
-                  className={`relative bg-slate-800/80 hover:bg-slate-800 active:scale-[0.98] border rounded-2xl p-3.5 sm:p-3.5 flex flex-col justify-between text-left transition-all group shadow-md hover:shadow-amber-500/5 cursor-pointer min-h-[135px] sm:min-h-0 ${
-                    countInCart > 0 ? 'border-amber-500/60 bg-slate-800/95 ring-1 ring-amber-500/30' : 'border-slate-700/80 hover:border-amber-500/50'
+                  className={`relative bg-slate-900 border-2 rounded-3xl p-4 flex flex-col justify-between text-left transition-all group shadow-xl cursor-pointer min-h-[160px] sm:min-h-0 ${
+                    countInCart > 0
+                      ? 'border-amber-400 bg-slate-850 ring-2 ring-amber-400/40'
+                      : 'border-slate-800 hover:border-amber-400/60'
                   }`}
                 >
                   {countInCart > 0 && (
-                    <span className="absolute -top-2 -right-1.5 bg-amber-500 text-slate-950 font-black text-xs sm:text-[11px] px-2.5 py-0.5 rounded-full shadow-md z-10 border border-slate-950 flex items-center gap-0.5">
+                    <span className="absolute -top-3 -right-2 bg-amber-400 text-slate-950 font-black text-sm px-3 py-0.5 rounded-full shadow-xl border-2 border-slate-950 flex items-center gap-0.5">
                       {countInCart}×
                     </span>
                   )}
                   <div className="w-full">
-                    <div className="flex items-start justify-between gap-1 mb-1">
-                      <h3 className="font-bold text-sm sm:text-sm text-white group-hover:text-amber-300 transition-colors line-clamp-2 leading-tight">
+                    <div className="flex items-start justify-between gap-1 mb-1.5">
+                      <h3 className="font-black text-base sm:text-sm text-white group-hover:text-amber-300 transition-colors line-clamp-2 leading-tight">
                         {prod.name}
                       </h3>
-                      <span className="text-[10px] sm:text-[10px] font-mono text-slate-400 bg-slate-900/60 px-1.5 py-0.5 rounded shrink-0">
+                      <span className="text-[11px] sm:text-[10px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md shrink-0">
                         PTU {prod.ptuCode?.toUpperCase() || 'B'}
                       </span>
                     </div>
                     {prod.description && (
-                      <p className="text-xs sm:text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
+                      <p className="text-xs sm:text-[11px] text-slate-300 line-clamp-2 mt-0.5 leading-snug">
                         {prod.description}
                       </p>
                     )}
                   </div>
 
-                  <div className="w-full mt-3 sm:mt-3 pt-2.5 border-t border-slate-700/60 flex items-center justify-between">
-                    <span className="font-black text-amber-400 text-base sm:text-base whitespace-nowrap font-mono">
+                  <div className="w-full mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
+                    <span className="font-black text-amber-400 text-xl sm:text-base whitespace-nowrap font-mono">
                       {Number(prod.price).toFixed(2)} zł
                     </span>
-                    <div className="w-9 h-9 sm:w-8 sm:h-8 rounded-xl bg-amber-500/15 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center transition-all shrink-0">
-                      <Plus size={18} />
+                    <div className="w-11 h-11 sm:w-9 sm:h-9 rounded-2xl bg-amber-500 text-slate-950 group-hover:bg-amber-400 flex items-center justify-center transition-all shrink-0 font-black shadow-md shadow-amber-500/25">
+                      <Plus size={22} />
                     </div>
                   </div>
                 </button>
@@ -1021,22 +1110,22 @@ export default function PosPage() {
       </div>
 
       {/* Mobile Floating Sticky Bottom Bar */}
-      <div className="lg:hidden shrink-0 bg-slate-900/98 backdrop-blur-md border-t border-slate-800 px-4 py-3 flex items-center justify-between z-20 shadow-2xl safe-area-pb">
+      <div className="lg:hidden shrink-0 bg-slate-900/98 backdrop-blur-md border-t-2 border-slate-700 px-4 py-3 flex items-center justify-between z-30 shadow-2xl safe-area-pb min-h-[64px]">
         <div 
           onClick={() => setIsMobileCartOpen(true)}
-          className="flex items-center gap-3 cursor-pointer select-none"
+          className="flex items-center gap-3.5 cursor-pointer select-none"
         >
-          <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
-            <Receipt size={22} />
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border-2 border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0">
+            <Receipt size={24} />
           </div>
           <div className="flex flex-col">
-            <div className="text-xs font-black text-slate-300 flex items-center gap-1.5">
-              <span className="bg-slate-800 px-2 py-0.5 rounded-md text-amber-400 font-black">
+            <div className="text-xs font-black text-slate-200 flex items-center gap-2">
+              <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md font-black">
                 {orderType === 'dine_in' ? `Stół ${selectedTable}` : 'Na wynos'}
               </span>
-              <span className="text-slate-400">· {totalItemsCount} poz.</span>
+              <span className="text-slate-400 font-bold">· {totalItemsCount} poz.</span>
             </div>
-            <div className="font-black text-xl text-amber-400 font-mono leading-tight mt-0.5">
+            <div className="font-black text-2xl text-white font-mono leading-none mt-1">
               {totalAmount.toFixed(2)} zł
             </div>
           </div>
@@ -1044,12 +1133,12 @@ export default function PosPage() {
 
         <button
           onClick={() => setIsMobileCartOpen(true)}
-          className="min-h-[50px] py-3 px-5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-sm rounded-2xl flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
+          className="min-h-[54px] py-3.5 px-6 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-base rounded-2xl flex items-center gap-2.5 shadow-xl shadow-amber-500/30 transition-all cursor-pointer"
         >
-          <Receipt size={18} />
+          <Receipt size={20} />
           <span>Rachunek</span>
           {totalItemsCount > 0 && (
-            <span className="bg-slate-950 text-amber-400 px-2 py-0.5 rounded-full text-xs font-black min-w-[20px] text-center">
+            <span className="bg-slate-950 text-amber-400 px-2.5 py-0.5 rounded-full text-sm font-black min-w-[24px] text-center">
               {totalItemsCount}
             </span>
           )}
