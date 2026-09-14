@@ -137,6 +137,14 @@ export function startFiscalWorker() {
         return;
       }
 
+      // Critical Fiscal Compliance Rule: Cannot fiscalize unpaid order!
+      if (order.paymentStatus !== 'paid' && order.paymentStatus !== 'confirmed') {
+        console.warn(
+          `[Fiscal Worker] BLOCKED: Cannot fiscalize unpaid order ${orderId} (paymentStatus: "${order.paymentStatus}"). Skipping.`
+        );
+        return;
+      }
+
       const items = await db
         .select()
         .from(orderItems)

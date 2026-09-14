@@ -168,9 +168,7 @@ export async function finalizeSaferpayPayment(orderId: string): Promise<{ succes
     }
   }
 
-  // Sukces: oznacz zamówienie jako 'paid', wyślij zdarzenie outbox dla rycos i websocket
-  await updateOrderStatus(orderId, 'paid');
-
+  // Sukces: najpierw oznacz paymentStatus jako 'confirmed'
   await db
     .update(orders)
     .set({
@@ -179,6 +177,9 @@ export async function finalizeSaferpayPayment(orderId: string): Promise<{ succes
       updatedAt: new Date(),
     })
     .where(eq(orders.id, orderId));
+
+  // Następnie zaktualizuj status cyklu zamówienia na 'paid' (co wywoła bezpieczną fiskalizację)
+  await updateOrderStatus(orderId, 'paid');
 
   // Wyczyść token z Redis
   await redis.del(`saferpay:order:${orderId}`);

@@ -310,12 +310,19 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus, reason?: string): Promise<OrderDetail> {
   const db = getDatabase();
 
+  const updateFields: Record<string, any> = {
+    status: newStatus,
+    updatedAt: new Date(),
+  };
+
+  // If status is updated to 'paid', ensure paymentStatus is also 'paid' (unless already confirmed)
+  if (newStatus === 'paid') {
+    updateFields.paymentStatus = sql`CASE WHEN ${orders.paymentStatus} = 'confirmed' THEN 'confirmed' ELSE 'paid' END`;
+  }
+
   const [updatedOrder] = await db
     .update(orders)
-    .set({
-      status: newStatus,
-      updatedAt: new Date(),
-    })
+    .set(updateFields)
     .where(eq(orders.id, orderId))
     .returning();
 
@@ -330,14 +337,17 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus,
     payload: { newStatus, reason },
   });
 
-  // Outbox trigger for fiscalization if ready_to_collect or paid
-  if (newStatus === 'ready_to_collect' || newStatus === 'paid') {
-    await db.insert(outboxEvents).values({
-      aggregateType: 'order',
-      aggregateId: orderId,
-      eventType: 'order.fiscalize',
-      payload: { orderId, companyId: updatedOrder.companyId },
-    });
+  // Outbox trigger for fiscalization: strictly ONLY when order is paid and payment is confirmed/paid.
+  // Kitchen readiness (ready_to_collect) MUST NEVER trigger fiscalization!
+  if (newStatus === 'paid' && (updatedOrder.paymentStatus === 'paid' || updatedOrder.paymentStatus === 'confirmed')) {
+    if (updatedOrder.fiscalStatus !== 'issued') {
+      await db.insert(outboxEvents).values({
+        aggregateType: 'order',
+        aggregateId: orderId,
+        eventType: 'order.fiscalize',
+        payload: { orderId, companyId: updatedOrder.companyId },
+      });
+    }
   }
 
   const orderDetail = (await getOrderById(orderId))!;
@@ -366,6 +376,101 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus,
       orderId,
       orderNumber: updatedOrder.orderNumber,
       status: newStatus,
+      collectionPin: updatedOrder.collectionPin,
+    },
+  });
+
+  return orderDetail;
+}
+
+/**
+ * Record payment for an order (POS / Staff settlement / cash desk).
+ * Ensures paymentStatus is 'paid', assigns payment method, triggers fiscalization,
+ * and preserves kitchen fulfillment status if already in progress or ready.
+ */
+export async function recordOrderPayment(
+  orderId: string,
+  paymentMethod: string,
+  terminalId?: string
+): Promise<OrderDetail> {
+  const db = getDatabase();
+
+  const [existingOrder] = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!existingOrder) {
+    throw new Error(`Order ${orderId} not found`);
+  }
+
+  // If order was pending_payment, advance to paid.
+  // If order was already in_progress or ready_to_collect, preserve kitchen status.
+  let nextStatus = existingOrder.status;
+  if (existingOrder.status === 'pending_payment') {
+    nextStatus = 'paid';
+  }
+
+  const [updatedOrder] = await db
+    .update(orders)
+    .set({
+      paymentStatus: 'paid',
+      paymentMethod: paymentMethod || existingOrder.paymentMethod || 'cash',
+      terminalId: terminalId || existingOrder.terminalId || null,
+      status: nextStatus,
+      updatedAt: new Date(),
+    })
+    .where(eq(orders.id, orderId))
+    .returning();
+
+  // Log payment event
+  await db.insert(orderEvents).values({
+    orderId,
+    eventType: 'order.payment_recorded',
+    payload: {
+      paymentMethod,
+      amount: updatedOrder.totalAmount,
+      terminalId,
+    },
+  });
+
+  // Trigger fiscalization outbox event if not already issued
+  if (updatedOrder.fiscalStatus !== 'issued') {
+    await db.insert(outboxEvents).values({
+      aggregateType: 'order',
+      aggregateId: orderId,
+      eventType: 'order.fiscalize',
+      payload: { orderId, companyId: updatedOrder.companyId },
+    });
+  }
+
+  const orderDetail = (await getOrderById(orderId))!;
+
+  // Broadcast to Staff
+  broadcastToStaff(updatedOrder.companyId, {
+    type: 'order.status_updated',
+    timestamp: new Date().toISOString(),
+    companyId: updatedOrder.companyId,
+    brandId: updatedOrder.brandId,
+    payload: {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      status: nextStatus,
+      collectionPin: updatedOrder.collectionPin,
+    },
+  });
+
+  // Broadcast to Customer Tracker
+  broadcastToOrder(orderId, {
+    type: 'order.status_updated',
+    timestamp: new Date().toISOString(),
+    companyId: updatedOrder.companyId,
+    brandId: updatedOrder.brandId,
+    payload: {
+      orderId,
+      orderNumber: updatedOrder.orderNumber,
+      status: nextStatus,
       collectionPin: updatedOrder.collectionPin,
     },
   });

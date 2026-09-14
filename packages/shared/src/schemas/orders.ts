@@ -73,7 +73,7 @@ export const OrderDetailSchema = z.object({
   totalAmount: z.number(),
   currency: z.string(),
   paymentMethod: z.string().nullable(),
-  paymentStatus: z.enum(['pending', 'confirmed', 'failed', 'refunded']).default('pending'),
+  paymentStatus: z.enum(['pending', 'confirmed', 'paid', 'failed', 'refunded']).default('pending'),
   fiscalStatus: z.enum(['none', 'pending', 'issued', 'failed']).default('none'),
   fiscalReceiptNumber: z.string().nullable().optional(),
   fiscalPdfUrl: z.string().nullable().optional(),

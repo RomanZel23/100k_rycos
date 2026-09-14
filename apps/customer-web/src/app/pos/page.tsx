@@ -365,6 +365,73 @@ export default function PosPage() {
   // Paired Workstation Terminal
   const [terminal, setTerminal] = useState<{ id: number; terminal_id: string; name: string; role?: string } | null>(null);
 
+  // Open tickets (Otwarte rachunki / stoliki) state
+  const [isOpenTicketsModalOpen, setIsOpenTicketsModalOpen] = useState(false);
+  const [openOrders, setOpenOrders] = useState<any[]>([]);
+  const [openOrdersLoading, setOpenOrdersLoading] = useState(false);
+  const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
+
+  const loadOpenOrders = async () => {
+    try {
+      setOpenOrdersLoading(true);
+      const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders?limit=50`, {
+        headers: {
+          'x-company-id': String(menu?.brand?.companyId || 1),
+        },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const list = json.data || [];
+        // Active orders that are NOT yet paid/confirmed
+        const unpaid = list.filter(
+          (o: any) =>
+            o.paymentStatus === 'pending' &&
+            !['cancelled', 'completed'].includes(o.status)
+        );
+        setOpenOrders(unpaid);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch open orders:', e);
+    } finally {
+      setOpenOrdersLoading(false);
+    }
+  };
+
+  const handleSettleOpenOrder = async (order: any, method: 'cash' | 'card') => {
+    setSettlingOrderId(order.id);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders/${order.id}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-company-id': String(menu?.brand.companyId || 1),
+        },
+        body: JSON.stringify({
+          paymentMethod: method,
+          terminalId: terminal?.id ? String(terminal.id) : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Błąd rozliczenia płatności');
+      }
+
+      setLastOrderSuccess({
+        orderNumber: order.orderNumber,
+        pin: order.collectionPin,
+        action: method === 'cash' ? 'Rozliczono: Gotówka (Fiskalizacja)' : 'Rozliczono: Karta (Fiskalizacja)',
+        total: parseFloat(order.totalAmount || '0'),
+      });
+
+      await loadOpenOrders();
+    } catch (err: any) {
+      alert(`Błąd rozliczenia rachunku: ${err.message}`);
+    } finally {
+      setSettlingOrderId(null);
+    }
+  };
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem('rycos_terminal');
@@ -375,6 +442,14 @@ export default function PosPage() {
       console.warn('Failed to parse rycos_terminal', e);
     }
   }, []);
+
+  useEffect(() => {
+    if (menu?.brand?.companyId) {
+      loadOpenOrders();
+      const interval = setInterval(loadOpenOrders, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [menu?.brand?.companyId]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -586,31 +661,40 @@ export default function PosPage() {
 
       const placed = await submitOrder(payload);
 
-      // If action is Cash or Card, immediately set status to paid to trigger fiscal printing
+      // Szybka sprzedaż przy kasie: Gotówka lub Karta natychmiast rejestruje płatność i fiskalizuje
       if (action === 'cash' || action === 'card') {
         try {
-          await fetch(`${getApiBaseUrl()}/v1/admin/orders/${placed.id}/status`, {
-            method: 'PUT',
+          await fetch(`${getApiBaseUrl()}/v1/admin/orders/${placed.id}/pay`, {
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'x-company-id': String(menu.brand.companyId || 1),
             },
-            body: JSON.stringify({ status: 'paid' }),
+            body: JSON.stringify({
+              paymentMethod: action,
+              terminalId: terminal?.id ? String(terminal.id) : undefined,
+            }),
           });
         } catch (e) {
-          console.warn('Status update for fiscal print:', e);
+          console.warn('Payment recording for direct POS checkout:', e);
         }
       }
 
       setLastOrderSuccess({
         orderNumber: placed.orderNumber,
         pin: placed.collectionPin,
-        action: action === 'cash' ? 'Gotówka (Fiskalizacja)' : action === 'card' ? 'Terminal (Fiskalizacja)' : 'Wysłano do kuchni',
+        action:
+          action === 'cash'
+            ? 'Gotówka (Fiskalizacja)'
+            : action === 'card'
+            ? 'Terminal (Fiskalizacja)'
+            : 'Wysłano do kuchni (Rachunek otwarty)',
         total: totalAmount,
       });
 
       clearCart();
       setIsMobileCartOpen(false);
+      loadOpenOrders();
     } catch (err: any) {
       alert(`Błąd składania zamówienia POS: ${err.message}`);
     } finally {
@@ -729,6 +813,23 @@ export default function PosPage() {
           >
             <Search size={15} />
           </button>
+          <button
+            onClick={() => {
+              loadOpenOrders();
+              setIsOpenTicketsModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 text-xs font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
+            title="Otwarte rachunki stolikowe do rozliczenia"
+          >
+            <Clock size={14} />
+            <span className="hidden sm:inline">Otwarte</span>
+            {openOrders.length > 0 && (
+              <span className="bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded-full text-[10px] font-black">
+                {openOrders.length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => setIsPinModalOpen(true)}
             className="flex items-center gap-1.5 text-xs font-black text-slate-950 bg-emerald-500 hover:bg-emerald-400 px-2.5 sm:px-3 py-1.5 rounded-xl transition-all shadow-md shadow-emerald-500/20 active:scale-95 cursor-pointer"
@@ -1112,6 +1213,153 @@ export default function PosPage() {
             >
               Kolejne zamówienie (Enter)
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Otwarte rachunki (Open Tables & Tickets to Settle) */}
+      {isOpenTicketsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-white flex items-center gap-2">
+                    <span>Otwarte rachunki stolikowe</span>
+                    <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs px-2 py-0.5 rounded-full font-bold">
+                      {openOrders.length}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Wybierz rachunek, aby go opłacić i wydrukować paragon fiskalny
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsOpenTicketsModalOpen(false)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+              {openOrdersLoading && openOrders.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 text-sm">
+                  Ładowanie otwartych rachunków...
+                </div>
+              ) : openOrders.length === 0 ? (
+                <div className="py-12 text-center space-y-2 text-slate-400">
+                  <Receipt size={40} className="mx-auto text-slate-600" />
+                  <div className="font-bold text-white text-base">Brak otwartych rachunków</div>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                    Wszystkie rachunki stolikowe zostały rozliczone i zafiskalizowane.
+                  </p>
+                </div>
+              ) : (
+                openOrders.map((ord: any) => {
+                  const isSettling = settlingOrderId === ord.id;
+                  const minsAgo = Math.floor((Date.now() - new Date(ord.createdAt).getTime()) / 60000);
+                  const timeLabel = minsAgo <= 0 ? 'przed chwilą' : `${minsAgo} min temu`;
+
+                  return (
+                    <div
+                      key={ord.id}
+                      className="bg-slate-800/80 border border-slate-700/80 hover:border-amber-500/50 rounded-2xl p-4 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-black text-xs">
+                            {ord.orderType === 'dine_in'
+                              ? `Stół ${ord.tableLabel || '—'}`
+                              : 'Na Wynos'}
+                          </span>
+                          <span className="font-mono font-bold text-slate-300 text-xs">
+                            #{ord.orderNumber}
+                          </span>
+                          <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                            <Clock size={11} /> {timeLabel}
+                          </span>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                              ord.status === 'ready_to_collect'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                            }`}
+                          >
+                            {ord.status === 'ready_to_collect'
+                              ? 'Danie gotowe'
+                              : 'W kuchni'}
+                          </span>
+                        </div>
+
+                        {/* Items preview */}
+                        <div className="text-xs text-slate-400 truncate">
+                          {(ord.items || [])
+                            .map((it: any) => `${it.quantity}x ${it.name}`)
+                            .join(', ')}
+                        </div>
+
+                        {ord.customerNote && (
+                          <div className="text-[11px] text-amber-300/90 italic">
+                            Uwaga: {ord.customerNote}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Amount and Settle Buttons */}
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-700/60">
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block font-bold uppercase">
+                            Do zapłaty
+                          </span>
+                          <span className="font-mono text-xl font-black text-amber-400">
+                            {parseFloat(ord.totalAmount || '0').toFixed(2)} zł
+                          </span>
+                        </div>
+
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleSettleOpenOrder(ord, 'cash')}
+                            disabled={isSettling}
+                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-900/30 active:scale-95 transition-all cursor-pointer"
+                            title="Rozlicz gotówką i wydrukuj paragon fiskalny"
+                          >
+                            <Banknote size={14} />
+                            <span>Gotówka</span>
+                          </button>
+                          <button
+                            onClick={() => handleSettleOpenOrder(ord, 'card')}
+                            disabled={isSettling}
+                            className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-900/30 active:scale-95 transition-all cursor-pointer"
+                            title="Rozlicz kartą i wydrukuj paragon fiskalny"
+                          >
+                            <CreditCard size={14} />
+                            <span>Karta</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-slate-900/90 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500 shrink-0">
+              <span>Kliknięcie przycisku opłaca rachunek i natychmiast zleca wydruk paragonu fiskalnego.</span>
+              <button
+                onClick={loadOpenOrders}
+                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors cursor-pointer"
+              >
+                Odśwież
+              </button>
+            </div>
           </div>
         </div>
       )}

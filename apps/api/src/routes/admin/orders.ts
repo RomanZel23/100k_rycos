@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getDatabase, orders, orderItems, brands, eq, and, desc, sql, inArray, gte, lte } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
-import { updateOrderStatus } from '../../services/orderEngine.js';
+import { updateOrderStatus, recordOrderPayment } from '../../services/orderEngine.js';
 
 export async function adminOrdersRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -78,6 +78,27 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
       return success(reply, updated, `Order status updated to ${status}`);
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update order status');
+    }
+  });
+
+  // POST /v1/admin/orders/:id/pay - Settle order payment and trigger fiscalization (POS / Staff / Tables)
+  fastify.post('/v1/admin/orders/:id/pay', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { paymentMethod, terminalId } = (req.body || {}) as {
+      paymentMethod?: string;
+      terminalId?: string;
+    };
+
+    const method = paymentMethod || 'cash';
+    try {
+      const updated = await recordOrderPayment(id, method, terminalId);
+      return success(
+        reply,
+        updated,
+        `Płatność dla zamówienia #${updated.orderNumber} została zarejestrowana i przekazana do fiskalizacji`
+      );
+    } catch (err: any) {
+      return error(reply, err.message || 'Nie udało się zarejestrować płatności');
     }
   });
 

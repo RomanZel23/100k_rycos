@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { CreateOrderRequestSchema, UpdateOrderStatusRequestSchema } from '@rycos/shared';
 import { getDatabase, orders, eq, and, desc, sql } from '@rycos/database';
-import { createOrder, getOrderById, updateOrderStatus } from '../services/orderEngine.js';
+import { createOrder, getOrderById, updateOrderStatus, recordOrderPayment } from '../services/orderEngine.js';
 import { broadcastToStaff } from '../plugins/websocket.js';
 
 export async function orderRoutes(fastify: FastifyInstance) {
@@ -24,6 +24,19 @@ export async function orderRoutes(fastify: FastifyInstance) {
       return reply.code(statusCode).send({ data: order, duplicate: isDuplicate });
     } catch (err: any) {
       return reply.code(400).send({ error: err.message || 'Failed to create order' });
+    }
+  });
+
+  // POST /v1/orders/:id/pay - Settle payment & fiscalize
+  fastify.post('/v1/orders/:id/pay', async (req, reply) => {
+    const params = req.params as { id: string };
+    const body = (req.body ?? {}) as { paymentMethod?: string; terminalId?: string };
+
+    try {
+      const order = await recordOrderPayment(params.id, body.paymentMethod || 'cash', body.terminalId);
+      return reply.send({ data: order, success: true });
+    } catch (err: any) {
+      return reply.code(400).send({ error: err.message || 'Failed to settle order payment' });
     }
   });
 
