@@ -253,52 +253,52 @@ function OrderTrackingContent() {
       <div className={`p-6 rounded-3xl text-center shadow-md transition-all ${
         isReady ? 'bg-emerald-500 text-white animate-bounce' : 'bg-slate-900 text-white'
       }`}>
-        <span className="text-xs font-bold uppercase tracking-widest opacity-80">
+        <span className="text-xs sm:text-sm font-black uppercase tracking-widest opacity-80">
           {order.brandName}
         </span>
-        <h1 className="text-3xl font-black mt-1">{t.orderWord} #{order.orderNumber}</h1>
+        <h1 className="text-3xl sm:text-4xl font-black mt-1.5">{t.orderWord} #{order.orderNumber}</h1>
 
         {/* Collection QR Code & PIN Card */}
         <div className="mt-5 p-5 rounded-3xl bg-white text-slate-900 shadow-xl max-w-xs mx-auto border border-slate-100">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-600 mb-2.5">
-            <QrCode size={16} />
+          <div className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black uppercase tracking-wider text-amber-600 mb-2.5">
+            <QrCode size={18} />
             <span>{t.pickupPinLabel}</span>
           </div>
 
           {qrDataUrl ? (
-            <div className="bg-white p-2 rounded-2xl border border-slate-200 inline-block shadow-sm">
+            <div className="bg-white p-2.5 rounded-2xl border border-slate-200 inline-block shadow-sm">
               <img
                 src={qrDataUrl}
                 alt="QR Kod Odbioru"
-                className="w-48 h-48 mx-auto rounded-xl object-contain"
+                className="w-52 h-52 mx-auto rounded-xl object-contain"
               />
             </div>
           ) : (
-            <div className="w-48 h-48 mx-auto bg-slate-100 animate-pulse rounded-2xl flex items-center justify-center text-slate-400 text-xs">
+            <div className="w-52 h-52 mx-auto bg-slate-100 animate-pulse rounded-2xl flex items-center justify-center text-slate-400 text-sm font-bold">
               Generowanie QR...
             </div>
           )}
 
           <div className="mt-3.5 pt-3 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
               {t.pin}:
             </span>
-            <span className="text-4xl font-mono font-black text-slate-950 tracking-widest block mt-0.5">
+            <span className="text-5xl sm:text-6xl font-mono font-black text-slate-950 tracking-widest block mt-0.5">
               {order.collectionPin}
             </span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-2 font-medium">
+          <p className="text-xs text-slate-500 mt-2 font-medium">
             {t.pickupPinSub}
           </p>
         </div>
 
         {isReady ? (
-          <p className="font-extrabold text-base mt-4 flex items-center justify-center gap-2">
-            <Sparkles size={20} />
+          <p className="font-black text-lg mt-4 flex items-center justify-center gap-2">
+            <Sparkles size={22} />
             <span>{t.pickupReadyCall}</span>
           </p>
         ) : (
-          <p className="text-xs text-white/80 mt-3">
+          <p className="text-sm text-white/90 font-medium mt-3">
             {getBannerSubtitle()}
           </p>
         )}
@@ -306,23 +306,23 @@ function OrderTrackingContent() {
 
       {/* Cash / Pay at Counter Banner (when paymentStatus === 'pending') */}
       {order.paymentMethod === 'cash' && order.paymentStatus === 'pending' && !['completed', 'cancelled'].includes(order.status) && (
-        <div className="bg-slate-900 text-white p-5 rounded-3xl shadow-lg border border-slate-800 space-y-3 animate-fade-in">
+        <div className="bg-slate-900 text-white p-5 rounded-3xl shadow-lg border border-slate-800 space-y-3.5 animate-fade-in">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
-              <Banknote size={22} />
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+              <Banknote size={26} />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-white">{t.orderPayAtCounterBanner}</h3>
-              <p className="text-xs text-slate-300 mt-0.5">
+              <h3 className="font-black text-base sm:text-lg text-white">{t.orderPayAtCounterBanner}</h3>
+              <p className="text-xs sm:text-sm text-slate-300 mt-0.5 font-medium">
                 {t.orderPayAtCounterSub}
               </p>
             </div>
           </div>
           <button
             onClick={() => setIsPaymentOpen(true)}
-            className="w-full py-3 bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-900 font-extrabold rounded-2xl shadow-sm transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3.5 min-h-[50px] bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-900 font-black rounded-2xl shadow-sm transition-all text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer"
           >
-            <CreditCard size={16} className="text-brand-500" />
+            <CreditCard size={18} className="text-brand-500" />
             <span>{t.orderPayOnlineOption} ({order.totalAmount.toFixed(2)} {order.currency || 'zł'})</span>
           </button>
         </div>
@@ -330,29 +330,29 @@ function OrderTrackingContent() {
 
       {/* Online Payment Error Alert */}
       {paymentErrorParam && order.paymentMethod !== 'cash' && isPending && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <AlertCircle size={18} className="shrink-0" />
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-sm font-bold flex items-center gap-2.5">
+          <AlertCircle size={20} className="shrink-0 text-red-600" />
           <span>{t.paymentFailedBanner}</span>
         </div>
       )}
 
       {/* Pending Online Payment CTA Banner */}
       {order.paymentMethod !== 'cash' && isPending && (
-        <div className="bg-amber-500 text-white p-5 rounded-3xl shadow-lg shadow-amber-500/20 space-y-3 animate-fade-in">
+        <div className="bg-amber-500 text-white p-5 rounded-3xl shadow-lg shadow-amber-500/20 space-y-3.5 animate-fade-in">
           <div className="flex items-center gap-3">
-            <Clock size={24} className="text-white shrink-0" />
+            <Clock size={28} className="text-white shrink-0" />
             <div>
-              <h3 className="font-extrabold text-base">{t.orderPendingBanner}</h3>
-              <p className="text-xs text-white/90">
+              <h3 className="font-black text-base sm:text-lg">{t.orderPendingBanner}</h3>
+              <p className="text-xs sm:text-sm text-white/95 font-medium">
                 {paymentErrorParam ? t.paymentFailedBanner : 'Opłać zamówienie, aby przekazać je do realizacji w kuchni.'}
               </p>
             </div>
           </div>
           <button
             onClick={() => setIsPaymentOpen(true)}
-            className="w-full py-3.5 bg-white text-slate-900 font-extrabold rounded-2xl shadow-md hover:bg-slate-50 active:scale-[0.98] transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-4 min-h-[54px] bg-white text-slate-900 font-black rounded-2xl shadow-md hover:bg-slate-50 active:scale-[0.98] transition-all text-base flex items-center justify-center gap-2 cursor-pointer"
           >
-            <CreditCard size={18} className="text-brand-500" />
+            <CreditCard size={20} className="text-brand-500" />
             <span>
               {paymentErrorParam ? t.retryPayment : t.orderPayNow} ({order.totalAmount.toFixed(2)} {order.currency || 'zł'})
             </span>
@@ -362,12 +362,12 @@ function OrderTrackingContent() {
 
       {/* Progress Stepper */}
       <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
-        <h3 className="font-extrabold text-slate-900 text-sm uppercase tracking-wider">
+        <h3 className="font-black text-slate-900 text-sm sm:text-base uppercase tracking-wider">
           {t.orderTrackingTitle}
         </h3>
 
         <div className="space-y-6 relative pl-3">
-          <div className="absolute left-[23px] top-4 bottom-4 w-0.5 bg-slate-100" />
+          <div className="absolute left-[25px] top-4 bottom-4 w-0.5 bg-slate-100" />
 
           {statusSteps.map((step, idx) => {
             // Step completion logic
@@ -402,7 +402,7 @@ function OrderTrackingContent() {
             return (
               <div key={step.status} className="flex items-center gap-4 relative z-10">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
                     isCompleted
                       ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
                       : isCurrent
@@ -410,23 +410,23 @@ function OrderTrackingContent() {
                       : 'bg-slate-100 text-slate-400'
                   }`}
                 >
-                  <Icon size={16} />
+                  <Icon size={18} />
                 </div>
 
                 <div>
                   <h4
-                    className={`text-sm font-bold ${
+                    className={`font-black ${
                       isCurrent
-                        ? 'text-slate-900 font-extrabold text-base'
+                        ? 'text-slate-900 text-base sm:text-lg'
                         : isCompleted
-                        ? 'text-slate-800'
-                        : 'text-slate-400'
+                        ? 'text-slate-800 text-sm sm:text-base'
+                        : 'text-slate-400 text-sm'
                     }`}
                   >
                     {step.label}
                   </h4>
                   {isCurrent && (
-                    <span className="text-[11px] text-brand-600 font-bold block">
+                    <span className="text-xs sm:text-sm text-brand-600 font-bold block mt-0.5">
                       {order.status === 'paid' && `● ${t.waitingForKitchen}`}
                       {order.status === 'in_progress' && `● ${t.dishesBeingPrepared}`}
                       {order.status === 'ready_to_collect' && `● ${t.pickupReadyCall}`}
@@ -434,7 +434,7 @@ function OrderTrackingContent() {
                     </span>
                   )}
                   {!isCurrent && isCompleted && (
-                    <span className="text-[11px] text-slate-500 block">
+                    <span className="text-xs sm:text-sm text-slate-500 font-medium block mt-0.5">
                       {step.sublabel}
                     </span>
                   )}
@@ -447,15 +447,15 @@ function OrderTrackingContent() {
 
       {/* E-Receipt / RYCOS Fiscal Card */}
       {order.fiscalReceiptNumber && (
-        <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
+        <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-100 space-y-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
-                <Receipt size={20} />
+              <div className="w-11 h-11 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                <Receipt size={22} />
               </div>
               <div>
                 <span className="text-xs font-bold text-slate-500 block">{t.fiscalReceiptTitle}</span>
-                <span className="text-sm font-mono font-bold text-slate-900">
+                <span className="text-sm sm:text-base font-mono font-black text-slate-900">
                   Nr: {order.fiscalReceiptNumber}
                 </span>
               </div>
@@ -466,9 +466,9 @@ function OrderTrackingContent() {
                 href={order.fiscalPdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm"
+                className="p-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 flex items-center gap-1.5 text-xs sm:text-sm font-black transition-all shadow-sm"
               >
-                <Download size={14} />
+                <Download size={16} />
                 <span>{t.downloadPdf}</span>
               </a>
             )}
@@ -476,11 +476,11 @@ function OrderTrackingContent() {
 
           {order.showReceiptQr !== false && receiptQrDataUrl && (
             <div className="pt-3 border-t border-slate-100 flex flex-col items-center text-center">
-              <span className="text-[11px] font-bold text-slate-500 mb-2">
+              <span className="text-xs font-bold text-slate-500 mb-2">
                 {lang === 'de' ? 'QR-Code für eParagon / Quittung:' : lang === 'en' ? 'Scan for e-receipt:' : 'Zeskanuj kod QR e-paragonu:'}
               </span>
-              <div className="p-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <img src={receiptQrDataUrl} alt="eParagon QR" className="w-28 h-28 object-contain" />
+              <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-100">
+                <img src={receiptQrDataUrl} alt="eParagon QR" className="w-32 h-32 object-contain" />
               </div>
             </div>
           )}
@@ -488,28 +488,28 @@ function OrderTrackingContent() {
       )}
 
       {/* Order Summary Details */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
-        <h3 className="font-extrabold text-slate-900 text-sm">{t.orderSummary}</h3>
+      <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-100 space-y-3">
+        <h3 className="font-black text-slate-900 text-sm sm:text-base">{t.orderSummary}</h3>
 
-        <div className="space-y-2 divide-y divide-slate-100 text-xs">
+        <div className="space-y-2 divide-y divide-slate-100 text-sm">
           {order.items.map((it, idx) => (
             <div key={idx} className="pt-2 flex justify-between items-start">
               <div>
-                <span className="font-bold text-slate-800">
+                <span className="font-black text-slate-800">
                   {it.quantity}x {it.name}
                 </span>
                 {it.addons && it.addons.length > 0 && (
-                  <span className="block text-slate-500 text-[11px]">
+                  <span className="block text-slate-500 text-xs font-medium">
                     {it.addons.map((a: any) => a.name).join(', ')}
                   </span>
                 )}
               </div>
-              <span className="font-bold text-slate-900">{it.lineTotal.toFixed(2)} {order.currency || 'zł'}</span>
+              <span className="font-black font-mono text-slate-900">{it.lineTotal.toFixed(2)} {order.currency || 'zł'}</span>
             </div>
           ))}
         </div>
 
-        <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-sm font-extrabold text-slate-900">
+        <div className="pt-3 border-t border-slate-100 flex justify-between items-center text-base sm:text-lg font-black text-slate-950 font-mono">
           <span>{t.total}:</span>
           <span>{order.totalAmount.toFixed(2)} {order.currency || 'zł'}</span>
         </div>
