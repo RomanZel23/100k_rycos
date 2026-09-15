@@ -381,6 +381,30 @@ export async function orderRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: `Błędny PIN dla zamówienia #${targetOrder.orderNumber}` });
     }
 
+    if (targetOrder.status === 'completed') {
+      const completionTime = targetOrder.updatedAt
+        ? new Date(targetOrder.updatedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      return reply.code(400).send({
+        error: `⚠️ Zamówienie #${targetOrder.orderNumber} zostało już wcześniej odebrane / wydane${completionTime ? ` o godz. ${completionTime}` : ''}!`,
+        alreadyCompleted: true,
+      });
+    }
+
+    if (targetOrder.status === 'cancelled') {
+      return reply.code(400).send({
+        error: `⚠️ Zamówienie #${targetOrder.orderNumber} zostało anulowane i nie może zostać wydane!`,
+        cancelled: true,
+      });
+    }
+
+    if (targetOrder.status === 'pending_payment' || targetOrder.paymentStatus === 'pending') {
+      return reply.code(400).send({
+        error: `⚠️ Zamówienie #${targetOrder.orderNumber} nie zostało jeszcze opłacone!`,
+        unpaid: true,
+      });
+    }
+
     try {
       const updated = await updateOrderStatus(targetOrder.id, 'completed');
       return reply.send({

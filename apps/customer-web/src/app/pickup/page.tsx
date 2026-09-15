@@ -515,9 +515,9 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
 
             {/* Error Message */}
             {errorMessage && (
-              <div className="mb-3 p-2.5 sm:p-3 rounded-xl bg-red-950/60 border border-red-500/50 text-red-200 text-xs flex items-center gap-2 shrink-0">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                <span>{errorMessage}</span>
+              <div className="mb-3 p-3 sm:p-4 rounded-2xl bg-red-950/90 border-2 border-red-500 text-red-100 text-sm sm:text-base font-black flex items-start gap-2.5 shrink-0 shadow-xl animate-shake">
+                <AlertCircle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+                <span className="leading-snug">{errorMessage}</span>
               </div>
             )}
 
