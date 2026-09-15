@@ -29,6 +29,7 @@ const NAV = [
   { href: '/dashboard/users', key: 'nav.users', defaultLabel: 'Users', manager: true },
   { href: '/dashboard/master', key: 'nav.master', defaultLabel: 'Platform SaaS (Master)', manager: true },
   { href: '/dashboard/billing', key: 'nav.billing', defaultLabel: 'Billing', manager: true },
+  { href: '/dashboard/stress-test', key: 'nav.stress_test', defaultLabel: 'Stress Test (100k)', manager: true },
   { href: '/dashboard/settings', key: 'nav.settings', defaultLabel: 'Settings', manager: true },
 ]
 
