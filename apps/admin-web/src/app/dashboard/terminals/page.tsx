@@ -60,7 +60,7 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
   ])
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
@@ -77,130 +77,132 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
 
       {/* Terminal Workstations Table */}
       <div className="card overflow-hidden p-0 border border-neutral-200/80 shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50/80 border-b border-neutral-200 text-left text-xs uppercase tracking-wider text-neutral-500">
-            <tr>
-              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.station', 'Stanowisko & ID')}</th>
-              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.profile', 'Profil operacyjny')}</th>
-              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.location', 'Lokalizacja')}</th>
-              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.brands', 'Marki')}</th>
-              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.hardware', 'Peryferia (Hardware)')}</th>
-              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.status', 'Status')}</th>
-              <th className="px-4 py-3 text-right">{getTranslation(locale, 'common.actions', 'Akcje')}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100 bg-white">
-            {(terminals ?? []).length === 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead className="bg-neutral-50/80 border-b border-neutral-200 text-left text-xs uppercase tracking-wider text-neutral-500">
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-neutral-400">
-                  {getTranslation(locale, 'terminals.empty', 'Brak skonfigurowanych stanowisk. Utwórz pierwsze stanowisko poniżej.')}
-                </td>
+                <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.station', 'Stanowisko & ID')}</th>
+                <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.profile', 'Profil operacyjny')}</th>
+                <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.location', 'Lokalizacja')}</th>
+                <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.brands', 'Marki')}</th>
+                <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.hardware', 'Peryferia (Hardware)')}</th>
+                <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.status', 'Status')}</th>
+                <th className="px-4 py-3 text-right">{getTranslation(locale, 'common.actions', 'Akcje')}</th>
               </tr>
-            )}
-            {(terminals ?? []).map((t) => {
-              const meta = roleMeta[t.role || 'all_in_one'] || roleMeta.all_in_one
-              const roleTitle = getTranslation(locale, meta.key, t.role || 'All-in-One')
-              const isAllBrands = !t.assigned_brand_ids || t.assigned_brand_ids.length === 0
-              const isSBR = t.terminal_id?.startsWith('SBR-')
-
-              return (
-                <tr key={t.id} className="hover:bg-neutral-50/60 transition-colors">
-                  <td className="px-4 py-3.5">
-                    <div className="flex flex-col">
-                      <Link href={`/dashboard/terminals/${t.id}`} className="font-semibold text-neutral-900 hover:text-brand transition-colors">
-                        {t.name}
-                      </Link>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`font-mono text-xs px-1.5 py-0.2 rounded ${isSBR ? 'bg-indigo-50 text-indigo-700 font-medium' : 'bg-neutral-100 text-neutral-600'}`}>
-                          {t.terminal_id}
-                        </span>
-                        {t.status === 'unclaimed' && (
-                          <span className="text-[11px] text-amber-600 font-medium">
-                            ({locale === 'pl' ? 'kod do parowania' : locale === 'de' ? 'Kopplungscode' : 'pairing code'})
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${meta.bg} ${meta.text}`}>
-                      <span>{meta.icon}</span>
-                      <span>{roleTitle}</span>
-                    </span>
-                  </td>
-
-                  <td className="px-4 py-3.5 text-neutral-600 whitespace-nowrap">
-                    {t.location_name ? (
-                      <span className="inline-flex items-center gap-1 text-xs">
-                        📍 {t.location_name}
-                      </span>
-                    ) : (
-                      <span className="text-neutral-400 text-xs">—</span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-3.5">
-                    {isAllBrands ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-100 text-neutral-700">
-                        {getTranslation(locale, 'terminals.all_brands', 'Wszystkie marki')}
-                      </span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1 max-w-xs">
-                        {t.assigned_brands?.map((b) => (
-                          <span key={b.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
-                            {b.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2 text-xs">
-                      <span title={t.printer_device_id ? `Drukarka: ${t.printer_device_id}` : 'Brak drukarki'} className={`px-1.5 py-0.5 rounded text-[11px] font-mono ${t.printer_device_id ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-neutral-300'}`}>
-                        🖨️ {t.printer_device_id ? (t.printer_device_id === 'self' ? (locale === 'pl' ? 'Lokalna' : locale === 'de' ? 'Lokal' : 'Local') : t.printer_device_id) : '—'}
-                      </span>
-                      <span title={t.tap_device_id ? `SoftPOS: ${t.tap_device_id}` : 'Brak SoftPOS'} className={`px-1.5 py-0.5 rounded text-[11px] font-mono ${t.tap_device_id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-neutral-300'}`}>
-                        💳 {t.tap_device_id ? (t.tap_device_id === 'self' ? (locale === 'pl' ? 'Lokalny' : locale === 'de' ? 'Lokal' : 'Local') : t.tap_device_id) : '—'}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${statusBadge[t.status] ?? 'bg-neutral-100 text-neutral-500 border-neutral-200'}`}>
-                      {t.status === 'active' ? getTranslation(locale, 'status.active', 'Aktywny') : t.status === 'unclaimed' ? (locale === 'pl' ? 'Oczekuje' : locale === 'de' ? 'Ausstehend' : 'Unclaimed') : t.status}
-                    </span>
-                    <div className="text-[11px] text-neutral-400 mt-0.5">
-                      {t.status === 'unclaimed' ? (locale === 'pl' ? '— brak sesji —' : locale === 'de' ? '— keine Sitzung —' : '— no session —') : fmt(t.last_active)}
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-2.5">
-                      {t.status !== 'unclaimed' && (
-                        <form action={logoutTerminal}>
-                          <input type="hidden" name="id" value={t.id} />
-                          <button className="text-xs font-medium text-neutral-400 hover:text-red-600 transition-colors">
-                            {locale === 'pl' ? 'Wyloguj' : locale === 'de' ? 'Abmelden' : 'Logout'}
-                          </button>
-                        </form>
-                      )}
-                      <Link
-                        href={`/dashboard/terminals/${t.id}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-brand bg-brand/5 hover:bg-brand/10 rounded-md transition-colors"
-                      >
-                        {t.status === 'unclaimed' 
-                          ? (locale === 'pl' ? 'Paruj / Konfiguruj' : locale === 'de' ? 'Koppeln / Konfigurieren' : 'Pair / Configure') 
-                          : (locale === 'pl' ? 'Konfiguruj ⚙️' : locale === 'de' ? 'Konfigurieren ⚙️' : 'Configure ⚙️')}
-                      </Link>
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-neutral-100 bg-white">
+              {(terminals ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-neutral-400">
+                    {getTranslation(locale, 'terminals.empty', 'Brak skonfigurowanych stanowisk. Utwórz pierwsze stanowisko poniżej.')}
                   </td>
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
+              )}
+              {(terminals ?? []).map((t) => {
+                const meta = roleMeta[t.role || 'all_in_one'] || roleMeta.all_in_one
+                const roleTitle = getTranslation(locale, meta.key, t.role || 'All-in-One')
+                const isAllBrands = !t.assigned_brand_ids || t.assigned_brand_ids.length === 0
+                const isSBR = t.terminal_id?.startsWith('SBR-')
+
+                return (
+                  <tr key={t.id} className="hover:bg-neutral-50/60 transition-colors">
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-col">
+                        <Link href={`/dashboard/terminals/${t.id}`} className="font-semibold text-neutral-900 hover:text-brand transition-colors">
+                          {t.name}
+                        </Link>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`font-mono text-xs px-1.5 py-0.2 rounded ${isSBR ? 'bg-indigo-50 text-indigo-700 font-medium' : 'bg-neutral-100 text-neutral-600'}`}>
+                            {t.terminal_id}
+                          </span>
+                          {t.status === 'unclaimed' && (
+                            <span className="text-[11px] text-amber-600 font-medium">
+                              ({locale === 'pl' ? 'kod parowania' : locale === 'de' ? 'Kopplung' : 'pairing'})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${meta.bg} ${meta.text}`}>
+                        <span>{meta.icon}</span>
+                        <span>{roleTitle}</span>
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3.5 text-neutral-600 whitespace-nowrap">
+                      {t.location_name ? (
+                        <span className="inline-flex items-center gap-1 text-xs">
+                          📍 {t.location_name}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400 text-xs">—</span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3.5">
+                      {isAllBrands ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-100 text-neutral-700">
+                          {getTranslation(locale, 'terminals.all_brands', 'Wszystkie marki')}
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {t.assigned_brands?.map((b) => (
+                            <span key={b.id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
+                              {b.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span title={t.printer_device_id ? `Drukarka: ${t.printer_device_id}` : 'Brak drukarki'} className={`px-1.5 py-0.5 rounded text-[11px] font-mono ${t.printer_device_id ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-neutral-300'}`}>
+                          🖨️ {t.printer_device_id ? (t.printer_device_id === 'self' ? (locale === 'pl' ? 'Lokalna' : locale === 'de' ? 'Lokal' : 'Local') : t.printer_device_id) : '—'}
+                        </span>
+                        <span title={t.tap_device_id ? `SoftPOS: ${t.tap_device_id}` : 'Brak SoftPOS'} className={`px-1.5 py-0.5 rounded text-[11px] font-mono ${t.tap_device_id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-neutral-300'}`}>
+                          💳 {t.tap_device_id ? (t.tap_device_id === 'self' ? (locale === 'pl' ? 'Lokalny' : locale === 'de' ? 'Lokal' : 'Local') : t.tap_device_id) : '—'}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${statusBadge[t.status] ?? 'bg-neutral-100 text-neutral-500 border-neutral-200'}`}>
+                        {t.status === 'active' ? getTranslation(locale, 'status.active', 'Aktywny') : t.status === 'unclaimed' ? (locale === 'pl' ? 'Oczekuje' : locale === 'de' ? 'Ausstehend' : 'Unclaimed') : t.status}
+                      </span>
+                      <div className="text-[11px] text-neutral-400 mt-0.5">
+                        {t.status === 'unclaimed' ? (locale === 'pl' ? '— brak sesji —' : locale === 'de' ? '— keine Sitzung —' : '— no session —') : fmt(t.last_active)}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2.5">
+                        {t.status !== 'unclaimed' && (
+                          <form action={logoutTerminal}>
+                            <input type="hidden" name="id" value={t.id} />
+                            <button className="text-xs font-medium text-neutral-400 hover:text-red-600 transition-colors">
+                              {locale === 'pl' ? 'Wyloguj' : locale === 'de' ? 'Abmelden' : 'Logout'}
+                            </button>
+                          </form>
+                        )}
+                        <Link
+                          href={`/dashboard/terminals/${t.id}`}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-brand bg-brand/5 hover:bg-brand/10 rounded-md transition-colors"
+                        >
+                          {t.status === 'unclaimed' 
+                            ? (locale === 'pl' ? 'Paruj / Konfiguruj' : locale === 'de' ? 'Koppeln / Konfig.' : 'Pair / Configure') 
+                            : (locale === 'pl' ? 'Konfiguruj ⚙️' : locale === 'de' ? 'Konfigurieren ⚙️' : 'Configure ⚙️')}
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Quick Add Workstation */}

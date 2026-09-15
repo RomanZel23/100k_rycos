@@ -119,29 +119,31 @@ export default async function BillingPage({
           {/* Per-terminal */}
           <h2 className="mt-8 text-lg font-semibold">{locale === 'pl' ? 'W tym miesiącu wg stanowisk' : 'This month by terminal'}</h2>
           <div className="card mt-3 overflow-hidden p-0">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
-                <tr>
-                  <th className="px-4 py-3">{getTranslation(locale, 'terminals.title', 'Stanowisko')}</th>
-                  <th className="px-4 py-3 text-right">{getTranslation(locale, 'orders.kpi.orders', 'Zamówienia')}</th>
-                  <th className="px-4 py-3 text-right">{getTranslation(locale, 'orders.kpi.revenue', 'Przychód')}</th>
-                  <th className="px-4 py-3 text-right">{getTranslation(locale, 'billing.commission', 'Prowizja')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {billing.by_terminal.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-6 text-center text-neutral-400">{locale === 'pl' ? 'Brak sprzedaży w tym miesiącu.' : 'No sales this month.'}</td></tr>
-                )}
-                {billing.by_terminal.map((t, i) => (
-                  <tr key={t.terminal_id ?? `none-${i}`}>
-                    <td className="px-4 py-3 font-medium">{t.terminal_id ?? (locale === 'pl' ? 'Online / nieprzypisane' : 'Online / unassigned')}</td>
-                    <td className="px-4 py-3 text-right">{t.order_count}</td>
-                    <td className="px-4 py-3 text-right">{money(t.gross, billing.currency)}</td>
-                    <td className="px-4 py-3 text-right">{money(t.commission, billing.currency)}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[500px] text-sm">
+                <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
+                  <tr>
+                    <th className="px-4 py-3">{getTranslation(locale, 'terminals.title', 'Stanowisko')}</th>
+                    <th className="px-4 py-3 text-right">{getTranslation(locale, 'orders.kpi.orders', 'Zamówienia')}</th>
+                    <th className="px-4 py-3 text-right">{getTranslation(locale, 'orders.kpi.revenue', 'Przychód')}</th>
+                    <th className="px-4 py-3 text-right">{getTranslation(locale, 'billing.commission', 'Prowizja')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {billing.by_terminal.length === 0 && (
+                    <tr><td colSpan={4} className="px-4 py-6 text-center text-neutral-400">{locale === 'pl' ? 'Brak sprzedaży w tym miesiącu.' : 'No sales this month.'}</td></tr>
+                  )}
+                  {billing.by_terminal.map((t, i) => (
+                    <tr key={t.terminal_id ?? `none-${i}`}>
+                      <td className="px-4 py-3 font-medium">{t.terminal_id ?? (locale === 'pl' ? 'Online / nieprzypisane' : 'Online / unassigned')}</td>
+                      <td className="px-4 py-3 text-right">{t.order_count}</td>
+                      <td className="px-4 py-3 text-right">{money(t.gross, billing.currency)}</td>
+                      <td className="px-4 py-3 text-right">{money(t.commission, billing.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

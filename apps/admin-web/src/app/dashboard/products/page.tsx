@@ -58,8 +58,9 @@ export default async function ProductsPage({
 
       {/* Product list */}
       <div className="card mt-6 overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[550px] text-sm">
+            <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
             <tr>
               <th className="px-4 py-3">{getTranslation(locale, 'products.table.product', 'Product')}</th>
               <th className="px-4 py-3">{getTranslation(locale, 'products.table.category', 'Category')}</th>
@@ -111,6 +112,7 @@ export default async function ProductsPage({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Pager pagination={pagination} perPage={perPage} />

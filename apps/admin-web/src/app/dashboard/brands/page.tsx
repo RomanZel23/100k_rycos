@@ -47,8 +47,9 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
       ) : (
         <>
           <div className="card mt-6 overflow-hidden p-0">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px] text-sm">
+                <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
                 <tr>
                   <th className="px-4 py-3">{getTranslation(locale, 'brands.table.brand', 'Brand')}</th>
                   <th className="px-4 py-3">{getTranslation(locale, 'brands.table.qr_slug', 'QR slug')}</th>
@@ -119,6 +120,7 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="card mt-6">
