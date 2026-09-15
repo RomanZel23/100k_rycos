@@ -356,11 +356,55 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
 
   // Confirmation / Success Overlay
   const [lastOrderSuccess, setLastOrderSuccess] = useState<{
+    orderId?: string;
     orderNumber: number;
     pin: string;
     action: string;
     total: number;
+    fiscalReceiptNumber?: string | null;
+    fiscalPdfUrl?: string | null;
+    fiscalQrCode?: string | null;
+    fiscalJobId?: string | null;
+    printerDeviceId?: string | null;
   } | null>(null);
+
+  const [isPrintingPaper, setIsPrintingPaper] = useState(false);
+  const [printStatusMessage, setPrintStatusMessage] = useState<string | null>(null);
+
+  const handlePrintPaperReceipt = async (orderId?: string, jobId?: string | null) => {
+    if (!orderId && !jobId) return;
+    setIsPrintingPaper(true);
+    setPrintStatusMessage('Wysyłanie do drukarki SBR...');
+    try {
+      const companyId = terminal?.company_id || menu?.brand?.companyId || 1;
+      const res = await fetch(`${getApiBaseUrl()}/v1/pos/print-receipt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+        },
+        body: JSON.stringify({
+          order_id: orderId,
+          company_id: companyId,
+          terminal_id: terminal?.terminal_id,
+          printer_device_id: terminal?.printer_device_id,
+          job_id: jobId || undefined,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        setPrintStatusMessage(`Wydrukowano pomyślnie na ${json.displayId || 'drukarce SBR'}`);
+      } else {
+        setPrintStatusMessage(json.error || 'Błąd wydruku na drukarce termicznej');
+      }
+    } catch (err: any) {
+      setPrintStatusMessage(err.message || 'Błąd połączenia z drukarką');
+    } finally {
+      setIsPrintingPaper(false);
+    }
+  };
 
   // Verification modal state
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -505,20 +549,27 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
 
       if (res.ok && json.success) {
         setTapPaymentState((prev) => ({ ...prev, status: 'success' }));
+        const fiscal = json.fiscal || {};
         setTimeout(() => {
           setTapPaymentState((prev) => ({ ...prev, isOpen: false }));
           setLastOrderSuccess({
+            orderId,
             orderNumber,
             pin: pin || '0000',
             action: `Terminal ${json.displayId || displayDevice} (Fiskalizacja)`,
             total: amount,
+            fiscalReceiptNumber: fiscal.receiptNumber,
+            fiscalPdfUrl: fiscal.pdfReceiptUrl,
+            fiscalQrCode: fiscal.qrCodeBase64,
+            fiscalJobId: fiscal.jobId,
+            printerDeviceId: terminal?.printer_device_id,
           });
           if (isNewCheckout) {
             clearCart();
             setIsMobileCartOpen(false);
           }
           loadOpenOrders();
-        }, 1200);
+        }, 1000);
       } else {
         const errorMsg = json.remark || json.error || 'Płatność kartą została odrzucona przez terminal.';
         setTapPaymentState((prev) => ({
@@ -596,11 +647,20 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
         throw new Error(err.message || 'Błąd rozliczenia płatności');
       }
 
+      const json = await res.json().catch(() => ({}));
+      const fiscal = json.data?.fiscal || json.fiscal || {};
+
       setLastOrderSuccess({
+        orderId: order.id,
         orderNumber: order.orderNumber,
         pin: order.collectionPin,
         action: 'Rozliczono: Gotówka (Fiskalizacja)',
         total: parseFloat(order.totalAmount || '0'),
+        fiscalReceiptNumber: fiscal.receiptNumber,
+        fiscalPdfUrl: fiscal.pdfReceiptUrl,
+        fiscalQrCode: fiscal.qrCodeBase64,
+        fiscalJobId: fiscal.jobId,
+        printerDeviceId: terminal?.printer_device_id,
       });
 
       await loadOpenOrders();
@@ -639,6 +699,17 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (lastOrderSuccess && (e.key === 'Enter' || e.key === 'Escape')) {
+        setLastOrderSuccess(null);
+        setPrintStatusMessage(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lastOrderSuccess]);
 
   // Load Menu
   useEffect(() => {
@@ -854,10 +925,11 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
       }
 
       // Szybka sprzedaż gotówką przy kasie: Natychmiast rejestruje płatność gotówkową i fiskalizuje
+      let fiscalData: any = null;
       if (action === 'cash') {
         try {
           const companyId = terminal?.company_id || menu.brand.companyId || 1;
-          await fetch(`${getApiBaseUrl()}/v1/admin/orders/${placed.id}/pay`, {
+          const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders/${placed.id}/pay`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -869,12 +941,15 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
               terminalId: terminal?.terminal_id || (terminal?.id ? String(terminal.id) : undefined),
             }),
           });
+          const resJson = await res.json().catch(() => ({}));
+          fiscalData = resJson.data?.fiscal || resJson.fiscal || null;
         } catch (e) {
           console.warn('Payment recording for direct POS checkout:', e);
         }
       }
 
       setLastOrderSuccess({
+        orderId: placed.id,
         orderNumber: placed.orderNumber,
         pin: placed.collectionPin,
         action:
@@ -882,6 +957,11 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             ? 'Gotówka (Fiskalizacja)'
             : 'Wysłano do kuchni (Rachunek otwarty)',
         total: totalAmount,
+        fiscalReceiptNumber: fiscalData?.receiptNumber,
+        fiscalPdfUrl: fiscalData?.pdfReceiptUrl,
+        fiscalQrCode: fiscalData?.qrCodeBase64,
+        fiscalJobId: fiscalData?.jobId,
+        printerDeviceId: terminal?.printer_device_id,
       });
 
       clearCart();
@@ -1594,46 +1674,161 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
         </div>
       )}
 
-      {/* Success Notification Modal */}
+      {/* Success Notification Modal with SB e-Paragon QR & Optional Paper Print */}
       {lastOrderSuccess && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-slate-900 border border-emerald-500/50 rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto animate-bounce">
-              <CheckCircle2 size={36} />
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150 overflow-y-auto">
+          <div className="bg-slate-900 border border-emerald-500/50 rounded-3xl max-w-md w-full p-5 sm:p-6 text-center space-y-4 shadow-2xl my-auto">
+            {/* Header Status */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={22} />
+                </div>
+                <div className="text-left">
+                  <span className="text-[10px] uppercase font-extrabold tracking-widest text-emerald-400 block">
+                    {lastOrderSuccess.action}
+                  </span>
+                  <h2 className="text-lg font-black text-white leading-tight">
+                    Zamówienie #{lastOrderSuccess.orderNumber}
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setLastOrderSuccess(null);
+                  setPrintStatusMessage(null);
+                }}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            <div>
-              <span className="text-xs uppercase font-extrabold tracking-widest text-emerald-400">
-                {lastOrderSuccess.action}
-              </span>
-              <h2 className="text-2xl font-black text-white mt-1">
-                Zamówienie #{lastOrderSuccess.orderNumber}
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Wysłano do kuchni Live KDS oraz do kolejki fiskalnej MQTT.
-              </p>
-            </div>
-
+            {/* Summary details */}
             <div className="bg-slate-800/80 rounded-2xl p-3 border border-slate-700/60 flex items-center justify-between text-left">
               <div>
-                <span className="text-[10px] text-slate-400 block uppercase font-bold">Kod PIN</span>
+                <span className="text-[10px] text-slate-400 block uppercase font-bold">Kod Odbioru (PIN)</span>
                 <span className="font-mono text-xl font-black text-amber-400">
                   {lastOrderSuccess.pin}
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-[10px] text-slate-400 block uppercase font-bold">Wartość</span>
-                <span className="font-mono text-xl font-black text-white">
+                <span className="text-[10px] text-slate-400 block uppercase font-bold">Kwota</span>
+                <span className="font-mono text-xl font-black text-emerald-400">
                   {lastOrderSuccess.total.toFixed(2)} zł
                 </span>
               </div>
             </div>
 
+            {/* SB e-Paragon QR Code Card */}
+            {(() => {
+              const qrSrc = lastOrderSuccess.fiscalQrCode
+                ? (lastOrderSuccess.fiscalQrCode.startsWith('data:') || lastOrderSuccess.fiscalQrCode.startsWith('http')
+                    ? lastOrderSuccess.fiscalQrCode
+                    : `data:image/png;base64,${lastOrderSuccess.fiscalQrCode}`)
+                : lastOrderSuccess.fiscalPdfUrl
+                ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(lastOrderSuccess.fiscalPdfUrl)}`
+                : null;
+
+              return (
+                <div className="bg-slate-950/70 rounded-2xl p-4 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-black text-slate-200 flex items-center gap-1.5">
+                      <QrCode size={16} className="text-emerald-400" />
+                      SB e-Paragon Fiskalny
+                    </span>
+                    {lastOrderSuccess.fiscalReceiptNumber && (
+                      <span className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono px-2 py-0.5 rounded-md font-bold">
+                        {lastOrderSuccess.fiscalReceiptNumber}
+                      </span>
+                    )}
+                  </div>
+
+                  {qrSrc ? (
+                    <div className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border-2 border-emerald-500/30 shadow-inner">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={qrSrc}
+                        alt="SB e-Paragon QR Code"
+                        className="w-44 h-44 sm:w-48 sm:h-48 object-contain"
+                      />
+                      <span className="text-[11px] font-bold text-slate-900 mt-2 flex items-center gap-1">
+                        <Smartphone size={14} className="text-emerald-600" />
+                        Zeskanuj smartfonem e-paragon
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="py-6 px-4 bg-slate-900/60 rounded-xl border border-dashed border-slate-800 text-center">
+                      <p className="text-xs text-slate-400">
+                        Brak wygenerowanego kodu QR lub trwa fiskalizacja...
+                      </p>
+                    </div>
+                  )}
+
+                  {lastOrderSuccess.fiscalPdfUrl && (
+                    <div className="text-center pt-0.5">
+                      <a
+                        href={lastOrderSuccess.fiscalPdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-medium inline-flex items-center gap-1"
+                      >
+                        Otwórz cyfrowy e-paragon (PDF)
+                      </a>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Optional Thermal Paper Print */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => handlePrintPaperReceipt(lastOrderSuccess.orderId, lastOrderSuccess.fiscalJobId)}
+                disabled={isPrintingPaper}
+                className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-amber-300 hover:text-amber-200 font-bold rounded-xl text-xs sm:text-sm border border-amber-500/30 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isPrintingPaper ? (
+                  <>
+                    <Loader2 className="animate-spin text-amber-400" size={16} />
+                    <span>Drukowanie na drukarce SBR...</span>
+                  </>
+                ) : (
+                  <>
+                    <Printer size={16} className="text-amber-400" />
+                    <span>🖨️ Drukuj paragon papierowy</span>
+                  </>
+                )}
+              </button>
+
+              {printStatusMessage && (
+                <div
+                  className={`text-xs p-2.5 rounded-xl border font-medium text-center ${
+                    printStatusMessage.includes('Błąd') || printStatusMessage.includes('failed')
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  }`}
+                >
+                  {printStatusMessage}
+                </div>
+              )}
+            </div>
+
+            {/* Next Order Button */}
             <button
-              onClick={() => setLastOrderSuccess(null)}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-sm shadow-lg shadow-emerald-900/40 active:scale-[0.98] transition-all cursor-pointer"
+              type="button"
+              onClick={() => {
+                setLastOrderSuccess(null);
+                setPrintStatusMessage(null);
+              }}
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-sm shadow-lg shadow-emerald-900/40 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              Kolejne zamówienie (Enter)
+              <span>Kolejne zamówienie</span>
+              <span className="text-[11px] bg-slate-950/20 text-slate-950 px-2 py-0.5 rounded font-mono font-black">
+                Enter ↵
+              </span>
             </button>
           </div>
         </div>

@@ -221,7 +221,7 @@ export function startFiscalWorker() {
         output: {
           autoPrint: false, // E-receipt default (QR / PDF on customer phone)
           showQrScreen: false,
-          returnQrCodeBase64: false,
+          returnQrCodeBase64: true,
         },
       };
 
@@ -239,23 +239,38 @@ export function startFiscalWorker() {
       const receiptNumber = String(result?.receiptNumber || result?.number || `PAR_${order.orderNumber}`);
       const jpkId = String(result?.jpkId || '');
       const pdfUrl = result?.pdfReceiptUrl || result?.pdfUrl || null;
+      const qrCodeBase64 = result?.qrCodeBase64 || result?.qrCode || result?.qrBase64 || null;
+      const jobId = result?.jobId || result?.printJob?.jobId || null;
 
-      console.log(`[Fiscal Worker] ✓ RYCOS Success! Receipt #${receiptNumber}, JPK: ${jpkId}, PDF: ${pdfUrl}`);
+      console.log(`[Fiscal Worker] ✓ RYCOS Success! Receipt #${receiptNumber}, JPK: ${jpkId}, PDF: ${pdfUrl}, Job: ${jobId}`);
 
       // 5. Store Fiscal Receipt Record in PostgreSQL
-      await db.insert(fiscalReceipts).values({
-        orderId,
-        companyId,
-        displayId,
-        requestId,
-        receiptNumber,
-        jpkId,
-        grossAmountGrosze: paymentAmountGrosze,
-        currency: order.currency,
-        customerNip: order.customerNip,
-        pdfReceiptUrl: pdfUrl,
-        rawResult: result,
-      });
+      await db
+        .insert(fiscalReceipts)
+        .values({
+          orderId,
+          companyId,
+          displayId,
+          requestId,
+          receiptNumber,
+          jpkId,
+          jobId,
+          grossAmountGrosze: paymentAmountGrosze,
+          currency: order.currency,
+          customerNip: order.customerNip,
+          pdfReceiptUrl: pdfUrl,
+          rawResult: result,
+        })
+        .onConflictDoUpdate({
+          target: fiscalReceipts.orderId,
+          set: {
+            receiptNumber,
+            jpkId,
+            jobId,
+            pdfReceiptUrl: pdfUrl,
+            rawResult: result,
+          },
+        });
 
       // 6. Update Order Fiscal Status
       await db
@@ -265,6 +280,8 @@ export function startFiscalWorker() {
           fiscalDeviceId: displayId,
           fiscalReceiptNumber: receiptNumber,
           fiscalPdfUrl: pdfUrl,
+          fiscalJobId: jobId,
+          fiscalQrCode: qrCodeBase64,
           updatedAt: new Date(),
         })
         .where(eq(orders.id, orderId));
@@ -278,11 +295,14 @@ export function startFiscalWorker() {
             type: 'order.fiscalized',
             timestamp: new Date().toISOString(),
             companyId,
+            brandId: order.brandId,
             payload: {
               orderId,
               orderNumber: order.orderNumber,
               receiptNumber,
               pdfUrl,
+              qrCode: qrCodeBase64,
+              jobId,
             },
           },
         })

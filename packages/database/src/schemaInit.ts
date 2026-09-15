@@ -157,6 +157,8 @@ CREATE TABLE IF NOT EXISTS "orders" (
 	"fiscal_device_id" varchar(64),
 	"fiscal_receipt_number" varchar(64),
 	"fiscal_pdf_url" text,
+	"fiscal_job_id" varchar(64),
+	"fiscal_qr_code" text,
 	"terminal_id" varchar(64),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -331,6 +333,8 @@ ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "tap_device_id" varchar(64);
 ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "fiscal_device_id" varchar(64);
 ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "capabilities" jsonb DEFAULT '{"can_sell":true,"can_kds":true,"can_pickup":true}'::jsonb NOT NULL;
 ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "config_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_job_id" varchar(64);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_qr_code" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
 
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_brand_product" ON "brand_products" ("brand_id", "product_id");

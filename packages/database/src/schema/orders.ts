@@ -24,6 +24,8 @@ export const orders = pgTable('orders', {
   fiscalDeviceId: varchar('fiscal_device_id', { length: 64 }),
   fiscalReceiptNumber: varchar('fiscal_receipt_number', { length: 64 }),
   fiscalPdfUrl: text('fiscal_pdf_url'),
+  fiscalJobId: varchar('fiscal_job_id', { length: 64 }),
+  fiscalQrCode: text('fiscal_qr_code'),
   terminalId: varchar('terminal_id', { length: 64 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

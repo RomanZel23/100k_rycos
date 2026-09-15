@@ -3,6 +3,7 @@ import { getDatabase, orders, orderItems, brands, eq, and, desc, sql, inArray, g
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { updateOrderStatus, recordOrderPayment } from '../../services/orderEngine.js';
+import { fiscalizeOrder } from '../../services/fiscalService.js';
 
 export async function adminOrdersRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -84,17 +85,29 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/orders/:id/pay - Settle order payment and trigger fiscalization (POS / Staff / Tables)
   fastify.post('/v1/admin/orders/:id/pay', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { paymentMethod, terminalId } = (req.body || {}) as {
+    const { paymentMethod, terminalId, autoPrint } = (req.body || {}) as {
       paymentMethod?: string;
       terminalId?: string;
+      autoPrint?: boolean;
     };
 
     const method = paymentMethod || 'cash';
     try {
       const updated = await recordOrderPayment(id, method, terminalId);
+      let fiscalData = null;
+      try {
+        fiscalData = await fiscalizeOrder({
+          orderId: id,
+          autoPrint: autoPrint ?? false,
+          terminalId,
+        });
+      } catch (fErr: any) {
+        console.warn('[Admin Pay] Fiscalization warning:', fErr.message);
+      }
+
       return success(
         reply,
-        updated,
+        { ...updated, fiscal: fiscalData },
         `Płatność dla zamówienia #${updated.orderNumber} została zarejestrowana i przekazana do fiskalizacji`
       );
     } catch (err: any) {

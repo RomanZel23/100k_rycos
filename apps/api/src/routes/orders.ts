@@ -4,6 +4,7 @@ import { getDatabase, orders, eq, and, desc, sql } from '@rycos/database';
 import { createOrder, getOrderById, updateOrderStatus, recordOrderPayment } from '../services/orderEngine.js';
 import { broadcastToStaff } from '../plugins/websocket.js';
 import { requestTapPayment, cancelTapPayment } from '../services/terminalPaymentService.js';
+import { fiscalizeOrder, printFiscalJob } from '../services/fiscalService.js';
 
 export async function orderRoutes(fastify: FastifyInstance) {
   // POST /v1/orders - Place a new order
@@ -45,6 +46,8 @@ export async function orderRoutes(fastify: FastifyInstance) {
       idPay?: string;
       order_id?: string;
       orderId?: string;
+      auto_print?: boolean;
+      autoPrint?: boolean;
     };
 
     const companyId = body.company_id ?? body.companyId;
@@ -53,6 +56,7 @@ export async function orderRoutes(fastify: FastifyInstance) {
     const amountGrosz = body.amount_grosz ?? body.amountGrosz;
     const orderId = body.order_id ?? body.orderId;
     const idPay = body.id_pay ?? body.idPay;
+    const autoPrint = body.auto_print ?? body.autoPrint ?? false;
 
     if (!amountGrosz || amountGrosz <= 0) {
       return reply.code(400).send({ error: 'amount_grosz must be a positive integer in grosze' });
@@ -81,9 +85,19 @@ export async function orderRoutes(fastify: FastifyInstance) {
 
       // If linked to an order, settle payment and trigger fiscalization
       let updatedOrder = null;
+      let fiscalData = null;
       if (orderId) {
         try {
           updatedOrder = await recordOrderPayment(orderId, 'card', terminalId);
+          try {
+            fiscalData = await fiscalizeOrder({
+              orderId,
+              autoPrint,
+              terminalId,
+            });
+          } catch (fErr: any) {
+            console.warn('[Tap Payment] Fiscalization warning:', fErr.message);
+          }
         } catch (orderErr: any) {
           console.warn('[Tap Payment] Failed to record order payment:', orderErr);
         }
@@ -97,6 +111,7 @@ export async function orderRoutes(fastify: FastifyInstance) {
         idPay: result.idPay,
         displayId: result.displayId,
         order: updatedOrder,
+        fiscal: fiscalData,
       });
     } catch (err: any) {
       return reply.code(500).send({
@@ -143,14 +158,83 @@ export async function orderRoutes(fastify: FastifyInstance) {
   fastify.post('/v1/pos/tap-payment/cancel', tapPaymentCancelHandler);
   fastify.post('/pos_tap_payment/cancel', tapPaymentCancelHandler);
 
+  // POST /v1/pos/print-receipt (and /print_fiscal_receipt) - Print paper receipt on thermal printer SBR-*
+  const printReceiptHandler = async (req: any, reply: any) => {
+    const body = (req.body ?? {}) as {
+      order_id?: string;
+      orderId?: string;
+      company_id?: number;
+      companyId?: number;
+      terminal_id?: string;
+      terminalId?: string;
+      printer_device_id?: string;
+      printerDeviceId?: string;
+      job_id?: string;
+      jobId?: string;
+    };
+
+    const orderId = body.order_id ?? body.orderId;
+    const companyId = body.company_id ?? body.companyId;
+    const terminalId = body.terminal_id ?? body.terminalId;
+    const printerDeviceId = body.printer_device_id ?? body.printerDeviceId;
+    const jobId = body.job_id ?? body.jobId;
+
+    try {
+      const res = await printFiscalJob({
+        orderId,
+        companyId,
+        terminalId,
+        printerDeviceId,
+        jobId,
+      });
+      return reply.send({ message: 'Wydruk przekazany do drukarki', ...res });
+    } catch (err: any) {
+      return reply.code(400).send({
+        success: false,
+        error: err.message || 'Nie udało się wydrukować paragonu na drukarce termicznej',
+      });
+    }
+  };
+
+  fastify.post('/v1/pos/print-receipt', printReceiptHandler);
+  fastify.post('/print_fiscal_receipt', printReceiptHandler);
+
+  // POST /v1/orders/:id/fiscalize - Manually or synchronously fiscalize order
+  fastify.post('/v1/orders/:id/fiscalize', async (req, reply) => {
+    const params = req.params as { id: string };
+    const body = (req.body ?? {}) as { autoPrint?: boolean; terminalId?: string };
+
+    try {
+      const res = await fiscalizeOrder({
+        orderId: params.id,
+        autoPrint: body.autoPrint,
+        terminalId: body.terminalId,
+      });
+      return reply.send({ success: true, data: res });
+    } catch (err: any) {
+      return reply.code(400).send({ error: err.message || 'Błąd fiskalizacji zamówienia' });
+    }
+  });
+
   // POST /v1/orders/:id/pay - Settle payment & fiscalize
   fastify.post('/v1/orders/:id/pay', async (req, reply) => {
     const params = req.params as { id: string };
-    const body = (req.body ?? {}) as { paymentMethod?: string; terminalId?: string };
+    const body = (req.body ?? {}) as { paymentMethod?: string; terminalId?: string; autoPrint?: boolean };
 
     try {
       const order = await recordOrderPayment(params.id, body.paymentMethod || 'cash', body.terminalId);
-      return reply.send({ data: order, success: true });
+      let fiscalData = null;
+      try {
+        fiscalData = await fiscalizeOrder({
+          orderId: params.id,
+          autoPrint: body.autoPrint,
+          terminalId: body.terminalId,
+        });
+      } catch (fErr: any) {
+        console.warn('[Orders Pay] Fiscalization warning:', fErr.message);
+      }
+
+      return reply.send({ data: order, fiscal: fiscalData, success: true });
     } catch (err: any) {
       return reply.code(400).send({ error: err.message || 'Failed to settle order payment' });
     }
