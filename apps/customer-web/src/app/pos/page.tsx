@@ -164,54 +164,54 @@ function PosTicketContent({
             return (
               <div
                 key={item.id}
-                className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 sm:p-3 flex flex-col gap-2 shadow-sm"
+                className="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-3.5 sm:p-3 flex flex-col gap-2.5 shadow-md"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-base sm:text-sm text-white leading-tight">
+                    <div className="font-black text-lg sm:text-base text-white leading-tight">
                       {item.product.name}
                     </div>
                     {item.selectedAddons.length > 0 && (
-                      <div className="text-xs sm:text-[11px] text-amber-400 font-semibold mt-0.5">
+                      <div className="text-sm sm:text-xs text-amber-300 font-bold mt-1 flex flex-wrap gap-1">
                         + {item.selectedAddons.map((a) => a.name).join(', ')}
                       </div>
                     )}
                     {item.specialInstructions && (
-                      <div className="text-xs sm:text-[10px] text-amber-200/90 bg-amber-500/10 p-1.5 rounded-lg mt-1 italic font-medium">
-                        &ldquo;{item.specialInstructions}&rdquo;
+                      <div className="text-sm sm:text-xs text-amber-100 bg-amber-500/20 border border-amber-500/30 p-2 rounded-xl mt-1.5 italic font-bold">
+                        ⚠️ &ldquo;{item.specialInstructions}&rdquo;
                       </div>
                     )}
                   </div>
-                  <span className="font-black text-base sm:text-sm text-amber-400 font-mono shrink-0 ml-2">
+                  <span className="font-black text-lg sm:text-base text-amber-400 font-mono shrink-0 ml-2">
                     {itemTotal.toFixed(2)} zł
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between pt-1.5 border-t border-slate-700/50">
+                <div className="flex items-center justify-between pt-2 border-t border-slate-700/60">
                   <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl p-1">
                     <button
                       onClick={() => updateQuantity(item.id, -1)}
-                      className="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-10 h-10 sm:w-8 sm:h-8 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
                     >
-                      <Minus size={15} />
+                      <Minus size={18} />
                     </button>
-                    <span className="w-8 text-center font-mono font-black text-sm sm:text-xs text-amber-400">
+                    <span className="w-9 text-center font-mono font-black text-base sm:text-sm text-amber-400">
                       {item.quantity}
                     </span>
                     <button
                       onClick={() => updateQuantity(item.id, 1)}
-                      className="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
+                      className="w-10 h-10 sm:w-8 sm:h-8 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 flex items-center justify-center transition-colors cursor-pointer"
                     >
-                      <Plus size={15} />
+                      <Plus size={18} />
                     </button>
                   </div>
 
                   <button
                     onClick={() => removeItem(item.id)}
-                    className="p-2 text-slate-400 hover:text-red-400 rounded-xl hover:bg-slate-750 transition-colors cursor-pointer"
+                    className="p-2.5 text-slate-400 hover:text-red-400 rounded-xl hover:bg-slate-750 transition-colors cursor-pointer"
                     title="Usuń pozycję"
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={20} />
                   </button>
                 </div>
               </div>
@@ -230,11 +230,11 @@ function PosTicketContent({
               placeholder="Uwagi do zamówienia..."
               value={customerNote}
               onChange={(e) => setCustomerNote(e.target.value)}
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs sm:text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm sm:text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400 font-medium"
             />
             <button
               onClick={() => setShowNip(!showNip)}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                 showNip ? 'bg-amber-500 text-slate-950 border-amber-400 font-black' : 'bg-slate-800 border-slate-700 text-slate-300'
               }`}
             >
@@ -248,16 +248,16 @@ function PosTicketContent({
               placeholder="Wprowadź 10-cyfrowy NIP do faktury..."
               value={customerNip}
               onChange={(e) => setCustomerNip(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400 animate-in slide-in-from-top-1 duration-150 font-mono"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm sm:text-xs text-white placeholder-slate-400 focus:outline-hidden focus:border-amber-400 animate-in slide-in-from-top-1 duration-150 font-mono font-bold"
             />
           )}
         </div>
 
         {/* Total Summary */}
-        <div className="bg-slate-800/90 rounded-2xl p-3 border border-slate-700/80 flex items-center justify-between shadow-sm">
+        <div className="bg-slate-800/90 rounded-2xl p-3 sm:p-3.5 border border-slate-700/80 flex items-center justify-between shadow-sm">
           <div>
             <span className="text-xs text-slate-400 font-bold">Pozycji: {totalItemsCount}</span>
-            <div className="text-xs sm:text-sm font-black text-slate-200">Do zapłaty brutto:</div>
+            <div className="text-sm sm:text-xs font-black text-slate-200">Do zapłaty brutto:</div>
           </div>
           <div className="text-right">
             <span className="font-black text-3xl sm:text-2xl text-amber-400 tracking-tight font-mono">
@@ -272,12 +272,12 @@ function PosTicketContent({
           <button
             onClick={() => handleProcessOrder('cash')}
             disabled={submitting || cart.length === 0}
-            className="py-4 sm:py-3.5 px-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-sm sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-emerald-900/30 transition-all cursor-pointer min-h-[64px]"
+            className="py-4 sm:py-3.5 px-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-base sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-emerald-900/30 transition-all cursor-pointer min-h-[68px] sm:min-h-[64px]"
           >
-            <Banknote size={22} />
+            <Banknote size={24} />
             <span>Gotówka</span>
-            <span className="text-xs sm:text-[10px] font-semibold text-emerald-100 flex items-center gap-0.5">
-              <Printer size={12} /> Drukuj
+            <span className="text-xs sm:text-[10px] font-bold text-emerald-100 flex items-center gap-0.5">
+              <Printer size={13} /> Drukuj
             </span>
           </button>
 
@@ -285,12 +285,12 @@ function PosTicketContent({
           <button
             onClick={() => handleProcessOrder('card')}
             disabled={submitting || cart.length === 0}
-            className="py-4 sm:py-3.5 px-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-sm sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-blue-900/30 transition-all cursor-pointer min-h-[64px]"
+            className="py-4 sm:py-3.5 px-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-base sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-blue-900/30 transition-all cursor-pointer min-h-[68px] sm:min-h-[64px]"
           >
-            <CreditCard size={22} />
+            <CreditCard size={24} />
             <span>Karta</span>
-            <span className="text-xs sm:text-[10px] font-semibold text-blue-100 flex items-center gap-0.5">
-              <Printer size={12} /> Drukuj
+            <span className="text-xs sm:text-[10px] font-bold text-blue-100 flex items-center gap-0.5">
+              <Printer size={13} /> Drukuj
             </span>
           </button>
 
@@ -298,11 +298,11 @@ function PosTicketContent({
           <button
             onClick={() => handleProcessOrder('kitchen')}
             disabled={submitting || cart.length === 0}
-            className="py-4 sm:py-3.5 px-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-sm sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-amber-900/30 transition-all cursor-pointer min-h-[64px]"
+            className="py-4 sm:py-3.5 px-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] rounded-2xl text-white font-black text-base sm:text-xs flex flex-col items-center justify-center gap-1.5 shadow-xl shadow-amber-900/30 transition-all cursor-pointer min-h-[68px] sm:min-h-[64px]"
           >
-            <Send size={22} />
+            <Send size={24} />
             <span>Do kuchni</span>
-            <span className="text-xs sm:text-[10px] font-semibold text-amber-100">Otwarty</span>
+            <span className="text-xs sm:text-[10px] font-bold text-amber-100">Otwarty</span>
           </button>
         </div>
 
@@ -1227,7 +1227,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                 return (
                   <div
                     key={prod.id}
-                    className={`bg-slate-900 border-2 rounded-3xl p-4 flex items-center justify-between gap-3 shadow-xl transition-all ${
+                    className={`bg-slate-900 border-2 rounded-3xl p-4 flex items-center justify-between gap-3.5 shadow-xl transition-all ${
                       countInCart > 0
                         ? 'border-amber-400 bg-slate-850 ring-2 ring-amber-400/40'
                         : 'border-slate-800 hover:border-slate-700'
@@ -1238,15 +1238,15 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                       onClick={() => handleProductClick(prod)}
                     >
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-lg text-white leading-snug">
+                        <h3 className="font-black text-xl text-white leading-snug">
                           {prod.name}
                         </h3>
-                        <span className="text-[11px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md shrink-0">
+                        <span className="text-xs font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md shrink-0">
                           PTU {prod.ptuCode?.toUpperCase() || 'B'}
                         </span>
                       </div>
                       {prod.description && (
-                        <p className="text-xs text-slate-300 font-medium line-clamp-2 mt-1 leading-relaxed">
+                        <p className="text-xs sm:text-sm text-slate-300 font-medium line-clamp-2 mt-1 leading-relaxed">
                           {prod.description}
                         </p>
                       )}
@@ -1260,16 +1260,16 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                       <div className="flex items-center gap-1.5 bg-slate-800/90 p-1.5 rounded-2xl border border-amber-400/60 shadow-md shrink-0">
                         <button
                           onClick={() => updateQuantity(cartItem.id, -1)}
-                          className="w-11 h-11 rounded-xl bg-slate-700 active:bg-slate-600 text-white font-black text-xl flex items-center justify-center cursor-pointer active:scale-95"
+                          className="w-12 h-12 rounded-xl bg-slate-700 active:bg-slate-600 text-white font-black text-2xl flex items-center justify-center cursor-pointer active:scale-95"
                         >
                           -
                         </button>
-                        <span className="font-black text-2xl text-amber-400 font-mono px-2.5 min-w-[32px] text-center">
+                        <span className="font-black text-2xl text-amber-400 font-mono px-2 min-w-[34px] text-center">
                           {countInCart}
                         </span>
                         <button
                           onClick={() => handleProductClick(prod)}
-                          className="w-11 h-11 rounded-xl bg-amber-400 active:bg-amber-300 text-slate-950 font-black text-xl flex items-center justify-center cursor-pointer active:scale-95"
+                          className="w-12 h-12 rounded-xl bg-amber-400 active:bg-amber-300 text-slate-950 font-black text-2xl flex items-center justify-center cursor-pointer active:scale-95"
                         >
                           +
                         </button>
@@ -1279,7 +1279,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                         onClick={() => handleProductClick(prod)}
                         className="w-14 h-14 rounded-2xl bg-amber-500 hover:bg-amber-400 active:scale-90 text-slate-950 flex items-center justify-center font-black shadow-xl shadow-amber-500/30 cursor-pointer shrink-0 transition-transform"
                       >
-                        <Plus size={28} />
+                        <Plus size={30} />
                       </button>
                     )}
                   </div>
@@ -1299,7 +1299,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                 <button
                   key={prod.id}
                   onClick={() => handleProductClick(prod)}
-                  className={`relative bg-slate-900 border-2 rounded-3xl p-4 flex flex-col justify-between text-left transition-all group shadow-xl cursor-pointer min-h-[160px] sm:min-h-0 ${
+                  className={`relative bg-slate-900 border-2 rounded-3xl p-4 flex flex-col justify-between text-left transition-all group shadow-xl cursor-pointer min-h-[170px] sm:min-h-0 ${
                     countInCart > 0
                       ? 'border-amber-400 bg-slate-850 ring-2 ring-amber-400/40'
                       : 'border-slate-800 hover:border-amber-400/60'
@@ -1312,7 +1312,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                   )}
                   <div className="w-full">
                     <div className="flex items-start justify-between gap-1 mb-1.5">
-                      <h3 className="font-black text-base sm:text-sm text-white group-hover:text-amber-300 transition-colors line-clamp-2 leading-tight">
+                      <h3 className="font-black text-lg sm:text-base text-white group-hover:text-amber-300 transition-colors line-clamp-2 leading-tight">
                         {prod.name}
                       </h3>
                       <span className="text-[11px] sm:text-[10px] font-mono font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md shrink-0">
@@ -1320,18 +1320,18 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                       </span>
                     </div>
                     {prod.description && (
-                      <p className="text-xs sm:text-[11px] text-slate-300 line-clamp-2 mt-0.5 leading-snug">
+                      <p className="text-xs sm:text-xs text-slate-300 line-clamp-2 mt-0.5 leading-snug">
                         {prod.description}
                       </p>
                     )}
                   </div>
 
                   <div className="w-full mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
-                    <span className="font-black text-amber-400 text-xl sm:text-base whitespace-nowrap font-mono">
+                    <span className="font-black text-amber-400 text-2xl sm:text-xl whitespace-nowrap font-mono">
                       {Number(prod.price).toFixed(2)} zł
                     </span>
-                    <div className="w-11 h-11 sm:w-9 sm:h-9 rounded-2xl bg-amber-500 text-slate-950 group-hover:bg-amber-400 flex items-center justify-center transition-all shrink-0 font-black shadow-md shadow-amber-500/25">
-                      <Plus size={22} />
+                    <div className="w-12 h-12 sm:w-10 sm:h-10 rounded-2xl bg-amber-500 text-slate-950 group-hover:bg-amber-400 flex items-center justify-center transition-all shrink-0 font-black shadow-md shadow-amber-500/25">
+                      <Plus size={24} />
                     </div>
                   </div>
                 </button>
@@ -1368,7 +1368,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
       </div>
 
       {/* Mobile Floating Sticky Bottom Bar */}
-      <div className="lg:hidden shrink-0 bg-slate-900/98 backdrop-blur-md border-t-2 border-slate-700 px-4 py-3 flex items-center justify-between z-30 shadow-2xl safe-area-pb min-h-[64px]">
+      <div className="lg:hidden shrink-0 bg-slate-900/98 backdrop-blur-md border-t-2 border-slate-700 px-4 py-3 flex items-center justify-between z-30 shadow-2xl safe-area-pb min-h-[70px]">
         <div 
           onClick={() => setIsMobileCartOpen(true)}
           className="flex items-center gap-3.5 cursor-pointer select-none"
@@ -1391,9 +1391,9 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
 
         <button
           onClick={() => setIsMobileCartOpen(true)}
-          className="min-h-[54px] py-3.5 px-6 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-base rounded-2xl flex items-center gap-2.5 shadow-xl shadow-amber-500/30 transition-all cursor-pointer"
+          className="min-h-[56px] py-3.5 px-6 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-lg rounded-2xl flex items-center gap-2.5 shadow-xl shadow-amber-500/30 transition-all cursor-pointer"
         >
-          <Receipt size={20} />
+          <Receipt size={22} />
           <span>Rachunek</span>
           {totalItemsCount > 0 && (
             <span className="bg-slate-950 text-amber-400 px-2.5 py-0.5 rounded-full text-sm font-black min-w-[24px] text-center">

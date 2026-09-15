@@ -508,7 +508,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
         }`}>
           <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
             <h2 className="font-bold text-xs sm:text-sm uppercase tracking-wider text-amber-400 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
               Nowe do przygotowania
             </h2>
             <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs sm:text-sm font-black">
@@ -529,39 +529,48 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
                 >
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-                      <span className="text-3xl sm:text-3xl font-black text-amber-400 tracking-tight">#{order.orderNumber}</span>
-                      <span className="font-mono text-lg sm:text-sm px-3.5 py-1.5 rounded-2xl bg-slate-800 text-amber-300 font-black border border-slate-700">
+                      <span className="text-4xl sm:text-3xl font-black text-amber-400 font-mono tracking-tight">#{order.orderNumber}</span>
+                      <span className="font-mono text-xl sm:text-base px-3.5 py-1.5 rounded-2xl bg-slate-800 text-amber-300 font-black border border-slate-700 shadow-sm">
                         PIN: {order.collectionPin}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-base text-slate-200 mb-3.5 font-black">
-                      <span className="flex items-center gap-2 text-lg sm:text-sm font-black text-white">
-                        <MapPin size={20} className="text-amber-400 shrink-0" />
+                      <span className="flex items-center gap-2 text-lg sm:text-base font-black text-white">
+                        <MapPin size={22} className="text-amber-400 shrink-0" />
                         {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos / Bar'}
                       </span>
-                      <span className="flex items-center gap-1.5 text-xs text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded-lg">
-                        <Clock size={14} />
+                      <span className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-300 font-bold bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-700">
+                        <Clock size={15} />
                         {getMinutesAgo(order.createdAt)}
                       </span>
                     </div>
 
                     {/* Pozycje menu */}
-                    <div className="space-y-3 py-1">
+                    <div className="space-y-3.5 py-1">
                       {order.items?.map((item, idx) => (
-                        <div key={idx} className="border-b border-slate-800/60 pb-2.5 last:border-0 last:pb-0">
+                        <div key={idx} className="border-b border-slate-800/80 pb-3 last:border-0 last:pb-0">
                           <div className="flex items-start gap-3 font-black text-white leading-snug">
-                            <span className="text-amber-400 font-mono text-2xl sm:text-base min-w-[36px]">{item.quantity}x</span>
-                            <span className="text-lg sm:text-base">{item.name}</span>
+                            <span className="text-amber-400 font-mono text-2xl sm:text-3xl min-w-[44px] bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded-xl text-center shrink-0">
+                              {item.quantity}x
+                            </span>
+                            <span className="text-xl sm:text-2xl font-black text-white leading-tight break-words pt-0.5">
+                              {item.name}
+                            </span>
                           </div>
                           {item.addons && item.addons.length > 0 && (
-                            <div className="text-sm sm:text-xs text-amber-300/90 pl-11 font-bold mt-1">
-                              + {item.addons.map((a) => a.name).join(', ')}
+                            <div className="text-base sm:text-sm text-amber-300/95 pl-[56px] font-bold mt-1.5 flex flex-wrap gap-1.5">
+                              {item.addons.map((a, aIdx) => (
+                                <span key={aIdx} className="bg-amber-400/15 border border-amber-400/30 px-2 py-0.5 rounded-lg">
+                                  + {a.name}
+                                </span>
+                              ))}
                             </div>
                           )}
                           {item.specialInstructions && (
-                            <div className="text-sm sm:text-xs text-amber-100 bg-amber-500/20 border border-amber-500/30 p-2.5 rounded-2xl mt-1.5 italic font-bold pl-11">
-                              „{item.specialInstructions}”
+                            <div className="text-base sm:text-sm text-amber-100 bg-amber-500/20 border border-amber-500/40 p-3 rounded-2xl mt-2 italic font-bold ml-1 flex items-start gap-2">
+                              <span className="not-italic">⚠️</span>
+                              <span>„{item.specialInstructions}”</span>
                             </div>
                           )}
                         </div>
@@ -571,10 +580,10 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
 
                   <button
                     onClick={() => updateStatus(order.id, 'in_progress')}
-                    className="w-full py-4 sm:py-3.5 bg-amber-400 hover:bg-amber-300 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-amber-500/25 min-h-[64px] flex items-center justify-center gap-2.5"
+                    className="w-full py-4 sm:py-4 bg-amber-400 hover:bg-amber-300 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-base uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-amber-500/25 min-h-[64px] flex items-center justify-center gap-2.5"
                   >
                     <span>Rozpocznij przygotowanie</span>
-                    <span className="text-xl">→</span>
+                    <span className="text-2xl">➔</span>
                   </button>
                 </div>
               ))
@@ -609,38 +618,47 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
                 >
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-                      <span className="text-3xl sm:text-3xl font-black text-blue-400 tracking-tight">#{order.orderNumber}</span>
-                      <span className="font-mono text-lg sm:text-sm px-3.5 py-1.5 rounded-2xl bg-slate-800 text-blue-300 font-black border border-slate-700">
+                      <span className="text-4xl sm:text-3xl font-black text-blue-400 font-mono tracking-tight">#{order.orderNumber}</span>
+                      <span className="font-mono text-xl sm:text-base px-3.5 py-1.5 rounded-2xl bg-slate-800 text-blue-300 font-black border border-slate-700 shadow-sm">
                         PIN: {order.collectionPin}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-base text-slate-200 mb-3.5 font-black">
-                      <span className="flex items-center gap-2 text-lg sm:text-sm font-black text-white">
-                        <MapPin size={20} className="text-blue-400 shrink-0" />
+                      <span className="flex items-center gap-2 text-lg sm:text-base font-black text-white">
+                        <MapPin size={22} className="text-blue-400 shrink-0" />
                         {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
                       </span>
-                      <span className="flex items-center gap-1.5 text-xs text-slate-300 font-bold bg-slate-800 px-2 py-1 rounded-lg">
-                        <Clock size={14} />
+                      <span className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-300 font-bold bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-700">
+                        <Clock size={15} />
                         {getMinutesAgo(order.createdAt)}
                       </span>
                     </div>
 
-                    <div className="space-y-3 py-1">
+                    <div className="space-y-3.5 py-1">
                       {order.items?.map((item, idx) => (
-                        <div key={idx} className="border-b border-slate-800/60 pb-2.5 last:border-0 last:pb-0">
+                        <div key={idx} className="border-b border-slate-800/80 pb-3 last:border-0 last:pb-0">
                           <div className="flex items-start gap-3 font-black text-white leading-snug">
-                            <span className="text-blue-400 font-mono text-2xl sm:text-base min-w-[36px]">{item.quantity}x</span>
-                            <span className="text-lg sm:text-base">{item.name}</span>
+                            <span className="text-blue-400 font-mono text-2xl sm:text-3xl min-w-[44px] bg-blue-400/10 border border-blue-400/30 px-2 py-0.5 rounded-xl text-center shrink-0">
+                              {item.quantity}x
+                            </span>
+                            <span className="text-xl sm:text-2xl font-black text-white leading-tight break-words pt-0.5">
+                              {item.name}
+                            </span>
                           </div>
                           {item.addons && item.addons.length > 0 && (
-                            <div className="text-sm sm:text-xs text-blue-300/90 pl-11 font-bold mt-1">
-                              + {item.addons.map((a) => a.name).join(', ')}
+                            <div className="text-base sm:text-sm text-blue-300/95 pl-[56px] font-bold mt-1.5 flex flex-wrap gap-1.5">
+                              {item.addons.map((a, aIdx) => (
+                                <span key={aIdx} className="bg-blue-400/15 border border-blue-400/30 px-2 py-0.5 rounded-lg">
+                                  + {a.name}
+                                </span>
+                              ))}
                             </div>
                           )}
                           {item.specialInstructions && (
-                            <div className="text-sm sm:text-xs text-amber-100 bg-amber-500/20 border border-amber-500/30 p-2.5 rounded-2xl mt-1.5 italic font-bold pl-11">
-                              „{item.specialInstructions}”
+                            <div className="text-base sm:text-sm text-amber-100 bg-amber-500/20 border border-amber-500/40 p-3 rounded-2xl mt-2 italic font-bold ml-1 flex items-start gap-2">
+                              <span className="not-italic">⚠️</span>
+                              <span>„{item.specialInstructions}”</span>
                             </div>
                           )}
                         </div>
@@ -650,10 +668,10 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
 
                   <button
                     onClick={() => updateStatus(order.id, 'ready_to_collect')}
-                    className="w-full py-4 sm:py-3.5 bg-blue-500 hover:bg-blue-400 active:scale-[0.98] text-white font-black rounded-2xl text-lg sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-blue-500/25 min-h-[64px] flex items-center justify-center gap-2.5"
+                    className="w-full py-4 sm:py-4 bg-blue-500 hover:bg-blue-400 active:scale-[0.98] text-white font-black rounded-2xl text-lg sm:text-base uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-blue-500/25 min-h-[64px] flex items-center justify-center gap-2.5"
                   >
                     <span>Oznacz jako Gotowe</span>
-                    <span className="text-xl">✓</span>
+                    <span className="text-2xl">✓</span>
                   </button>
                 </div>
               ))
@@ -688,27 +706,48 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
                 >
                   <div>
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
-                      <span className="text-3xl sm:text-3xl font-black text-emerald-400 tracking-tight">#{order.orderNumber}</span>
-                      <span className="font-mono text-lg sm:text-sm px-3.5 py-1.5 rounded-2xl bg-emerald-950 text-emerald-300 font-black border border-emerald-500/40">
+                      <span className="text-4xl sm:text-3xl font-black text-emerald-400 font-mono tracking-tight">#{order.orderNumber}</span>
+                      <span className="font-mono text-xl sm:text-base px-3.5 py-1.5 rounded-2xl bg-emerald-950 text-emerald-300 font-black border border-emerald-500/40 shadow-sm">
                         PIN: {order.collectionPin}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-base text-slate-200 mb-3.5 font-black">
-                      <span className="flex items-center gap-2 text-lg sm:text-sm font-black text-white">
-                        <MapPin size={20} className="text-emerald-400 shrink-0" />
+                      <span className="flex items-center gap-2 text-lg sm:text-base font-black text-white">
+                        <MapPin size={22} className="text-emerald-400 shrink-0" />
                         {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
                       </span>
-                      <span className="text-emerald-300 font-black bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 rounded-xl text-xs">
+                      <span className="text-emerald-300 font-black bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 rounded-xl text-xs sm:text-sm">
                         Czeka na klienta
                       </span>
                     </div>
 
-                    <div className="space-y-3 py-1">
+                    <div className="space-y-3.5 py-1">
                       {order.items?.map((item, idx) => (
-                        <div key={idx} className="text-base sm:text-sm font-black text-slate-100 flex items-center gap-3">
-                          <span className="text-emerald-400 font-mono text-2xl sm:text-base min-w-[36px]">{item.quantity}x</span>
-                          <span className="text-lg sm:text-base">{item.name}</span>
+                        <div key={idx} className="border-b border-slate-800/80 pb-3 last:border-0 last:pb-0">
+                          <div className="flex items-start gap-3 font-black text-white leading-snug">
+                            <span className="text-emerald-400 font-mono text-2xl sm:text-3xl min-w-[44px] bg-emerald-400/10 border border-emerald-400/30 px-2 py-0.5 rounded-xl text-center shrink-0">
+                              {item.quantity}x
+                            </span>
+                            <span className="text-xl sm:text-2xl font-black text-white leading-tight break-words pt-0.5">
+                              {item.name}
+                            </span>
+                          </div>
+                          {item.addons && item.addons.length > 0 && (
+                            <div className="text-base sm:text-sm text-emerald-300/95 pl-[56px] font-bold mt-1.5 flex flex-wrap gap-1.5">
+                              {item.addons.map((a, aIdx) => (
+                                <span key={aIdx} className="bg-emerald-400/15 border border-emerald-400/30 px-2 py-0.5 rounded-lg">
+                                  + {a.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {item.specialInstructions && (
+                            <div className="text-base sm:text-sm text-amber-100 bg-amber-500/20 border border-amber-500/40 p-3 rounded-2xl mt-2 italic font-bold ml-1 flex items-start gap-2">
+                              <span className="not-italic">⚠️</span>
+                              <span>„{item.specialInstructions}”</span>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -720,15 +759,15 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
                         setPinModalTargetOrder(order);
                         setIsPinModalOpen(true);
                       }}
-                      className="py-4 sm:py-3.5 bg-slate-800 hover:bg-slate-750 active:scale-[0.98] border-2 border-emerald-500/40 text-emerald-300 font-black rounded-2xl text-lg sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[64px] shadow-lg"
+                      className="py-4 sm:py-3.5 bg-slate-800 hover:bg-slate-750 active:scale-[0.98] border-2 border-emerald-500/40 text-emerald-300 font-black rounded-2xl text-lg sm:text-base flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[64px] shadow-lg"
                       title="Weryfikuj kod PIN lub QR"
                     >
-                      <KeyRound size={20} />
+                      <KeyRound size={22} />
                       <span>PIN / QR</span>
                     </button>
                     <button
                       onClick={() => updateStatus(order.id, 'completed')}
-                      className="py-4 sm:py-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-sm uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-emerald-500/25 min-h-[64px] flex items-center justify-center gap-2"
+                      className="py-4 sm:py-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-base uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-emerald-500/25 min-h-[64px] flex items-center justify-center gap-2"
                     >
                       <span>Wydano ✓</span>
                     </button>
