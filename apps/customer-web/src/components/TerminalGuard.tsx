@@ -26,6 +26,9 @@ export interface PairedTerminal {
   location_id?: number | null;
   location_name?: string | null;
   assigned_brand_ids?: number[];
+  tap_device_id?: string | null;
+  printer_device_id?: string | null;
+  fiscal_device_id?: string | null;
   capabilities?: {
     can_sell?: boolean;
     can_kds?: boolean;

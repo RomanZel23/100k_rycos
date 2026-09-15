@@ -22,7 +22,11 @@ import {
   Smartphone,
   Download,
   LayoutGrid,
-  List
+  List,
+  Wifi,
+  AlertCircle,
+  Radio,
+  Loader2
 } from 'lucide-react';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
@@ -424,7 +428,153 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
     }
   };
 
+  // Tap card payment modal state (SBR-* / SoftPOS)
+  const [tapPaymentState, setTapPaymentState] = useState<{
+    isOpen: boolean;
+    orderId?: string;
+    orderNumber?: number;
+    pin?: string;
+    amount: number;
+    idPay?: string;
+    status: 'waiting_for_card' | 'processing' | 'success' | 'declined' | 'error';
+    errorRemark?: string;
+    targetDevice?: string;
+    isNewCheckout?: boolean;
+  }>({
+    isOpen: false,
+    amount: 0,
+    status: 'waiting_for_card',
+  });
+
+  const startCardTapPayment = async ({
+    orderId,
+    orderNumber,
+    pin,
+    amount,
+    isNewCheckout,
+  }: {
+    orderId: string;
+    orderNumber: number;
+    pin?: string;
+    amount: number;
+    isNewCheckout: boolean;
+  }) => {
+    const idPay = crypto.randomUUID();
+    const displayDevice =
+      terminal?.tap_device_id && terminal.tap_device_id !== 'self'
+        ? terminal.tap_device_id
+        : terminal?.terminal_id?.startsWith('SBR-') || terminal?.terminal_id?.startsWith('SBT-')
+        ? terminal.terminal_id
+        : 'SBR-SoftPOS';
+
+    setTapPaymentState({
+      isOpen: true,
+      orderId,
+      orderNumber,
+      pin,
+      amount,
+      idPay,
+      status: 'waiting_for_card',
+      targetDevice: displayDevice,
+      errorRemark: undefined,
+      isNewCheckout,
+    });
+
+    try {
+      const companyId = terminal?.company_id || menu?.brand?.companyId || 1;
+      const res = await fetch(`${getApiBaseUrl()}/v1/pos/tap-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+        },
+        body: JSON.stringify({
+          company_id: companyId,
+          terminal_id: terminal?.terminal_id,
+          tap_device_id: terminal?.tap_device_id,
+          order_id: orderId,
+          amount_grosz: Math.round(amount * 100),
+          currency: menu?.brand?.currency || 'PLN',
+          reference: `POS-${orderNumber}-${Date.now()}`,
+          id_pay: idPay,
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (res.ok && json.success) {
+        setTapPaymentState((prev) => ({ ...prev, status: 'success' }));
+        setTimeout(() => {
+          setTapPaymentState((prev) => ({ ...prev, isOpen: false }));
+          setLastOrderSuccess({
+            orderNumber,
+            pin: pin || '0000',
+            action: `Terminal ${json.displayId || displayDevice} (Fiskalizacja)`,
+            total: amount,
+          });
+          if (isNewCheckout) {
+            clearCart();
+            setIsMobileCartOpen(false);
+          }
+          loadOpenOrders();
+        }, 1200);
+      } else {
+        const errorMsg = json.remark || json.error || 'Płatność kartą została odrzucona przez terminal.';
+        setTapPaymentState((prev) => ({
+          ...prev,
+          status: 'declined',
+          errorRemark: errorMsg,
+        }));
+      }
+    } catch (err: any) {
+      setTapPaymentState((prev) => ({
+        ...prev,
+        status: 'error',
+        errorRemark: err.message || 'Błąd połączenia z terminalem płatniczym.',
+      }));
+    }
+  };
+
+  const handleCancelTapPayment = async () => {
+    if (tapPaymentState.idPay) {
+      const companyId = terminal?.company_id || menu?.brand?.companyId || 1;
+      try {
+        await fetch(`${getApiBaseUrl()}/v1/pos/tap-payment/cancel`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-company-id': String(companyId),
+            ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          },
+          body: JSON.stringify({
+            company_id: companyId,
+            terminal_id: terminal?.terminal_id,
+            tap_device_id: terminal?.tap_device_id,
+            id_pay: tapPaymentState.idPay,
+          }),
+        });
+      } catch (e) {
+        console.warn('Failed to send cancel to terminal:', e);
+      }
+    }
+    setTapPaymentState((prev) => ({ ...prev, isOpen: false }));
+    loadOpenOrders();
+  };
+
   const handleSettleOpenOrder = async (order: any, method: 'cash' | 'card') => {
+    if (method === 'card') {
+      // Trigger Tap payment flow on physical/virtual SBR-* card reader
+      startCardTapPayment({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        pin: order.collectionPin,
+        amount: parseFloat(order.totalAmount || '0'),
+        isNewCheckout: false,
+      });
+      return;
+    }
+
     setSettlingOrderId(order.id);
     try {
       const companyId = terminal?.company_id || menu?.brand.companyId || 1;
@@ -449,7 +599,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
       setLastOrderSuccess({
         orderNumber: order.orderNumber,
         pin: order.collectionPin,
-        action: method === 'cash' ? 'Rozliczono: Gotówka (Fiskalizacja)' : 'Rozliczono: Karta (Fiskalizacja)',
+        action: 'Rozliczono: Gotówka (Fiskalizacja)',
         total: parseFloat(order.totalAmount || '0'),
       });
 
@@ -691,8 +841,20 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
 
       const placed = await submitOrder(payload);
 
-      // Szybka sprzedaż przy kasie: Gotówka lub Karta natychmiast rejestruje płatność i fiskalizuje
-      if (action === 'cash' || action === 'card') {
+      // Szybka sprzedaż kartą przy kasie: Uruchamia płatność zbliżeniową na terminalu SBR-* / SoftPOS
+      if (action === 'card') {
+        startCardTapPayment({
+          orderId: placed.id,
+          orderNumber: placed.orderNumber,
+          pin: placed.collectionPin,
+          amount: totalAmount,
+          isNewCheckout: true,
+        });
+        return;
+      }
+
+      // Szybka sprzedaż gotówką przy kasie: Natychmiast rejestruje płatność gotówkową i fiskalizuje
+      if (action === 'cash') {
         try {
           const companyId = terminal?.company_id || menu.brand.companyId || 1;
           await fetch(`${getApiBaseUrl()}/v1/admin/orders/${placed.id}/pay`, {
@@ -703,7 +865,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
               ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
             },
             body: JSON.stringify({
-              paymentMethod: action,
+              paymentMethod: 'cash',
               terminalId: terminal?.terminal_id || (terminal?.id ? String(terminal.id) : undefined),
             }),
           });
@@ -718,8 +880,6 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
         action:
           action === 'cash'
             ? 'Gotówka (Fiskalizacja)'
-            : action === 'card'
-            ? 'Terminal (Fiskalizacja)'
             : 'Wysłano do kuchni (Rachunek otwarty)',
         total: totalAmount,
       });
@@ -1301,6 +1461,134 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
               >
                 Dodaj do rachunku
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Płatność Zbliżeniowa SoftPOS / SBR-* */}
+      {tapPaymentState.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-blue-500/50 rounded-3xl max-w-md w-full p-6 text-center space-y-5 shadow-2xl relative overflow-hidden">
+            {/* Ambient Background Glow */}
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Header info */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping" />
+                <span className="text-xs font-black uppercase tracking-wider text-blue-400">
+                  Terminal Płatniczy SoftPOS / SBR
+                </span>
+              </div>
+              <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
+                {tapPaymentState.targetDevice || 'SBR-Terminal'}
+              </span>
+            </div>
+
+            {/* Center Animation Icon */}
+            {tapPaymentState.status === 'waiting_for_card' && (
+              <div className="relative py-4 flex flex-col items-center justify-center">
+                <div className="w-24 h-24 rounded-full bg-blue-500/15 border-2 border-blue-400/50 flex items-center justify-center relative shadow-lg shadow-blue-500/20 animate-pulse">
+                  <CreditCard size={44} className="text-blue-400" />
+                  <div className="absolute -top-1 -right-1 w-7 h-7 rounded-full bg-blue-500 text-slate-950 flex items-center justify-center font-bold text-xs shadow">
+                    <Wifi size={16} className="rotate-90" />
+                  </div>
+                </div>
+                <div className="mt-4 space-y-1">
+                  <h3 className="text-xl font-black text-white">Przyłóż kartę lub telefon</h3>
+                  <p className="text-xs text-slate-400">
+                    Oczekiwanie na zbliżenie do terminala <span className="text-blue-300 font-bold">{tapPaymentState.targetDevice}</span>...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {tapPaymentState.status === 'success' && (
+              <div className="relative py-4 flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
+                <div className="w-24 h-24 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <CheckCircle2 size={52} />
+                </div>
+                <div className="mt-4 space-y-1">
+                  <h3 className="text-2xl font-black text-emerald-400">Płatność zatwierdzona!</h3>
+                  <p className="text-xs text-slate-300">
+                    Transakcja zaakceptowana. Rejestruję i przekazuję do fiskalizacji...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {(tapPaymentState.status === 'declined' || tapPaymentState.status === 'error') && (
+              <div className="relative py-4 flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
+                <div className="w-24 h-24 rounded-full bg-rose-500/20 border-2 border-rose-400 text-rose-400 flex items-center justify-center shadow-lg shadow-rose-500/30">
+                  <AlertCircle size={52} />
+                </div>
+                <div className="mt-4 space-y-1">
+                  <h3 className="text-xl font-black text-rose-400">Transakcja nieudana</h3>
+                  <p className="text-xs text-rose-200/90 font-medium max-w-xs mx-auto">
+                    {tapPaymentState.errorRemark || 'Terminal odrzucił transakcję.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Order & Amount Badge */}
+            <div className="bg-slate-800/80 rounded-2xl p-4 border border-slate-700/80 flex items-center justify-between text-left">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                  {tapPaymentState.orderNumber ? `Zamówienie #${tapPaymentState.orderNumber}` : 'Rachunek'}
+                </span>
+                <span className="text-xs font-bold text-slate-300">Płatność Zbliżeniowa</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block uppercase font-bold">Kwota do pobrania</span>
+                <span className="font-mono text-2xl font-black text-amber-400">
+                  {tapPaymentState.amount.toFixed(2)} zł
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2">
+              {tapPaymentState.status === 'waiting_for_card' ? (
+                <button
+                  onClick={handleCancelTapPayment}
+                  className="w-full py-3.5 bg-slate-800 hover:bg-slate-750 text-rose-400 hover:text-rose-300 font-bold rounded-xl text-sm border border-slate-700 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <X size={16} />
+                  <span>Anuluj transakcję na terminalu</span>
+                </button>
+              ) : tapPaymentState.status === 'declined' || tapPaymentState.status === 'error' ? (
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => {
+                      if (tapPaymentState.orderId && tapPaymentState.orderNumber) {
+                        startCardTapPayment({
+                          orderId: tapPaymentState.orderId,
+                          orderNumber: tapPaymentState.orderNumber,
+                          pin: tapPaymentState.pin,
+                          amount: tapPaymentState.amount,
+                          isNewCheckout: tapPaymentState.isNewCheckout ?? false,
+                        });
+                      }
+                    }}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-blue-900/30 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <RotateCcw size={15} />
+                    <span>Spróbuj ponownie</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTapPaymentState((prev) => ({ ...prev, isOpen: false }));
+                      loadOpenOrders();
+                    }}
+                    className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs border border-slate-700 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    Zamknij
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

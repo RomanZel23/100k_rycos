@@ -26,6 +26,12 @@ const envSchema = z.object({
   // Public URLs for redirects and notifications
   PUBLIC_API_URL: z.string().default('https://100k-api.rycos.eu'),
   PUBLIC_CUSTOMER_URL: z.string().default('https://100k.rycos.eu'),
+  // RYCOS MQTT Bridge (SBR-* and Fiscal Devices)
+  RYCOS_MQTT_HOST: z.string().default(process.env.RYCOS_MQTT_HOST || 'rycos.eu'),
+  RYCOS_MQTT_PORT: z.coerce.number().default(Number(process.env.RYCOS_MQTT_PORT) || 8883),
+  RYCOS_MQTT_USERNAME: z.string().default(process.env.RYCOS_MQTT_USERNAME || 'rycos_portal'),
+  RYCOS_MQTT_PASSWORD: z.string().default(process.env.RYCOS_MQTT_PASSWORD || 'Rycos$ala#'),
+  RYCOS_DISPLAY_ID: z.string().default(process.env.RYCOS_DISPLAY_ID || 'SBT-NMLL2M'),
   // Deprecated OVH S3 Object Storage (Images now use local Supabase Storage)
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().optional(),

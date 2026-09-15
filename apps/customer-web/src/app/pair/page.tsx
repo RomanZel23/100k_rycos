@@ -12,6 +12,9 @@ interface PairedTerminal {
   role: string;
   location_id?: number | null;
   location_name?: string | null;
+  tap_device_id?: string | null;
+  printer_device_id?: string | null;
+  fiscal_device_id?: string | null;
   status: string;
 }
 

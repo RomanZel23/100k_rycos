@@ -73,6 +73,9 @@ export async function catalogRoutes(fastify: FastifyInstance) {
         ...updated,
         terminal_id: updated.terminalId,
         company_id: updated.companyId,
+        tap_device_id: updated.tapDeviceId,
+        printer_device_id: updated.printerDeviceId,
+        fiscal_device_id: updated.fiscalDeviceId,
       },
       message: 'Terminal paired successfully',
     });
