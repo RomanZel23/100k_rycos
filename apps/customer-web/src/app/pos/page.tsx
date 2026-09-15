@@ -715,9 +715,15 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
   useEffect(() => {
     fetchMenu('default', 'pl')
       .then((data) => {
-        setMenu(data);
-        if (data.categories.length > 0) {
-          setActiveCategory(data.categories[0].id);
+        const activeCatIds = new Set(data.products.map((p) => p.categoryId));
+        const filteredCategories = data.categories.filter((c) => activeCatIds.has(c.id));
+        const cleanData = {
+          ...data,
+          categories: filteredCategories.length > 0 ? filteredCategories : data.categories,
+        };
+        setMenu(cleanData);
+        if (cleanData.categories.length > 0) {
+          setActiveCategory(cleanData.categories[0].id);
         }
         setLoading(false);
       })

@@ -86,9 +86,22 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   useEffect(() => {
     fetchMenu(brandSlug, lang)
       .then((data) => {
-        setMenu(data);
-        if (data.categories.length > 0 && !activeCategory) {
-          setActiveCategory(data.categories[0].id);
+        // Defensively filter categories to only those that actually have products in this menu
+        const productCategoryIds = new Set(data.products.map((p) => p.categoryId));
+        const nonNullCategories = data.categories.filter((c) => productCategoryIds.has(c.id));
+        const cleanData: MenuResponse = {
+          ...data,
+          categories: nonNullCategories.length > 0 ? nonNullCategories : data.categories,
+        };
+
+        setMenu(cleanData);
+        if (cleanData.categories.length > 0) {
+          setActiveCategory((prev) => {
+            if (prev && cleanData.categories.some((c) => c.id === prev)) {
+              return prev;
+            }
+            return cleanData.categories[0].id;
+          });
         }
         setLoading(false);
       })

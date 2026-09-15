@@ -293,13 +293,7 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
   if (productRows.length === 0) {
     const emptyResponse: MenuResponse = {
       brand: brandInfo,
-      categories: categoryRows.map((c) => ({
-        id: c.id,
-        companyId: c.companyId,
-        name: c.name,
-        position: c.position,
-        translations: {},
-      })),
+      categories: [],
       products: [],
     };
     return emptyResponse;
@@ -408,9 +402,13 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
     };
   });
 
+  // Only include categories that actually contain products in this brand's menu
+  const activeCategoryIds = new Set(mappedProducts.map((p) => p.categoryId).filter((id): id is number => typeof id === 'number'));
+  const effectiveCategories = categoryRows.filter((c) => activeCategoryIds.has(c.id));
+
   const response: MenuResponse = {
     brand: brandInfo,
-    categories: categoryRows.map((c) => ({
+    categories: effectiveCategories.map((c) => ({
       id: c.id,
       companyId: c.companyId,
       name: translationsMap.get(`categories:${c.id}:name`) || c.name,
@@ -428,10 +426,11 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
   return response;
 }
 
-export async function invalidateBrandMenuCache(brandId: number): Promise<void> {
+export async function invalidateBrandMenuCache(brandId?: number): Promise<void> {
   if (!redis || redis.status !== 'ready') return;
   try {
-    const keys = await redis.keys(`menu:brand:${brandId}:*`);
+    const pattern = brandId ? `menu:brand:${brandId}:*` : `menu:brand:*`;
+    const keys = await redis.keys(pattern);
     if (keys.length > 0) {
       await redis.del(...keys);
     }
