@@ -2,6 +2,8 @@ import { adminApiData } from '@/lib/api'
 import { currentUser, isManager } from '@/lib/auth'
 import { NoAccess } from '@/components/NoAccess'
 import { Banner } from '@/components/Banner'
+import { getTranslation } from '@/lib/i18n'
+import { getAdminLocale } from '@/lib/i18n-server'
 import { savePaymentGateway, deletePaymentGateway } from './actions'
 
 interface PaymentGateway {
@@ -20,6 +22,7 @@ export default async function PaymentGatewaysPage({
   searchParams: Promise<{ error?: string; notice?: string }>
 }) {
   if (!isManager(await currentUser())) return <NoAccess />
+  const locale = await getAdminLocale()
   const { error, notice } = await searchParams
   const gateways = (await adminApiData<PaymentGateway[]>('/payment-gateways')) ?? []
   const saferpay = gateways.find((g) => g.gateway_name === 'SaferPay') ?? null
@@ -27,9 +30,9 @@ export default async function PaymentGatewaysPage({
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-bold">Bramka płatności (Payment gateway)</h1>
+      <h1 className="text-2xl font-bold">{getTranslation(locale, 'gateways.title', 'Bramka płatności (Payment gateway)')}</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Podłącz bramkę płatniczą, aby klienci mogli opłacać zamówienia online (karty, Google Pay, BLIK).
+        {getTranslation(locale, 'gateways.subtitle', 'Podłącz bramkę płatniczą, aby klienci mogli opłacać zamówienia online (karty, Google Pay, BLIK).')}
       </p>
 
       {error && <Banner kind="error" className="mt-4">{error}</Banner>}
@@ -42,23 +45,23 @@ export default async function PaymentGatewaysPage({
             <WorldlineBadge />
             <div>
               <p className="text-base font-semibold">SaferPay (Worldline)</p>
-              <p className="text-xs text-neutral-500">Karty płatnicze, Google Pay, Apple Pay, BLIK</p>
+              <p className="text-xs text-neutral-500">{getTranslation(locale, 'gateways.saferpay_desc', 'Karty płatnicze, Google Pay, Apple Pay, BLIK')}</p>
             </div>
           </div>
           {saferpay ? (
             <div className="flex items-center gap-1.5">
               <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-                Aktywny
+                {getTranslation(locale, 'gateways.status_active', 'Aktywny')}
               </span>
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                 isTestMode ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
               }`}>
-                {isTestMode ? 'Sandbox / Test' : 'Produkcja / Live'}
+                {isTestMode ? getTranslation(locale, 'gateways.mode_sandbox', 'Sandbox / Test') : getTranslation(locale, 'gateways.mode_live', 'Produkcja / Live')}
               </span>
             </div>
           ) : (
             <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-semibold text-neutral-500">
-              Nieskonfigurowany
+              {getTranslation(locale, 'gateways.status_unconfigured', 'Nieskonfigurowany')}
             </span>
           )}
         </div>
@@ -68,7 +71,7 @@ export default async function PaymentGatewaysPage({
           {saferpay && <input type="hidden" name="id" value={saferpay.id} />}
 
           <div className="sm:col-span-2">
-            <label className="label" htmlFor="public_key">API username</label>
+            <label className="label" htmlFor="public_key">{getTranslation(locale, 'gateways.api_user', 'API username')}</label>
             <input
               id="public_key"
               name="public_key"
@@ -83,12 +86,12 @@ export default async function PaymentGatewaysPage({
               className="input"
             />
             <p className="mt-1 text-xs text-neutral-400">
-              Z panelu SaferPay → Settings → JSON API. Format: <span className="font-mono">API_*_*</span> (nie jest to Twój e-mail).
+              {getTranslation(locale, 'gateways.api_user_hint', 'Z panelu SaferPay → Settings → JSON API. Format: API_*_* (nie jest to Twój e-mail).')}
             </p>
           </div>
 
           <div className="sm:col-span-2">
-            <label className="label" htmlFor="private_key">API password</label>
+            <label className="label" htmlFor="private_key">{getTranslation(locale, 'gateways.api_password', 'API password')}</label>
             <input
               id="private_key"
               name="private_key"
@@ -96,13 +99,13 @@ export default async function PaymentGatewaysPage({
               autoComplete="new-password"
               data-lpignore="true"
               required={!saferpay}
-              placeholder={saferpay?.private_key_set ? '•••••••• (pozostaw puste, aby zachować obecne hasło)' : 'Hasło wygenerowane dla użytkownika JSON API'}
+              placeholder={saferpay?.private_key_set ? getTranslation(locale, 'gateways.api_password_keep', '•••••••• (pozostaw puste, aby zachować obecne hasło)') : (locale === 'pl' ? 'Hasło wygenerowane dla użytkownika JSON API' : 'Password generated for JSON API user')}
               className="input"
             />
           </div>
 
           <div>
-            <label className="label" htmlFor="customer_id">CustomerId</label>
+            <label className="label" htmlFor="customer_id">{getTranslation(locale, 'gateways.customer_id', 'CustomerId')}</label>
             <input
               id="customer_id"
               name="customer_id"
@@ -115,7 +118,7 @@ export default async function PaymentGatewaysPage({
             />
           </div>
           <div>
-            <label className="label" htmlFor="terminal_id">TerminalId</label>
+            <label className="label" htmlFor="terminal_id">{getTranslation(locale, 'gateways.terminal_id', 'TerminalId')}</label>
             <input
               id="terminal_id"
               name="terminal_id"
@@ -137,35 +140,43 @@ export default async function PaymentGatewaysPage({
                 className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
               />
               <div className="text-xs">
-                <span className="font-semibold text-neutral-800 text-sm block">Środowisko testowe (Sandbox)</span>
+                <span className="font-semibold text-neutral-800 text-sm block">
+                  {getTranslation(locale, 'gateways.test_toggle', 'Środowisko testowe (Sandbox)')}
+                </span>
                 <span className="text-neutral-500 block mt-0.5">
-                  Zaznaczone: zapytania kierowane są do środowiska testowego Saferpay (<code className="font-mono text-neutral-700">test.saferpay.com</code>).<br />
-                  Odznacz, gdy wprowadzasz docelowe dane produkcyjne (<code className="font-mono text-neutral-700">www.saferpay.com</code>).
+                  {locale === 'pl'
+                    ? <>Zaznaczone: zapytania kierowane są do środowiska testowego Saferpay (<code className="font-mono text-neutral-700">test.saferpay.com</code>).<br />Odznacz, gdy wprowadzasz docelowe dane produkcyjne (<code className="font-mono text-neutral-700">www.saferpay.com</code>).</>
+                    : <>Checked: requests route to Saferpay sandbox (<code className="font-mono text-neutral-700">test.saferpay.com</code>).<br />Uncheck when using production credentials (<code className="font-mono text-neutral-700">www.saferpay.com</code>).</>}
                 </span>
               </div>
             </label>
           </div>
 
           <div className="sm:col-span-2 flex items-center gap-3 pt-2">
-            <button className="btn-brand sm:w-auto sm:px-6">{saferpay ? 'Zapisz zmiany' : 'Zapisz poświadczenia'}</button>
+            <button className="btn-brand sm:w-auto sm:px-6">
+              {saferpay ? getTranslation(locale, 'btn.save', 'Zapisz zmiany') : (locale === 'pl' ? 'Zapisz poświadczenia' : 'Save credentials')}
+            </button>
             {saferpay && (
               <form action={deletePaymentGateway}>
                 <input type="hidden" name="id" value={saferpay.id} />
-                <button className="text-sm font-medium text-red-600 hover:underline">Usuń konfigurację</button>
+                <button className="text-sm font-medium text-red-600 hover:underline">
+                  {getTranslation(locale, 'btn.delete', 'Usuń konfigurację')}
+                </button>
               </form>
             )}
           </div>
         </form>
       </div>
 
-      {/* Coming-soon stubs so the path is obvious to the owner. */}
-      <p className="mt-6 text-xs text-neutral-400">More gateways (Stripe, PayU, …) coming as they're integrated.</p>
+      <p className="mt-6 text-xs text-neutral-400">
+        {locale === 'pl' ? 'Wkrótce kolejne bramki (Stripe, PayU...).' : 'More gateways (Stripe, PayU...) coming soon.'}
+      </p>
     </div>
   )
 }
 
-// Worldline wordmark — served from /public/worldline.jpg.
 function WorldlineBadge() {
   // eslint-disable-next-line @next/next/no-img-element
   return <img src="/worldline.jpg" alt="Worldline" className="h-14 w-14 rounded-lg object-contain" />
 }
+

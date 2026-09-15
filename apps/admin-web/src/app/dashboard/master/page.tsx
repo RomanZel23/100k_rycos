@@ -1,4 +1,8 @@
 import { adminApiData } from '@/lib/api';
+import { currentUser, isManager } from '@/lib/auth';
+import { NoAccess } from '@/components/NoAccess';
+import { getTranslation } from '@/lib/i18n';
+import { getAdminLocale } from '@/lib/i18n-server';
 import { MasterCompaniesTable } from './MasterCompaniesTable';
 
 interface MasterOverviewData {
@@ -23,6 +27,10 @@ interface MasterOverviewData {
 export const revalidate = 0;
 
 export default async function MasterSaasPage() {
+  const user = await currentUser();
+  if (!isManager(user)) return <NoAccess />;
+  const locale = await getAdminLocale();
+
   const rawData: any = await adminApiData('/master/overview');
 
   const totalCompanies = Number(rawData?.totalCompanies ?? rawData?.total_companies ?? 1);
@@ -74,14 +82,14 @@ export default async function MasterSaasPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
-              Platform SaaS Master
+              {getTranslation(locale, 'master.title', 'Platform SaaS Master')}
             </h1>
             <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
-              Super-Admin
+              {getTranslation(locale, 'master.super_admin_badge', 'Super-Admin')}
             </span>
           </div>
           <p className="text-sm text-neutral-500 mt-1">
-            Globalne zarządzanie wszystkimi firmami, lokalami i wolumenem sprzedaży w platformie RYCOS Cloud.
+            {getTranslation(locale, 'master.subtitle', 'Globalne zarządzanie wszystkimi firmami, lokalami i wolumenem sprzedaży w platformie RYCOS Cloud.')}
           </p>
         </div>
       </div>
@@ -90,16 +98,20 @@ export default async function MasterSaasPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {/* Total Companies */}
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Wszystkie Firmy</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            {getTranslation(locale, 'master.kpi.total_companies', 'Wszystkie Firmy')}
+          </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-black text-neutral-900">{overview.totalCompanies}</span>
-            <span className="text-xs text-neutral-400">tenantów</span>
+            <span className="text-xs text-neutral-400">{getTranslation(locale, 'master.kpi.tenants', 'tenantów')}</span>
           </div>
         </div>
 
         {/* Active Companies */}
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Aktywne Konta</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
+            {getTranslation(locale, 'master.kpi.active_companies', 'Aktywne Lokale')}
+          </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-black text-emerald-800">{overview.activeCompanies}</span>
             <span className="text-xs text-emerald-600">live</span>
@@ -108,19 +120,23 @@ export default async function MasterSaasPage() {
 
         {/* Total Orders */}
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Globalne Zamówienia</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            {getTranslation(locale, 'master.kpi.total_orders', 'Globalne Zamówienia')}
+          </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-black text-neutral-900">{overview.totalOrders}</span>
-            <span className="text-xs text-neutral-400">transakcji</span>
+            <span className="text-xs text-neutral-400">{getTranslation(locale, 'master.kpi.processed', 'transakcji')}</span>
           </div>
         </div>
 
         {/* Total Volume */}
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Łączny Wolumen GMV</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            {getTranslation(locale, 'master.kpi.total_volume', 'Łączny Wolumen GMV')}
+          </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-black text-neutral-900">
-              {overview.totalVolume.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {overview.totalVolume.toLocaleString(locale === 'pl' ? 'pl-PL' : locale === 'de' ? 'de-DE' : 'en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
             <span className="text-xs text-neutral-400">zł</span>
           </div>
@@ -128,10 +144,12 @@ export default async function MasterSaasPage() {
 
         {/* 7d Signups */}
         <div className="rounded-2xl border border-purple-200 bg-purple-50/50 p-5 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-purple-700">Rejestracje (7 dni)</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-purple-700">
+            {getTranslation(locale, 'master.kpi.signups_7d', 'Rejestracje (7 dni)')}
+          </p>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-black text-purple-800">+{overview.signups7d}</span>
-            <span className="text-xs text-purple-600">nowych</span>
+            <span className="text-xs text-purple-600">{getTranslation(locale, 'master.kpi.last_7d', 'nowych')}</span>
           </div>
         </div>
       </div>
@@ -140,16 +158,21 @@ export default async function MasterSaasPage() {
       <div className="rounded-2xl border border-neutral-200 bg-white shadow-xs overflow-hidden">
         <div className="border-b border-neutral-200 px-6 py-4 flex items-center justify-between">
           <div>
-            <h2 className="font-bold text-neutral-900">Rejestr Tenantów (Klienci B2B)</h2>
-            <p className="text-xs text-neutral-500">Lista podmiotów zarejestrowanych w systemie wielotenantowym</p>
+            <h2 className="font-bold text-neutral-900">
+              {locale === 'pl' ? 'Rejestr Tenantów (Klienci B2B)' : locale === 'de' ? 'Mandanten-Register (B2B)' : 'Tenant Directory (B2B)'}
+            </h2>
+            <p className="text-xs text-neutral-500">
+              {locale === 'pl' ? 'Lista podmiotów zarejestrowanych w systemie' : 'List of registered tenant accounts'}
+            </p>
           </div>
           <span className="rounded-lg bg-neutral-100 px-3 py-1 font-mono text-xs text-neutral-600 font-bold">
-            {overview.companies.length} firm
+            {overview.companies.length} {locale === 'pl' ? 'firm' : 'accounts'}
           </span>
         </div>
 
-        <MasterCompaniesTable initialCompanies={overview.companies} />
+        <MasterCompaniesTable initialCompanies={overview.companies} locale={locale} />
       </div>
     </div>
   );
 }
+

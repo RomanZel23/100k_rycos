@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { adminApiData } from '@/lib/api'
 import { currentUser, isManager } from '@/lib/auth'
 import { NoAccess } from '@/components/NoAccess'
+import { getTranslation } from '@/lib/i18n'
+import { getAdminLocale } from '@/lib/i18n-server'
 
 interface KPIs {
   revenue: number
@@ -25,19 +27,6 @@ interface Analytics {
 interface Brand { id: number; name: string | null }
 interface Company { currency: string }
 
-const RANGES: { key: string; label: string }[] = [
-  { key: 'today',  label: 'Today' },
-  { key: '7d',     label: '7 days' },
-  { key: '30d',    label: '30 days' },
-  { key: '90d',    label: '90 days' },
-  { key: 'mtd',    label: 'Month to date' },
-  { key: 'ytd',    label: 'Year to date' },
-  { key: 'custom', label: 'Custom range' },
-]
-
-// Default custom range = last 30 calendar days, ending today. Used to pre-fill
-// the date pickers when the user first switches to Custom so they don't have
-// to type two dates from scratch.
 function isoToday(offsetDays = 0): string {
   const d = new Date()
   d.setDate(d.getDate() + offsetDays)
@@ -62,13 +51,22 @@ export default async function OrdersAnalyticsPage({
   searchParams: Promise<{ range?: string; brand_id?: string; from?: string; to?: string }>
 }) {
   if (!isManager(await currentUser())) return <NoAccess />
+  const locale = await getAdminLocale()
   const sp = await searchParams
   const range = sp.range ?? '30d'
   const brandId = sp.brand_id ?? ''
-  // For the picker default: 30 days ago → today. The Custom branch passes
-  // these straight through to the server.
   const fromInput = sp.from ?? isoToday(-29)
   const toInput   = sp.to   ?? isoToday(0)
+
+  const RANGES: { key: string; label: string }[] = [
+    { key: 'today',  label: getTranslation(locale, 'orders.range.today', 'Today') },
+    { key: '7d',     label: getTranslation(locale, 'orders.range.7d', '7 days') },
+    { key: '30d',    label: getTranslation(locale, 'orders.range.30d', '30 days') },
+    { key: '90d',    label: getTranslation(locale, 'orders.range.90d', '90 days') },
+    { key: 'mtd',    label: getTranslation(locale, 'orders.range.mtd', 'Month to date') },
+    { key: 'ytd',    label: getTranslation(locale, 'orders.range.ytd', 'Year to date') },
+    { key: 'custom', label: getTranslation(locale, 'orders.range.custom', 'Custom range') },
+  ]
 
   const qs = new URLSearchParams({ range })
   if (brandId) qs.set('brand_id', brandId)
@@ -108,41 +106,38 @@ export default async function OrdersAnalyticsPage({
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Orders analytics</h1>
+          <h1 className="text-2xl font-bold">{getTranslation(locale, 'orders.title', 'Orders analytics')}</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Revenue, order counts and trends. Comparison delta is vs the immediately preceding window of the same length.
+            {getTranslation(locale, 'orders.subtitle', 'Revenue, order counts and trends. Comparison delta is vs the immediately preceding window of the same length.')}
           </p>
         </div>
       </div>
 
-      {/* Filters — pure GET form, server-rendered. */}
+      {/* Filters */}
       <form method="get" className="card mt-6 flex flex-wrap items-end gap-3">
         <div>
-          <label className="label" htmlFor="range">Range</label>
+          <label className="label" htmlFor="range">{getTranslation(locale, 'orders.range', 'Range')}</label>
           <select id="range" name="range" defaultValue={range} className="input">
             {RANGES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
         </div>
-        {/* Custom range pickers — always rendered so the user can fill them in
-            before switching the dropdown to Custom; server ignores them
-            unless range=custom. */}
         <div>
-          <label className="label" htmlFor="from">From</label>
+          <label className="label" htmlFor="from">{getTranslation(locale, 'orders.from', 'From')}</label>
           <input id="from" name="from" type="date" defaultValue={fromInput} className="input" />
         </div>
         <div>
-          <label className="label" htmlFor="to">To</label>
+          <label className="label" htmlFor="to">{getTranslation(locale, 'orders.to', 'To')}</label>
           <input id="to" name="to" type="date" defaultValue={toInput} className="input" />
         </div>
         <div>
-          <label className="label" htmlFor="brand_id">Brand</label>
+          <label className="label" htmlFor="brand_id">{getTranslation(locale, 'nav.brands', 'Brand')}</label>
           <select id="brand_id" name="brand_id" defaultValue={brandId} className="input">
-            <option value="">All brands</option>
+            <option value="">{getTranslation(locale, 'orders.all_brands', 'All brands')}</option>
             {(brands ?? []).map((b) => <option key={b.id} value={b.id}>{b.name || `Brand ${b.id}`}</option>)}
           </select>
         </div>
         <div>
-          <button className="btn-brand sm:w-auto sm:px-6">Apply</button>
+          <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'btn.apply', 'Apply')}</button>
         </div>
       </form>
 
@@ -152,22 +147,22 @@ export default async function OrdersAnalyticsPage({
         <>
           {/* KPI strip */}
           <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Kpi label="Revenue" value={fmtMoney(a.kpis.revenue, currency)} delta={a.kpis.revenue_delta_pct} />
-            <Kpi label="Orders" value={a.kpis.orders.toLocaleString()} delta={a.kpis.orders_delta_pct} />
-            <Kpi label="Avg order value" value={fmtMoney(a.kpis.aov, currency)} delta={a.kpis.aov_delta_pct} />
-            <Kpi label="Items sold" value={a.kpis.items_sold.toLocaleString()} delta={a.kpis.items_delta_pct} />
+            <Kpi label={getTranslation(locale, 'orders.kpi.revenue', 'Revenue')} value={fmtMoney(a.kpis.revenue, currency)} delta={a.kpis.revenue_delta_pct} vsText={getTranslation(locale, 'orders.kpi.vs_prior', 'vs prior period')} />
+            <Kpi label={getTranslation(locale, 'orders.kpi.orders', 'Orders')} value={a.kpis.orders.toLocaleString()} delta={a.kpis.orders_delta_pct} vsText={getTranslation(locale, 'orders.kpi.vs_prior', 'vs prior period')} />
+            <Kpi label={getTranslation(locale, 'orders.kpi.aov', 'Avg order value')} value={fmtMoney(a.kpis.aov, currency)} delta={a.kpis.aov_delta_pct} vsText={getTranslation(locale, 'orders.kpi.vs_prior', 'vs prior period')} />
+            <Kpi label={getTranslation(locale, 'orders.kpi.items_sold', 'Items sold')} value={a.kpis.items_sold.toLocaleString()} delta={a.kpis.items_delta_pct} vsText={getTranslation(locale, 'orders.kpi.vs_prior', 'vs prior period')} />
           </section>
 
           {/* Daily revenue chart */}
           <section className="card mt-6">
-            <h2 className="text-base font-semibold">Revenue per day</h2>
-            <p className="text-xs text-neutral-500">{a.daily.length} day{a.daily.length === 1 ? '' : 's'} in the selected range.</p>
+            <h2 className="text-base font-semibold">{getTranslation(locale, 'orders.daily_revenue', 'Revenue per day')}</h2>
+            <p className="text-xs text-neutral-500">{a.daily.length} {locale === 'pl' ? 'dni w wybranym okresie' : locale === 'de' ? 'Tage im gewählten Zeitraum' : 'days in the selected range'}.</p>
             <div className="mt-4">
               {a.daily.length === 0 ? (
-                <p className="text-sm text-neutral-400">No orders in this range.</p>
+                <p className="text-sm text-neutral-400">{locale === 'pl' ? 'Brak zamówień w tym okresie.' : locale === 'de' ? 'Keine Bestellungen in diesem Zeitraum.' : 'No orders in this range.'}</p>
               ) : (
                 <BarChart
-                  series={a.daily.map((d) => ({ label: d.day, value: d.revenue, sub: `${d.orders} order${d.orders === 1 ? '' : 's'}` }))}
+                  series={a.daily.map((d) => ({ label: d.day, value: d.revenue, sub: `${d.orders}` }))}
                   height={160}
                   formatValue={(v) => fmtMoney(v, currency)}
                 />
@@ -177,35 +172,36 @@ export default async function OrdersAnalyticsPage({
 
           {/* Monthly trend */}
           <section className="card mt-6">
-            <h2 className="text-base font-semibold">Month-over-month revenue (last 12 months)</h2>
-            <p className="text-xs text-neutral-500">Independent of the range filter so you can see seasonality even when scoped to a recent window.</p>
+            <h2 className="text-base font-semibold">{getTranslation(locale, 'orders.monthly_revenue', 'Month-over-month revenue (last 12 months)')}</h2>
             <div className="mt-4">
               {a.monthly.length === 0 ? (
-                <p className="text-sm text-neutral-400">No order history yet.</p>
+                <p className="text-sm text-neutral-400">{locale === 'pl' ? 'Brak historii zamówień.' : locale === 'de' ? 'Noch keine Bestellhistorie.' : 'No order history yet.'}</p>
               ) : (
                 <BarChart
-                  series={a.monthly.map((m) => ({ label: m.month, value: m.revenue, sub: `${m.orders} order${m.orders === 1 ? '' : 's'}` }))}
+                  series={a.monthly.map((m) => ({ label: m.month, value: m.revenue, sub: `${m.orders}` }))}
                   height={160}
                   formatValue={(v) => fmtMoney(v, currency)}
-                  // Compact axis: month label like "11" (skip year for tight bars) — full date on tooltip via <title>.
                   labelTransform={(s) => s.slice(5)}
                 />
               )}
             </div>
           </section>
 
-          {/* Top sellers + brand breakdown side-by-side on wide screens */}
+          {/* Top sellers + brand breakdown */}
           <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="card">
-              <h2 className="text-base font-semibold">Top sellers</h2>
-              <p className="text-xs text-neutral-500">By revenue in the selected range.</p>
+              <h2 className="text-base font-semibold">{getTranslation(locale, 'orders.top_sellers', 'Top sellers')}</h2>
               <div className="mt-3">
                 {a.top_products.length === 0 ? (
-                  <p className="text-sm text-neutral-400">Nothing sold yet.</p>
+                  <p className="text-sm text-neutral-400">{locale === 'pl' ? 'Brak sprzedaży w tym okresie.' : locale === 'de' ? 'Noch keine Verkäufe.' : 'Nothing sold yet.'}</p>
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="text-left text-xs uppercase tracking-wide text-neutral-400">
-                      <tr><th className="py-1">Product</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Revenue</th></tr>
+                      <tr>
+                        <th className="py-1">{getTranslation(locale, 'products.table.product', 'Product')}</th>
+                        <th className="py-1 text-right">Qty</th>
+                        <th className="py-1 text-right">{getTranslation(locale, 'orders.kpi.revenue', 'Revenue')}</th>
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-100">
                       {a.top_products.map((p) => (
@@ -222,13 +218,12 @@ export default async function OrdersAnalyticsPage({
             </div>
 
             <div className="card">
-              <h2 className="text-base font-semibold">Revenue by brand</h2>
-              <p className="text-xs text-neutral-500">In the selected range.</p>
+              <h2 className="text-base font-semibold">{getTranslation(locale, 'orders.by_brand', 'Revenue by brand')}</h2>
               <div className="mt-3">
                 {a.by_brand.length === 0 ? (
-                  <p className="text-sm text-neutral-400">No brand activity yet.</p>
+                  <p className="text-sm text-neutral-400">{locale === 'pl' ? 'Brak aktywności marek.' : locale === 'de' ? 'Noch keine Markenaktivität.' : 'No brand activity yet.'}</p>
                 ) : (
-                  <HorizontalBars rows={a.by_brand.map((b) => ({ label: b.brand_name, value: b.revenue, sub: `${b.orders} order${b.orders === 1 ? '' : 's'}` }))} formatValue={(v) => fmtMoney(v, currency)} />
+                  <HorizontalBars rows={a.by_brand.map((b) => ({ label: b.brand_name, value: b.revenue, sub: `${b.orders}` }))} formatValue={(v) => fmtMoney(v, currency)} />
                 )}
               </div>
             </div>
@@ -236,16 +231,16 @@ export default async function OrdersAnalyticsPage({
 
           {/* Hour heatmap */}
           <section className="card mt-6">
-            <h2 className="text-base font-semibold">When customers order</h2>
-            <p className="text-xs text-neutral-500">Order count by day-of-week × hour-of-day. Darker = busier.</p>
+            <h2 className="text-base font-semibold">{getTranslation(locale, 'orders.heatmap_title', 'When customers order')}</h2>
+            <p className="text-xs text-neutral-500">{getTranslation(locale, 'orders.heatmap_subtitle', 'Order count by day-of-week × hour-of-day. Darker = busier.')}</p>
             <div className="mt-3">
               <Heatmap cells={a.hour_heatmap} />
             </div>
           </section>
 
           <p className="mt-6 text-xs text-neutral-400">
-            Only fulfilled orders (status <code>completed</code> or <code>ready_to_collect</code>) are included. Cart abandons and failed payments don't pollute the numbers.{' '}
-            <Link href="/dashboard/products/stock/insights" className="font-medium text-brand hover:underline">Stock insights →</Link>
+            {getTranslation(locale, 'orders.fulfilled_footnote', "Only fulfilled orders (status completed or ready_to_collect) are included.")}{' '}
+            <Link href="/dashboard/products/stock/insights" className="font-medium text-brand hover:underline">{getTranslation(locale, 'orders.stock_insights_link', 'Stock insights →')}</Link>
           </p>
         </>
       )}
@@ -253,9 +248,7 @@ export default async function OrdersAnalyticsPage({
   )
 }
 
-// — Small server-rendered components ----------------------------------------
-
-function Kpi({ label, value, delta }: { label: string; value: string; delta: number | null }) {
+function Kpi({ label, value, delta, vsText }: { label: string; value: string; delta: number | null; vsText?: string }) {
   const positive = delta != null && delta > 0
   const negative = delta != null && delta < 0
   const color = positive ? 'text-green-700' : negative ? 'text-red-600' : 'text-neutral-400'
@@ -264,7 +257,7 @@ function Kpi({ label, value, delta }: { label: string; value: string; delta: num
       <p className="text-xs uppercase tracking-wide text-neutral-400">{label}</p>
       <p className="mt-1 text-xl font-bold">{value}</p>
       <p className={`mt-0.5 text-xs font-medium ${color}`}>
-        {fmtPct(delta)} <span className="font-normal text-neutral-400">vs prior period</span>
+        {fmtPct(delta)} <span className="font-normal text-neutral-400">{vsText || 'vs prior period'}</span>
       </p>
     </div>
   )
@@ -327,9 +320,6 @@ function HorizontalBars({ rows, formatValue }: { rows: SeriesPoint[]; formatValu
   )
 }
 
-// 7×24 heatmap — order count per (day-of-week, hour). Cell color scales with
-// the max across the grid. Empty cells render as a faint placeholder so the
-// grid is visible even when traffic is sparse.
 function Heatmap({ cells }: { cells: { dow: number; hour: number; orders: number }[] }) {
   const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0))
   for (const c of cells) {
@@ -354,12 +344,11 @@ function Heatmap({ cells }: { cells: { dow: number; hour: number; orders: number
               <td className="pr-2 text-right text-neutral-500">{DOW_LABELS[dow]}</td>
               {row.map((v, h) => {
                 const intensity = max === 0 ? 0 : v / max
-                // brand color (#FF8800) at varying opacity
                 const bg = v === 0 ? '#f5f5f5' : `rgba(255, 136, 0, ${0.15 + intensity * 0.85})`
                 return (
                   <td key={h} className="p-0">
                     <div
-                      title={`${DOW_LABELS[dow]} ${h.toString().padStart(2, '0')}:00 — ${v} order${v === 1 ? '' : 's'}`}
+                      title={`${DOW_LABELS[dow]} ${h.toString().padStart(2, '0')}:00 — ${v} orders`}
                       className="m-px h-6 w-7 rounded"
                       style={{ background: bg }}
                     />
@@ -373,3 +362,4 @@ function Heatmap({ cells }: { cells: { dow: number; hour: number; orders: number
     </div>
   )
 }
+

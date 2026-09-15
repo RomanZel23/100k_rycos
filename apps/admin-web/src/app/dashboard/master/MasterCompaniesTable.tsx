@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { AdminLocale } from '@/lib/i18n';
+import { getTranslation } from '@/lib/i18n';
 import { updateCompanyStatusAction } from './actions';
 
 interface CompanyRow {
@@ -15,7 +17,7 @@ interface CompanyRow {
   totalVolume: number;
 }
 
-export function MasterCompaniesTable({ initialCompanies }: { initialCompanies: CompanyRow[] }) {
+export function MasterCompaniesTable({ initialCompanies, locale = 'pl' }: { initialCompanies: CompanyRow[]; locale?: AdminLocale }) {
   const [companies, setCompanies] = useState<CompanyRow[]>(initialCompanies);
   const [loadingId, setLoadingId] = useState<number | null>(null);
 
@@ -38,7 +40,7 @@ export function MasterCompaniesTable({ initialCompanies }: { initialCompanies: C
   if (companies.length === 0) {
     return (
       <div className="p-8 text-center text-sm text-neutral-400">
-        Brak firm w systemie.
+        {getTranslation(locale, 'master.empty', 'Brak firm w systemie.')}
       </div>
     );
   }
@@ -48,13 +50,13 @@ export function MasterCompaniesTable({ initialCompanies }: { initialCompanies: C
       <table className="w-full text-left text-sm text-neutral-700">
         <thead className="bg-neutral-50/70 border-b border-neutral-200 text-xs font-semibold uppercase tracking-wider text-neutral-500">
           <tr>
-            <th className="px-6 py-3.5">ID / Firma</th>
-            <th className="px-6 py-3.5">NIP</th>
-            <th className="px-6 py-3.5">Kraj / Waluta</th>
-            <th className="px-6 py-3.5">Zamówienia</th>
-            <th className="px-6 py-3.5">Obrót (GMV)</th>
-            <th className="px-6 py-3.5">Status</th>
-            <th className="px-6 py-3.5 text-right">Zarządzanie</th>
+            <th className="px-6 py-3.5">{getTranslation(locale, 'master.table.company', 'ID / Firma')}</th>
+            <th className="px-6 py-3.5">{getTranslation(locale, 'master.table.nip', 'NIP')}</th>
+            <th className="px-6 py-3.5">{getTranslation(locale, 'master.table.country_currency', 'Kraj / Waluta')}</th>
+            <th className="px-6 py-3.5">{getTranslation(locale, 'master.table.orders', 'Zamówienia')}</th>
+            <th className="px-6 py-3.5">{getTranslation(locale, 'master.table.gmv', 'Obrót (GMV)')}</th>
+            <th className="px-6 py-3.5">{getTranslation(locale, 'master.table.status', 'Status')}</th>
+            <th className="px-6 py-3.5 text-right">{getTranslation(locale, 'master.table.actions', 'Zarządzanie')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-neutral-100">
@@ -70,7 +72,7 @@ export function MasterCompaniesTable({ initialCompanies }: { initialCompanies: C
                     <span className="font-bold text-neutral-900">{c.name}</span>
                   </div>
                   <span className="text-xs text-neutral-400">
-                    Od: {new Date(c.createdAt).toLocaleDateString('pl-PL')}
+                    {locale === 'pl' ? 'Od' : 'Since'}: {new Date(c.createdAt).toLocaleDateString(locale === 'pl' ? 'pl-PL' : locale === 'de' ? 'de-DE' : 'en-US')}
                   </span>
                 </td>
 
@@ -107,7 +109,7 @@ export function MasterCompaniesTable({ initialCompanies }: { initialCompanies: C
                         isActive ? 'bg-emerald-500' : isSuspended ? 'bg-red-500' : 'bg-neutral-400'
                       }`}
                     />
-                    {isActive ? 'Aktywna' : isSuspended ? 'Zablokowana' : c.status}
+                    {isActive ? getTranslation(locale, 'master.status.active', 'Aktywna') : isSuspended ? getTranslation(locale, 'master.status.suspended', 'Zablokowana') : c.status}
                   </span>
                 </td>
 
@@ -122,10 +124,10 @@ export function MasterCompaniesTable({ initialCompanies }: { initialCompanies: C
                     }`}
                   >
                     {loadingId === c.id
-                      ? 'Zapis...'
+                      ? (locale === 'pl' ? 'Zapis...' : 'Saving...')
                       : isActive
-                      ? 'Zawieś konto'
-                      : 'Aktywuj konto'}
+                      ? (locale === 'pl' ? 'Zawieś konto' : locale === 'de' ? 'Konto sperren' : 'Suspend account')
+                      : (locale === 'pl' ? 'Aktywuj konto' : locale === 'de' ? 'Konto aktivieren' : 'Activate account')}
                   </button>
                 </td>
               </tr>
@@ -136,3 +138,4 @@ export function MasterCompaniesTable({ initialCompanies }: { initialCompanies: C
     </div>
   );
 }
+

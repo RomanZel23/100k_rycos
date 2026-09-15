@@ -4,6 +4,8 @@ import { currentUser, isManager } from '@/lib/auth'
 import { NoAccess } from '@/components/NoAccess'
 import { Banner } from '@/components/Banner'
 import { DeleteBrandButton } from '@/components/DeleteBrandButton'
+import { getTranslation } from '@/lib/i18n'
+import { getAdminLocale } from '@/lib/i18n-server'
 import { createBrand, deleteBrand, toggleBrandStatus } from './actions'
 
 interface Brand {
@@ -19,26 +21,27 @@ interface Brand {
 export default async function BrandsPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   const user = await currentUser()
   if (!isManager(user)) return <NoAccess />
+  const locale = await getAdminLocale()
   const { error, notice } = await searchParams
   const brands = (await adminApiData<Brand[]>('/brands')) ?? []
   const companyName = (user?.user_metadata?.name as string) || ''
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-2xl font-bold">Brands</h1>
+      <h1 className="text-2xl font-bold">{getTranslation(locale, 'brands.title', 'Brands')}</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        A brand is a customer ordering entry point (its own QR code, look &amp; menu). Most companies start with one.
+        {getTranslation(locale, 'brands.subtitle', 'A brand is a customer ordering entry point (its own QR code, look & menu).')}
       </p>
       {error && <Banner kind="error" className="mt-4">{error}</Banner>}
       {notice && <Banner kind="success" className="mt-4">{notice}</Banner>}
 
       {brands.length === 0 ? (
         <div className="card mt-6 text-center">
-          <h2 className="text-lg font-semibold">Create your first brand</h2>
-          <p className="mt-1 text-sm text-neutral-500">Give it a name — you can use your company name and customise it later.</p>
+          <h2 className="text-lg font-semibold">{getTranslation(locale, 'brands.create_first', 'Create your first brand')}</h2>
+          <p className="mt-1 text-sm text-neutral-500">{getTranslation(locale, 'brands.create_first_hint', 'Give it a name — you can use your company name and customise it later.')}</p>
           <form action={createBrand} className="mx-auto mt-4 flex max-w-md gap-2">
-            <input name="name" required defaultValue={companyName} placeholder="Brand name" className="input" />
-            <button className="btn-brand sm:w-auto sm:px-6">Create</button>
+            <input name="name" required defaultValue={companyName} placeholder={getTranslation(locale, 'brands.table.brand', 'Brand name')} className="input" />
+            <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'btn.create', 'Create')}</button>
           </form>
         </div>
       ) : (
@@ -47,12 +50,12 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-400">
                 <tr>
-                  <th className="px-4 py-3">Brand</th>
-                  <th className="px-4 py-3">QR slug</th>
-                  <th className="px-4 py-3">Layout</th>
-                  <th className="px-4 py-3 text-right">Products</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                  <th className="px-4 py-3 text-right">Akcje</th>
+                  <th className="px-4 py-3">{getTranslation(locale, 'brands.table.brand', 'Brand')}</th>
+                  <th className="px-4 py-3">{getTranslation(locale, 'brands.table.qr_slug', 'QR slug')}</th>
+                  <th className="px-4 py-3">{getTranslation(locale, 'brands.table.layout', 'Layout')}</th>
+                  <th className="px-4 py-3 text-right">{getTranslation(locale, 'brands.table.products', 'Products')}</th>
+                  <th className="px-4 py-3 text-center">{getTranslation(locale, 'brands.table.status', 'Status')}</th>
+                  <th className="px-4 py-3 text-right">{getTranslation(locale, 'common.actions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -70,12 +73,12 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
                       {b.is_active ? (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          Aktywna
+                          {getTranslation(locale, 'brands.status_active', 'Active')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600 border border-neutral-200">
                           <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
-                          Wstrzymana
+                          {getTranslation(locale, 'brands.status_paused', 'Paused')}
                         </span>
                       )}
                     </td>
@@ -91,9 +94,9 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
                                 ? 'text-amber-600 hover:text-amber-700 hover:underline'
                                 : 'text-emerald-600 hover:text-emerald-700 hover:underline'
                             }`}
-                            title={b.is_active ? 'Wstrzymaj przyjmowanie zamówień' : 'Aktywuj przyjmowanie zamówień'}
+                            title={b.is_active ? getTranslation(locale, 'brands.pause_action', 'Pause') : getTranslation(locale, 'brands.activate_action', 'Activate')}
                           >
-                            {b.is_active ? 'Wstrzymaj' : 'Aktywuj'}
+                            {b.is_active ? getTranslation(locale, 'brands.pause_action', 'Pause') : getTranslation(locale, 'brands.activate_action', 'Activate')}
                           </button>
                         </form>
 
@@ -101,14 +104,14 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
                           href={`/dashboard/brands/${b.id}`}
                           className="text-xs font-medium text-brand hover:underline"
                         >
-                          Edytuj
+                          {getTranslation(locale, 'btn.edit', 'Edit')}
                         </Link>
 
                         <DeleteBrandButton
                           action={deleteBrand}
                           brandId={b.id}
                           brandName={b.name}
-                          label="Usuń"
+                          label={getTranslation(locale, 'btn.delete', 'Delete')}
                         />
                       </div>
                     </td>
@@ -119,10 +122,10 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
           </div>
 
           <div className="card mt-6">
-            <h2 className="text-base font-semibold">Add another brand</h2>
+            <h2 className="text-base font-semibold">{locale === 'pl' ? 'Dodaj kolejną markę' : locale === 'de' ? 'Weitere Marke hinzufügen' : 'Add another brand'}</h2>
             <form action={createBrand} className="mt-3 flex gap-2">
-              <input name="name" required placeholder="Brand name" className="input" />
-              <button className="btn-brand sm:w-auto sm:px-6">Create</button>
+              <input name="name" required placeholder={getTranslation(locale, 'brands.table.brand', 'Brand name')} className="input" />
+              <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'btn.create', 'Create')}</button>
             </form>
           </div>
         </>
@@ -130,3 +133,4 @@ export default async function BrandsPage({ searchParams }: { searchParams: Promi
     </div>
   )
 }
+

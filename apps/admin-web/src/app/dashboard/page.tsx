@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { adminApiData } from '@/lib/api'
 import { currentUser, isManager } from '@/lib/auth'
+import { getTranslation } from '@/lib/i18n'
+import { getAdminLocale } from '@/lib/i18n-server'
 import { ackSingleLocation, ackTeamOnly, setAcceptingOrders } from './actions'
 
 interface Company {
@@ -14,6 +16,7 @@ const isOn = (v: boolean | string | undefined) => v === true || v === 'true' || 
 
 export default async function DashboardPage() {
   const manager = isManager(await currentUser())
+  const locale = await getAdminLocale()
   const company = await adminApiData<Company>('/companies')
 
   // Onboarding checklist data (managers only).
@@ -26,8 +29,6 @@ export default async function DashboardPage() {
       adminApiData<unknown[]>('/brands'),
       adminApiData<unknown[]>('/locations'),
       adminApiData<Terminal[]>('/terminals'),
-      // /fiscal-devices returns { devices, unassigned } since the multi-terminal
-      // refactor — peel devices off so the rest of the page keeps working.
       adminApiData<{ devices: FiscalDevice[]; unassigned: unknown[] }>('/fiscal-devices'),
       adminApiData<unknown[]>('/products'),
       adminApiData<unknown[]>('/team'),
@@ -39,50 +40,44 @@ export default async function DashboardPage() {
     const fiscalList: FiscalDevice[] = fiscal?.devices ?? []
     const activeTerminals = terminalList.filter((t) => t.status === 'active')
     const activeFiscal = fiscalList.filter((f) => f.status === 'active')
-    // Primary fiscalizer is now a property of the fiscal device, not the
-    // terminal. The flag is exclusive per company (DB partial unique index).
     const hasPrimary = fiscalList.some((f) => isOn((f as FiscalDevice & { is_primary: boolean }).is_primary))
     locationsAcked = (settings ?? []).some((s) => s.feature_key === 'onboarding_locations_ack' && isOn(s.is_enabled))
     teamAcked = (settings ?? []).some((s) => s.feature_key === 'onboarding_team_ack' && isOn(s.is_enabled))
     steps = [
-      { key: 'brand', label: 'Create your first brand', hint: 'A customer ordering entry point (its own QR & menu).', href: '/dashboard/brands', done: len(brands) > 0 },
-      { key: 'location', label: 'Set up locations', hint: 'Branches or floors — or confirm you run a single location.', href: '/dashboard/locations', done: len(locations) > 0 || locationsAcked },
-      { key: 'terminal', label: 'Add a POS terminal', hint: 'Create one, then pair the device so it becomes active.', href: '/dashboard/terminals', done: activeTerminals.length > 0 },
-      { key: 'fiscal', label: 'Add a fiscal device', hint: 'Required to fiscalize sales (Poland). Keep at least one active.', href: '/dashboard/fiscal-devices', done: activeFiscal.length > 0 },
-      { key: 'gateway', label: 'Connect a payment gateway', hint: 'So customers can pay.', href: '/dashboard/payment-gateways', done: len(gateways) > 0 },
-      { key: 'product', label: 'Add a product', hint: 'Build your menu.', href: '/dashboard/products', done: len(products) > 0 },
-      // The owner already counts as a member, so require either a teammate (>1)
-      // or an explicit "just me" acknowledgement — otherwise the step is a no-op.
-      { key: 'user', label: 'Invite your team', hint: 'Add staff or managers — or confirm it’s just you.', href: '/dashboard/users', done: len(team) > 1 || teamAcked },
+      { key: 'brand', label: getTranslation(locale, 'overview.step.brand', 'Create your first brand'), hint: getTranslation(locale, 'overview.step.brand_hint', 'A customer ordering entry point (its own QR & menu).'), href: '/dashboard/brands', done: len(brands) > 0 },
+      { key: 'location', label: getTranslation(locale, 'overview.step.location', 'Set up locations'), hint: getTranslation(locale, 'overview.step.location_hint', 'Branches or floors — or confirm you run a single location.'), href: '/dashboard/locations', done: len(locations) > 0 || locationsAcked },
+      { key: 'terminal', label: getTranslation(locale, 'overview.step.terminal', 'Add a POS terminal'), hint: getTranslation(locale, 'overview.step.terminal_hint', 'Create one, then pair the device so it becomes active.'), href: '/dashboard/terminals', done: activeTerminals.length > 0 },
+      { key: 'fiscal', label: getTranslation(locale, 'overview.step.fiscal', 'Add a fiscal device'), hint: getTranslation(locale, 'overview.step.fiscal_hint', 'Required to fiscalize sales (Poland). Keep at least one active.'), href: '/dashboard/fiscal-devices', done: activeFiscal.length > 0 },
+      { key: 'gateway', label: getTranslation(locale, 'overview.step.gateway', 'Connect a payment gateway'), hint: getTranslation(locale, 'overview.step.gateway_hint', 'So customers can pay.'), href: '/dashboard/payment-gateways', done: len(gateways) > 0 },
+      { key: 'product', label: getTranslation(locale, 'overview.step.product', 'Add a product'), hint: getTranslation(locale, 'overview.step.product_hint', 'Build your menu.'), href: '/dashboard/products', done: len(products) > 0 },
+      { key: 'user', label: getTranslation(locale, 'overview.step.user', 'Invite your team'), hint: getTranslation(locale, 'overview.step.user_hint', 'Add staff or managers — or confirm it’s just you.'), href: '/dashboard/users', done: len(team) > 1 || teamAcked },
     ]
 
-    // Health warnings — surfaced once onboarding is complete (or anything regresses).
-    // Each issue gets its own box.
     if (len(products) === 0)
-      warnings.push({ key: 'no-products', title: 'No products', body: 'Your company has no products. Customers won’t see anything to order — please add at least one.', href: '/dashboard/products', cta: 'Add a product' })
+      warnings.push({ key: 'no-products', title: getTranslation(locale, 'overview.warn.no_products_title', 'No products'), body: getTranslation(locale, 'overview.warn.no_products_body', 'Your company has no products. Customers won’t see anything to order — please add at least one.'), href: '/dashboard/products', cta: getTranslation(locale, 'btn.add', 'Add') })
     if (activeTerminals.length === 0)
-      warnings.push({ key: 'no-active-terminal', title: 'No active POS terminal', body: terminalList.length > 0 ? 'You have a terminal but it isn’t active. Pair the device to start taking orders.' : 'You have no POS terminal. Add one and pair the device to take orders.', href: '/dashboard/terminals', cta: 'Manage terminals' })
+      warnings.push({ key: 'no-active-terminal', title: getTranslation(locale, 'overview.warn.no_terminal_title', 'No active POS terminal'), body: getTranslation(locale, 'overview.warn.no_terminal_body', 'You have no POS terminal. Add one and pair the device to take orders.'), href: '/dashboard/terminals', cta: getTranslation(locale, 'btn.manage', 'Manage') })
     if (activeFiscal.length === 0)
-      warnings.push({ key: 'no-active-fiscal', title: 'No active fiscal device', body: fiscalList.length > 0 ? 'You have a fiscal device but none is active. Activate one to fiscalize sales.' : 'No fiscal device is set up. Sales can’t be fiscalized until you add one (required in Poland).', href: '/dashboard/fiscal-devices', cta: 'Manage fiscal devices' })
+      warnings.push({ key: 'no-active-fiscal', title: getTranslation(locale, 'overview.warn.no_fiscal_title', 'No active fiscal device'), body: getTranslation(locale, 'overview.warn.no_fiscal_body', 'No fiscal device is set up. Sales can’t be fiscalized until you add one.'), href: '/dashboard/fiscal-devices', cta: getTranslation(locale, 'btn.manage', 'Manage') })
     if (activeFiscal.length > 0 && !hasPrimary)
-      warnings.push({ key: 'no-primary', title: 'No primary fiscalizer', body: 'No fiscal device is set as the primary fiscalizer. Orders routed to terminals without a fiscal device have nowhere to fiscalize — pick one device as the safety net.', href: '/dashboard/fiscal-devices', cta: 'Set primary' })
+      warnings.push({ key: 'no-primary', title: getTranslation(locale, 'overview.warn.no_primary_fiscal_title', 'No primary fiscalizer'), body: getTranslation(locale, 'overview.warn.no_primary_fiscal_body', 'No fiscal device is set as the primary fiscalizer.'), href: '/dashboard/fiscal-devices', cta: getTranslation(locale, 'btn.setup', 'Set primary') })
     if (len(gateways) === 0)
-      warnings.push({ key: 'no-gateway', title: 'No payment gateway', body: 'Customers can’t pay until you connect a payment gateway. SaferPay (Worldline) is supported today.', href: '/dashboard/payment-gateways', cta: 'Connect SaferPay' })
+      warnings.push({ key: 'no-gateway', title: getTranslation(locale, 'overview.warn.no_gateway_title', 'No payment gateway'), body: getTranslation(locale, 'overview.warn.no_gateway_body', 'Customers can’t pay until you connect a payment gateway. SaferPay (Worldline) is supported today.'), href: '/dashboard/payment-gateways', cta: getTranslation(locale, 'btn.connect', 'Connect') })
   }
   const doneCount = steps.filter((s) => s.done).length
   const allDone = steps.length > 0 && doneCount === steps.length
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="text-2xl font-bold">Overview</h1>
-      <p className="mt-1 text-sm text-neutral-500">Your company at a glance.</p>
+      <h1 className="text-2xl font-bold">{getTranslation(locale, 'overview.title', 'Overview')}</h1>
+      <p className="mt-1 text-sm text-neutral-500">{getTranslation(locale, 'overview.subtitle', 'Your company at a glance.')}</p>
 
       {/* Onboarding checklist */}
       {manager && !allDone && (
         <div className="card mt-6 border-brand/30">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold">Finish setting up</h2>
-            <span className="text-sm text-neutral-500">{doneCount} of {steps.length} done</span>
+            <h2 className="text-base font-semibold">{getTranslation(locale, 'overview.finish_setup', 'Finish setting up')}</h2>
+            <span className="text-sm text-neutral-500">{doneCount} / {steps.length} {getTranslation(locale, 'overview.done_count', 'done')}</span>
           </div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
             <div className="h-full rounded-full bg-brand" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
@@ -99,15 +94,15 @@ export default async function DashboardPage() {
                 </span>
                 {!s.done && (
                   <span className="flex shrink-0 items-center gap-3">
-                    <Link href={s.href} className="text-xs font-semibold text-brand hover:underline">Set up →</Link>
+                    <Link href={s.href} className="text-xs font-semibold text-brand hover:underline">{getTranslation(locale, 'btn.setup', 'Set up')} →</Link>
                     {s.key === 'location' && (
                       <form action={ackSingleLocation}>
-                        <button className="text-xs text-neutral-400 hover:underline">Single location</button>
+                        <button className="text-xs text-neutral-400 hover:underline">{getTranslation(locale, 'overview.btn.single_location', 'Single location')}</button>
                       </form>
                     )}
                     {s.key === 'user' && (
                       <form action={ackTeamOnly}>
-                        <button className="text-xs text-neutral-400 hover:underline">Just me</button>
+                        <button className="text-xs text-neutral-400 hover:underline">{getTranslation(locale, 'overview.btn.just_me', 'Just me')}</button>
                       </form>
                     )}
                   </span>
@@ -118,7 +113,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Health warnings — once setup is complete, flag anything that drifts out of shape. */}
+      {/* Health warnings */}
       {manager && allDone && warnings.map((w) => (
         <div key={w.key} className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
           <div className="flex items-start justify-between gap-4">
@@ -145,7 +140,7 @@ export default async function DashboardPage() {
                 <form action={setAcceptingOrders} className="flex items-center gap-3">
                   <input type="hidden" name="next" value={(!company.is_accepting_orders).toString()} />
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${company.is_accepting_orders ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {company.is_accepting_orders ? 'Accepting orders' : 'Paused'}
+                    {company.is_accepting_orders ? getTranslation(locale, 'overview.accepting_orders', 'Accepting orders') : getTranslation(locale, 'overview.paused', 'Paused')}
                   </span>
                   <button
                     type="submit"
@@ -157,15 +152,15 @@ export default async function DashboardPage() {
                 </form>
               ) : (
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${company.is_accepting_orders ? 'bg-green-50 text-green-700' : 'bg-neutral-100 text-neutral-500'}`}>
-                  {company.is_accepting_orders ? 'Accepting orders' : 'Paused'}
+                  {company.is_accepting_orders ? getTranslation(locale, 'overview.accepting_orders', 'Accepting orders') : getTranslation(locale, 'overview.paused', 'Paused')}
                 </span>
               )}
             </div>
           </div>
-          <Stat label="Country" value={company.country || '—'} />
-          <Stat label="Currency" value={company.currency || '—'} />
-          <Stat label="Business type" value={company.business_type || '—'} />
-          <Stat label="Company ID" value={String(company.id)} />
+          <Stat label={getTranslation(locale, 'overview.country', 'Country')} value={company.country || '—'} />
+          <Stat label={getTranslation(locale, 'overview.currency', 'Currency')} value={company.currency || '—'} />
+          <Stat label={getTranslation(locale, 'overview.business_type', 'Business type')} value={company.business_type || '—'} />
+          <Stat label={getTranslation(locale, 'overview.company_id', 'Company ID')} value={String(company.id)} />
         </div>
       )}
     </div>
@@ -180,3 +175,4 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+

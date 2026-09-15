@@ -9,6 +9,8 @@ import { BrandImageUploader } from '@/components/BrandImageUploader'
 import { BrandColorPicker } from '@/components/BrandColorPicker'
 import { Banner } from '@/components/Banner'
 import { DeleteBrandButton } from '@/components/DeleteBrandButton'
+import { getTranslation } from '@/lib/i18n'
+import { getAdminLocale } from '@/lib/i18n-server'
 import { updateBrand, assignProducts, deleteBrand } from '../actions'
 
 interface Brand {
@@ -41,17 +43,14 @@ const CURRENCIES = [
   { value: 'QAR', label: 'QAR' },
 ]
 const ALL_LAYOUTS = ['boxed', 'list', 'circled', 'cards', 'scanner', 'lines', 'free', 'parking', 'freeCards', 'freeGrid']
-// Allowed menu layouts per business type (TODO: move to a business_type_defaults
-// table once onboarding uses it). Unlisted types fall back to all layouts.
 const LAYOUTS_BY_TYPE: Record<string, string[]> = {
-  product: ['list', 'boxed', 'circled'], // F&B / restaurants
+  product: ['list', 'boxed', 'circled'],
 }
 const LAYOUT_HELP =
-  'How the customer ordering menu is arranged. list = simple rows; boxed = grid of boxed items with images; circled = round category chips. Pick what fits your menu.'
+  'How the customer ordering menu is arranged. list = simple rows; boxed = grid of boxed items with images; circled = round category chips.'
 
-// Customer ordering domain by company business type (extend as new verticals launch).
 const ORDER_BASES: Record<string, string> = {
-  product: 'https://100k.rycos.eu', // restaurants / F&B / retail
+  product: 'https://100k.rycos.eu',
 }
 const orderBase = (businessType?: string) =>
   ORDER_BASES[businessType ?? ''] || process.env.NEXT_PUBLIC_ORDER_BASE_URL || 'https://100k.rycos.eu'
@@ -72,6 +71,7 @@ export default async function EditBrandPage({
   searchParams: Promise<{ error?: string; notice?: string }>
 }) {
   if (!isManager(await currentUser())) return <NoAccess />
+  const locale = await getAdminLocale()
   const { id } = await params
   const { error, notice } = await searchParams
   const [brand, products, company] = await Promise.all([
@@ -84,7 +84,6 @@ export default async function EditBrandPage({
   const brandSlug = brand.qr_slug || (brand as any).slug || `brand-${id}`
   const orderUrl = `${orderBase(company?.business_type).replace(/\/$/, '')}/${brandSlug}`
   const qrDataUrl = await QRCode.toDataURL(orderUrl, { width: 180, margin: 1 })
-  // Limit layouts to the company's vertical; always include the current value.
   const layouts = LAYOUTS_BY_TYPE[company?.business_type ?? ''] ?? ALL_LAYOUTS
   const layoutOptions = layouts.includes(brand.menu_layout) ? layouts : [brand.menu_layout, ...layouts]
   const brandImages = brand.images ?? { header: null, logo: null, footer: null }
@@ -93,7 +92,7 @@ export default async function EditBrandPage({
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <Link href="/dashboard/brands" className="text-sm text-neutral-500 hover:text-brand">&larr; Brands</Link>
+        <Link href="/dashboard/brands" className="text-sm text-neutral-500 hover:text-brand">&larr; {getTranslation(locale, 'brands.title', 'Brands')}</Link>
         <h1 className="mt-2 text-2xl font-bold">{brand.name || `Brand ${brand.id}`}</h1>
       </div>
 
@@ -105,7 +104,7 @@ export default async function EditBrandPage({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={qrDataUrl} alt="QR code" className="h-44 w-44 rounded border border-neutral-200" />
         <div className="text-sm">
-          <p className="text-xs uppercase tracking-wide text-neutral-400">Ordering link</p>
+          <p className="text-xs uppercase tracking-wide text-neutral-400">{locale === 'pl' ? 'Link do menu QR' : locale === 'de' ? 'QR-Bestelllink' : 'Ordering link'}</p>
           <p className="mt-1 break-all font-medium">{orderUrl}</p>
           <p className="mt-2 text-xs text-neutral-400">QR slug: {brandSlug}</p>
         </div>
@@ -114,23 +113,23 @@ export default async function EditBrandPage({
       {/* Details */}
       <form action={updateBrand} className="card space-y-3">
         <input type="hidden" name="id" value={brand.id} />
-        <h2 className="text-base font-semibold">Szczegóły marki (Details)</h2>
+        <h2 className="text-base font-semibold">{getTranslation(locale, 'brands.edit_title', 'Brand details')}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field name="name" label="Nazwa marki" defaultValue={brand.name ?? ''} />
-          <Field name="qr_slug" label="Krótki QR Slug (np. g2d6a)" defaultValue={brandSlug} />
+          <Field name="name" label={getTranslation(locale, 'brands.table.brand', 'Brand name')} defaultValue={brand.name ?? ''} />
+          <Field name="qr_slug" label={getTranslation(locale, 'brands.slug_label', 'QR Slug URL')} defaultValue={brandSlug} />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="menu_layout">
-              Układ menu (Layout){' '}
+              {getTranslation(locale, 'brands.table.layout', 'Menu layout')}{' '}
               <span title={LAYOUT_HELP} className="cursor-help text-neutral-400" aria-label={LAYOUT_HELP}>ⓘ</span>
             </label>
             <select id="menu_layout" name="menu_layout" defaultValue={brand.menu_layout} className="input">
               {layoutOptions.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
-          <Select name="language" label="Język menu" options={LANGS} value={brand.language} />
-          <Select name="currency" label="Waluta" options={CURRENCIES} value={brand.currency} />
+          <Select name="language" label={getTranslation(locale, 'settings.default_language', 'Menu language')} options={LANGS} value={brand.language} />
+          <Select name="currency" label={getTranslation(locale, 'settings.currency', 'Currency')} options={CURRENCIES} value={brand.currency} />
         </div>
 
         <div className="pt-3 border-t border-neutral-100 space-y-3">
@@ -143,7 +142,7 @@ export default async function EditBrandPage({
               className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand cursor-pointer"
             />
             <label htmlFor="is_active" className="text-sm font-semibold text-neutral-800 cursor-pointer">
-              Marka aktywna (klienci mogą składać zamówienia przez kod QR)
+              {locale === 'pl' ? 'Marka aktywna (klienci mogą składać zamówienia przez kod QR)' : locale === 'de' ? 'Marke aktiv (Kunden können per QR-Code bestellen)' : 'Brand active (customers can place orders via QR code)'}
             </label>
           </div>
 
@@ -157,10 +156,14 @@ export default async function EditBrandPage({
             />
             <div>
               <label htmlFor="allow_pay_at_counter" className="text-sm font-semibold text-neutral-800 cursor-pointer block">
-                Zezwalaj na płatność przy odbiorze (Gotówka / Kasa u obsługi)
+                {getTranslation(locale, 'brands.pay_at_counter', 'Allow pay at counter / bar')}
               </label>
               <p className="text-xs text-neutral-500">
-                Gdy włączone, klienci w menu QR mogą wybrać opcję zapłaty gotówką lub kartą przy ladzie / u kelnera. Gdy wyłączone, wymagana jest natychmiastowa płatność online (BLIK / Apple Pay / Karta).
+                {locale === 'pl'
+                  ? 'Gdy włączone, klienci w menu QR mogą wybrać opcję zapłaty gotówką lub kartą przy ladzie / u kelnera. Gdy wyłączone, wymagana jest natychmiastowa płatność online.'
+                  : locale === 'de'
+                  ? 'Wenn aktiviert, können Kunden die Zahlung an der Theke/beim Kellner wählen. Wenn deaktiviert, ist sofortige Online-Zahlung erforderlich.'
+                  : 'When enabled, customers can choose to pay at the counter / bar. When disabled, immediate online payment is required.'}
               </p>
             </div>
           </div>
@@ -170,34 +173,34 @@ export default async function EditBrandPage({
           <BrandColorPicker initialActiveColor={colors.active} initialBgColor={colors.bg} />
         </div>
         <div className="pt-2">
-          <button className="btn-brand sm:w-auto sm:px-6">Zapisz szczegóły</button>
+          <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'btn.save', 'Save')}</button>
         </div>
       </form>
 
-      {/* Images (Supabase Storage) */}
+      {/* Images */}
       <div className="card">
-        <h2 className="text-base font-semibold">Grafiki marki (Supabase Storage)</h2>
-        <p className="mt-1 text-xs text-neutral-500">Zarządzaj grafikami nagłówka, logo oraz stopki dla tej marki.</p>
+        <h2 className="text-base font-semibold">{locale === 'pl' ? 'Grafiki marki' : locale === 'de' ? 'Markengrafiken' : 'Brand images'}</h2>
+        <p className="mt-1 text-xs text-neutral-500">{locale === 'pl' ? 'Zarządzaj grafikami nagłówka, logo oraz stopki dla tej marki.' : locale === 'de' ? 'Kopfzeilen-, Logo- und Fußzeilengrafiken verwalten.' : 'Manage header, logo and footer graphics for this brand.'}</p>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <BrandImageUploader
             brandId={brand.id}
             type="header"
-            label="Header / Baner"
-            aspectHint="Poziomy baner na górze menu (np. 16:9 lub 3:1, min. 1200x500 px)"
+            label={getTranslation(locale, 'brands.banner_image', 'Header Banner')}
+            aspectHint="16:9 / 3:1 (min. 1200x500 px)"
             currentUrl={brandImages.header}
           />
           <BrandImageUploader
             brandId={brand.id}
             type="logo"
-            label="Logo"
-            aspectHint="Kwadratowe logo marki (1:1, np. 500x500 px)"
+            label={getTranslation(locale, 'brands.logo_image', 'Brand Logo')}
+            aspectHint="1:1 (min. 500x500 px)"
             currentUrl={brandImages.logo}
           />
           <BrandImageUploader
             brandId={brand.id}
             type="footer"
-            label="Stopka (Footer)"
-            aspectHint="Pozioma grafika na dole menu (np. sponsorzy, 1200x300 px)"
+            label={getTranslation(locale, 'brands.footer_image', 'Footer Graphic')}
+            aspectHint="1200x300 px"
             currentUrl={brandImages.footer}
           />
         </div>
@@ -206,26 +209,26 @@ export default async function EditBrandPage({
       {/* Menu assignment */}
       <form action={assignProducts} className="card">
         <input type="hidden" name="id" value={brand.id} />
-        <h2 className="text-base font-semibold">Menu — products in this brand</h2>
-        <p className="mb-3 mt-1 text-sm text-neutral-500">Choose which products appear when customers order from this brand.</p>
+        <h2 className="text-base font-semibold">{locale === 'pl' ? 'Karta dań — produkty w tej marce' : locale === 'de' ? 'Speisekarte — Produkte dieser Marke' : 'Menu — products in this brand'}</h2>
+        <p className="mb-3 mt-1 text-sm text-neutral-500">{locale === 'pl' ? 'Wybierz, które pozycje mają być widoczne dla klientów zamawiających z tej marki.' : locale === 'de' ? 'Wählen Sie die Produkte aus, die Kunden sehen können.' : 'Choose which products appear when customers order from this brand.'}</p>
         <BrandMenuPicker products={products ?? []} initial={brandProductIds} />
-        <button className="btn-brand mt-3 sm:w-auto sm:px-6">Save menu</button>
+        <button className="btn-brand mt-3 sm:w-auto sm:px-6">{getTranslation(locale, 'btn.save', 'Save menu')}</button>
       </form>
 
-      {/* Strefa niebezpieczna / Danger zone */}
+      {/* Danger zone */}
       <div className="card border border-red-200 bg-red-50/40 p-5 rounded-2xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-sm font-bold text-red-900">Strefa niebezpieczna — usuwanie marki</h3>
+            <h3 className="text-sm font-bold text-red-900">{locale === 'pl' ? 'Strefa niebezpieczna — usuwanie marki' : locale === 'de' ? 'Gefahrenbereich — Marke löschen' : 'Danger zone — delete brand'}</h3>
             <p className="text-xs text-red-700 mt-0.5">
-              Usunięcie marki spowoduje trwałe odpięcie jej kodu QR i menu. Tej operacji nie można cofnąć.
+              {locale === 'pl' ? 'Usunięcie marki spowoduje trwałe odpięcie jej kodu QR i menu.' : locale === 'de' ? 'Das Löschen der Marke entfernt den QR-Code und das Menü dauerhaft.' : 'Deleting a brand permanently removes its QR code and menu.'}
             </p>
           </div>
           <DeleteBrandButton
             action={deleteBrand}
             brandId={brand.id}
             brandName={brand.name}
-            label="Usuń markę"
+            label={getTranslation(locale, 'btn.delete', 'Delete')}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all shrink-0 shadow-sm"
           />
         </div>
@@ -275,3 +278,4 @@ function Select({
     </div>
   )
 }
+

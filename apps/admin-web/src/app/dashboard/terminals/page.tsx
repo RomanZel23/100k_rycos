@@ -3,6 +3,8 @@ import { adminApiData } from '@/lib/api'
 import { currentUser, isManager } from '@/lib/auth'
 import { NoAccess } from '@/components/NoAccess'
 import { Banner } from '@/components/Banner'
+import { getTranslation } from '@/lib/i18n'
+import { getAdminLocale } from '@/lib/i18n-server'
 import { createTerminal, logoutTerminal } from './actions'
 
 interface Terminal {
@@ -39,17 +41,18 @@ const statusBadge: Record<string, string> = {
   archived: 'bg-neutral-100 text-neutral-400 border-neutral-200',
 }
 
-const roleMeta: Record<string, { label: string; icon: string; bg: string; text: string }> = {
-  all_in_one: { label: 'All-in-One Foodtruck', icon: '⚡', bg: 'bg-amber-50', text: 'text-amber-800' },
-  pos: { label: 'Kasa na Ladzie (POS)', icon: '🖥️', bg: 'bg-blue-50', text: 'text-blue-800' },
-  kds: { label: 'Kuchnia (KDS)', icon: '🍳', bg: 'bg-orange-50', text: 'text-orange-800' },
-  pickup: { label: 'Skaner Wydań (BYOD)', icon: '📱', bg: 'bg-emerald-50', text: 'text-emerald-800' },
-  kiosk: { label: 'Kiosk Klienta', icon: '🛎️', bg: 'bg-purple-50', text: 'text-purple-800' },
-  fiscal_hub: { label: 'Hub Fiskalny', icon: '🏢', bg: 'bg-slate-50', text: 'text-slate-800' },
+const roleMeta: Record<string, { key: string; icon: string; bg: string; text: string }> = {
+  all_in_one: { key: 'terminals.role.all_in_one', icon: '⚡', bg: 'bg-amber-50', text: 'text-amber-800' },
+  pos: { key: 'terminals.role.pos', icon: '🖥️', bg: 'bg-blue-50', text: 'text-blue-800' },
+  kds: { key: 'terminals.role.kds', icon: '🍳', bg: 'bg-orange-50', text: 'text-orange-800' },
+  pickup: { key: 'terminals.role.pickup', icon: '📱', bg: 'bg-emerald-50', text: 'text-emerald-800' },
+  kiosk: { key: 'terminals.role.kiosk', icon: '🛎️', bg: 'bg-purple-50', text: 'text-purple-800' },
+  fiscal_hub: { key: 'terminals.role.fiscal_hub', icon: '🏢', bg: 'bg-slate-50', text: 'text-slate-800' },
 }
 
 export default async function TerminalsPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
   if (!isManager(await currentUser())) return <NoAccess />
+  const locale = await getAdminLocale()
   const { error, notice } = await searchParams
   const [terminals, locations] = await Promise.all([
     adminApiData<Terminal[]>('/terminals'),
@@ -60,9 +63,11 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Stanowiska pracy & Terminale</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+            {getTranslation(locale, 'terminals.title', 'Stanowiska pracy & Terminale')}
+          </h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Zarządzaj profilami stanowisk w foodtruckach: urządzenia All-in-One, kasy ladowe, kuchnia KDS, skanery wydań BYOD oraz integracja ze sprzętem SolutionsBay (SBR-*).
+            {getTranslation(locale, 'terminals.subtitle', 'Zarządzaj profilami stanowisk: urządzenia All-in-One, kasy ladowe, kuchnia KDS, skanery wydań BYOD oraz integracja ze sprzętem SolutionsBay (SBR-*).')}
           </p>
         </div>
       </div>
@@ -75,25 +80,26 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
         <table className="w-full text-sm">
           <thead className="bg-neutral-50/80 border-b border-neutral-200 text-left text-xs uppercase tracking-wider text-neutral-500">
             <tr>
-              <th className="px-4 py-3">Stanowisko & ID</th>
-              <th className="px-4 py-3">Profil operacyjny</th>
-              <th className="px-4 py-3">Lokalizacja</th>
-              <th className="px-4 py-3">Marki</th>
-              <th className="px-4 py-3">Peryferia (Hardware)</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right">Akcje</th>
+              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.station', 'Stanowisko & ID')}</th>
+              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.profile', 'Profil operacyjny')}</th>
+              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.location', 'Lokalizacja')}</th>
+              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.brands', 'Marki')}</th>
+              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.hardware', 'Peryferia (Hardware)')}</th>
+              <th className="px-4 py-3">{getTranslation(locale, 'terminals.table.status', 'Status')}</th>
+              <th className="px-4 py-3 text-right">{getTranslation(locale, 'common.actions', 'Akcje')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100 bg-white">
             {(terminals ?? []).length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-neutral-400">
-                  Brak skonfigurowanych stanowisk. Utwórz pierwsze stanowisko poniżej.
+                  {getTranslation(locale, 'terminals.empty', 'Brak skonfigurowanych stanowisk. Utwórz pierwsze stanowisko poniżej.')}
                 </td>
               </tr>
             )}
             {(terminals ?? []).map((t) => {
-              const role = roleMeta[t.role || 'all_in_one'] || roleMeta.all_in_one
+              const meta = roleMeta[t.role || 'all_in_one'] || roleMeta.all_in_one
+              const roleTitle = getTranslation(locale, meta.key, t.role || 'All-in-One')
               const isAllBrands = !t.assigned_brand_ids || t.assigned_brand_ids.length === 0
               const isSBR = t.terminal_id?.startsWith('SBR-')
 
@@ -109,16 +115,18 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
                           {t.terminal_id}
                         </span>
                         {t.status === 'unclaimed' && (
-                          <span className="text-[11px] text-amber-600 font-medium">(kod do parowania)</span>
+                          <span className="text-[11px] text-amber-600 font-medium">
+                            ({locale === 'pl' ? 'kod do parowania' : locale === 'de' ? 'Kopplungscode' : 'pairing code'})
+                          </span>
                         )}
                       </div>
                     </div>
                   </td>
 
                   <td className="px-4 py-3.5 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${role.bg} ${role.text}`}>
-                      <span>{role.icon}</span>
-                      <span>{role.label}</span>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${meta.bg} ${meta.text}`}>
+                      <span>{meta.icon}</span>
+                      <span>{roleTitle}</span>
                     </span>
                   </td>
 
@@ -135,7 +143,7 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
                   <td className="px-4 py-3.5">
                     {isAllBrands ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-100 text-neutral-700">
-                        Wszystkie marki
+                        {getTranslation(locale, 'terminals.all_brands', 'Wszystkie marki')}
                       </span>
                     ) : (
                       <div className="flex flex-wrap gap-1 max-w-xs">
@@ -151,20 +159,20 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2 text-xs">
                       <span title={t.printer_device_id ? `Drukarka: ${t.printer_device_id}` : 'Brak drukarki'} className={`px-1.5 py-0.5 rounded text-[11px] font-mono ${t.printer_device_id ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-neutral-300'}`}>
-                        🖨️ {t.printer_device_id ? (t.printer_device_id === 'self' ? 'Lokalna' : t.printer_device_id) : '—'}
+                        🖨️ {t.printer_device_id ? (t.printer_device_id === 'self' ? (locale === 'pl' ? 'Lokalna' : locale === 'de' ? 'Lokal' : 'Local') : t.printer_device_id) : '—'}
                       </span>
                       <span title={t.tap_device_id ? `SoftPOS: ${t.tap_device_id}` : 'Brak SoftPOS'} className={`px-1.5 py-0.5 rounded text-[11px] font-mono ${t.tap_device_id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-neutral-300'}`}>
-                        💳 {t.tap_device_id ? (t.tap_device_id === 'self' ? 'Lokalny' : t.tap_device_id) : '—'}
+                        💳 {t.tap_device_id ? (t.tap_device_id === 'self' ? (locale === 'pl' ? 'Lokalny' : locale === 'de' ? 'Lokal' : 'Local') : t.tap_device_id) : '—'}
                       </span>
                     </div>
                   </td>
 
                   <td className="px-4 py-3.5 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${statusBadge[t.status] ?? 'bg-neutral-100 text-neutral-500 border-neutral-200'}`}>
-                      {t.status === 'active' ? 'Aktywny' : t.status === 'unclaimed' ? 'Oczekuje' : t.status}
+                      {t.status === 'active' ? getTranslation(locale, 'status.active', 'Aktywny') : t.status === 'unclaimed' ? (locale === 'pl' ? 'Oczekuje' : locale === 'de' ? 'Ausstehend' : 'Unclaimed') : t.status}
                     </span>
                     <div className="text-[11px] text-neutral-400 mt-0.5">
-                      {t.status === 'unclaimed' ? '— brak sesji —' : fmt(t.last_active)}
+                      {t.status === 'unclaimed' ? (locale === 'pl' ? '— brak sesji —' : locale === 'de' ? '— keine Sitzung —' : '— no session —') : fmt(t.last_active)}
                     </div>
                   </td>
 
@@ -174,7 +182,7 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
                         <form action={logoutTerminal}>
                           <input type="hidden" name="id" value={t.id} />
                           <button className="text-xs font-medium text-neutral-400 hover:text-red-600 transition-colors">
-                            Wyloguj
+                            {locale === 'pl' ? 'Wyloguj' : locale === 'de' ? 'Abmelden' : 'Logout'}
                           </button>
                         </form>
                       )}
@@ -182,7 +190,9 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
                         href={`/dashboard/terminals/${t.id}`}
                         className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-brand bg-brand/5 hover:bg-brand/10 rounded-md transition-colors"
                       >
-                        {t.status === 'unclaimed' ? 'Paruj / Konfiguruj' : 'Konfiguruj ⚙️'}
+                        {t.status === 'unclaimed' 
+                          ? (locale === 'pl' ? 'Paruj / Konfiguruj' : locale === 'de' ? 'Koppeln / Konfigurieren' : 'Pair / Configure') 
+                          : (locale === 'pl' ? 'Konfiguruj ⚙️' : locale === 'de' ? 'Konfigurieren ⚙️' : 'Configure ⚙️')}
                       </Link>
                     </div>
                   </td>
@@ -195,34 +205,38 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
 
       {/* Quick Add Workstation */}
       <div className="card bg-white border border-neutral-200/80 shadow-sm p-6">
-        <h2 className="text-base font-bold text-neutral-900">Dodaj nowe stanowisko pracy (BYOD / POS)</h2>
+        <h2 className="text-base font-bold text-neutral-900">{getTranslation(locale, 'terminals.new_title', 'Dodaj nowe stanowisko pracy (BYOD / POS)')}</h2>
         <p className="mt-0.5 text-xs text-neutral-500">
-          Wprowadź nazwę i profil operacyjny. System automatycznie wygeneruje unikalny wewnętrzny kod parowania oraz kod QR dla smartfona lub tabletu.
+          {locale === 'pl'
+            ? 'Wprowadź nazwę i profil operacyjny. System automatycznie wygeneruje unikalny wewnętrzny kod parowania oraz kod QR dla smartfona lub tabletu.'
+            : locale === 'de'
+            ? 'Geben Sie Name und Profil ein. Das System generiert automatisch Kopplungscode und QR-Code.'
+            : 'Enter workstation name and role. The system will automatically generate a pairing code and QR.'}
         </p>
 
         <form action={createTerminal} className="mt-5 space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="sm:col-span-1">
-              <label className="label" htmlFor="name">Nazwa stanowiska</label>
-              <input id="name" name="name" required placeholder="np. Kelner Bartek (A55), Kasa 1, Grill KDS" className="input" />
+              <label className="label" htmlFor="name">{getTranslation(locale, 'terminals.name', 'Nazwa stanowiska')}</label>
+              <input id="name" name="name" required placeholder={locale === 'pl' ? 'np. Kelner Bartek (A55), Kasa 1, Grill KDS' : 'e.g. Counter 1, Kitchen KDS'} className="input" />
             </div>
 
             <div className="sm:col-span-1">
-              <label className="label" htmlFor="role">Profil operacyjny</label>
+              <label className="label" htmlFor="role">{getTranslation(locale, 'terminals.role', 'Profil operacyjny')}</label>
               <select id="role" name="role" defaultValue="all_in_one" className="input font-medium">
-                <option value="all_in_one">⚡ All-in-One Foodtruck Master</option>
-                <option value="pos">🖥️ Kasa na Ladzie / Kelner (POS)</option>
-                <option value="kds">🍳 Kuchnia (KDS)</option>
-                <option value="pickup">📱 Skaner Wydań (BYOD)</option>
-                <option value="kiosk">🛎️ Kiosk Samoobsługowy</option>
-                <option value="fiscal_hub">🏢 Hub Fiskalny</option>
+                <option value="all_in_one">⚡ {getTranslation(locale, 'terminals.role.all_in_one', 'All-in-One Foodtruck Master')}</option>
+                <option value="pos">🖥️ {getTranslation(locale, 'terminals.role.pos', 'Kasa na Ladzie / Kelner (POS)')}</option>
+                <option value="kds">🍳 {getTranslation(locale, 'terminals.role.kds', 'Kuchnia (KDS)')}</option>
+                <option value="pickup">📱 {getTranslation(locale, 'terminals.role.pickup', 'Skaner Wydań (BYOD)')}</option>
+                <option value="kiosk">🛎️ {getTranslation(locale, 'terminals.role.kiosk', 'Kiosk Samoobsługowy')}</option>
+                <option value="fiscal_hub">🏢 {getTranslation(locale, 'terminals.role.fiscal_hub', 'Hub Fiskalny')}</option>
               </select>
             </div>
 
             <div className="sm:col-span-1">
-              <label className="label" htmlFor="location_id">Lokalizacja / Foodtruck</label>
+              <label className="label" htmlFor="location_id">{getTranslation(locale, 'terminals.table.location', 'Lokalizacja / Foodtruck')}</label>
               <select id="location_id" name="location_id" className="input">
-                <option value="">— brak przypisania —</option>
+                <option value="">— {locale === 'pl' ? 'brak przypisania' : locale === 'de' ? 'keine Zuordnung' : 'unassigned'} —</option>
                 {(locations ?? []).map((l) => (
                   <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
@@ -232,7 +246,7 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
 
           <div className="flex justify-end pt-2 border-t border-neutral-100">
             <button className="btn-brand">
-              Utwórz stanowisko & wygeneruj kod parowania ➔
+              {locale === 'pl' ? 'Utwórz stanowisko & wygeneruj kod parowania ➔' : locale === 'de' ? 'Arbeitsplatz erstellen & Kopplungscode generieren ➔' : 'Create workstation & generate pairing code ➔'}
             </button>
           </div>
         </form>
@@ -240,3 +254,4 @@ export default async function TerminalsPage({ searchParams }: { searchParams: Pr
     </div>
   )
 }
+

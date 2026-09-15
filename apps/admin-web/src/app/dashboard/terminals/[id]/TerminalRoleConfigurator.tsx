@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { AdminLocale } from '@/lib/i18n';
 
 interface Capabilities {
   can_sell?: boolean;
@@ -55,53 +56,133 @@ const ROLE_DEFAULTS: Record<string, Capabilities> = {
   },
 };
 
-const ROLES = [
-  {
-    id: 'all_in_one',
-    title: '⚡ All-in-One Foodtruck Master',
-    desc: 'Kasa POS + Kuchnia KDS + Skaner Wydań + SoftPOS i Drukarka SBR-*',
-    badge: 'Zalecane na ladę',
-  },
-  {
-    id: 'pos',
-    title: '🖥️ Kasa na Ladzie (POS)',
-    desc: 'Sprzedaż bezpośrednia, obsługa gotówki, SoftPOS, druk paragonów',
-    badge: 'Tylko sprzedaż',
-  },
-  {
-    id: 'kds',
-    title: '🍳 Kuchnia (KDS)',
-    desc: 'Ekran zamówień w kuchni / przy grillu, oznaczanie dań jako gotowe',
-    badge: 'Dla kucharzy',
-  },
-  {
-    id: 'pickup',
-    title: '📱 Skaner Wydań (BYOD)',
-    desc: 'Prywatny smartfon pracownika na wydawce, szybkie skanowanie QR',
-    badge: 'Mobilne BYOD',
-  },
-  {
-    id: 'kiosk',
-    title: '🛎️ Kiosk Samoobsługowy',
-    desc: 'Tablet dla klientów na zewnątrz foodtrucka do samodzielnego zamawiania',
-    badge: 'Samoobsługa',
-  },
-  {
-    id: 'fiscal_hub',
-    title: '🏢 Hub Fiskalny / Manager',
-    desc: 'Centralna rejestracja fiskalna w tle (e-paragony / kasa wirtualna)',
-    badge: 'Fiskalizacja',
-  },
-];
+const ROLES: Record<AdminLocale, Array<{ id: string; title: string; desc: string; badge: string }>> = {
+  pl: [
+    {
+      id: 'all_in_one',
+      title: '⚡ All-in-One Foodtruck Master',
+      desc: 'Kasa POS + Kuchnia KDS + Skaner Wydań + SoftPOS i Drukarka SBR-*',
+      badge: 'Zalecane na ladę',
+    },
+    {
+      id: 'pos',
+      title: '🖥️ Kasa na Ladzie (POS)',
+      desc: 'Sprzedaż bezpośrednia, obsługa gotówki, SoftPOS, druk paragonów',
+      badge: 'Tylko sprzedaż',
+    },
+    {
+      id: 'kds',
+      title: '🍳 Kuchnia (KDS)',
+      desc: 'Ekran zamówień w kuchni / przy grillu, oznaczanie dań jako gotowe',
+      badge: 'Dla kucharzy',
+    },
+    {
+      id: 'pickup',
+      title: '📱 Skaner Wydań (BYOD)',
+      desc: 'Prywatny smartfon pracownika na wydawce, szybkie skanowanie QR',
+      badge: 'Mobilne BYOD',
+    },
+    {
+      id: 'kiosk',
+      title: '🛎️ Kiosk Samoobsługowy',
+      desc: 'Tablet dla klientów na zewnątrz foodtrucka do samodzielnego zamawiania',
+      badge: 'Samoobsługa',
+    },
+    {
+      id: 'fiscal_hub',
+      title: '🏢 Hub Fiskalny / Manager',
+      desc: 'Centralna rejestracja fiskalna w tle (e-paragony / kasa wirtualna)',
+      badge: 'Fiskalizacja',
+    },
+  ],
+  en: [
+    {
+      id: 'all_in_one',
+      title: '⚡ All-in-One Foodtruck Master',
+      desc: 'POS Counter + Kitchen KDS + Pickup Scanner + SoftPOS & SBR Printer',
+      badge: 'Recommended',
+    },
+    {
+      id: 'pos',
+      title: '🖥️ Counter POS',
+      desc: 'Direct sales, cash handling, SoftPOS card payments, receipt printing',
+      badge: 'Sales Only',
+    },
+    {
+      id: 'kds',
+      title: '🍳 Kitchen Display (KDS)',
+      desc: 'Kitchen/grill order screen, marking dishes ready for pickup',
+      badge: 'Kitchen Staff',
+    },
+    {
+      id: 'pickup',
+      title: '📱 Pickup Scanner (BYOD)',
+      desc: 'Staff personal phone at the pickup window, fast QR scanning',
+      badge: 'Mobile BYOD',
+    },
+    {
+      id: 'kiosk',
+      title: '🛎️ Self-Order Kiosk',
+      desc: 'Customer tablet on the counter or outside for self ordering',
+      badge: 'Self Service',
+    },
+    {
+      id: 'fiscal_hub',
+      title: '🏢 Fiscal Hub / Manager',
+      desc: 'Centralized background fiscalization (e-receipts / virtual register)',
+      badge: 'Fiscal Hub',
+    },
+  ],
+  de: [
+    {
+      id: 'all_in_one',
+      title: '⚡ All-in-One Foodtruck Master',
+      desc: 'Theken-POS + KDS Küche + Ausgabe-Scanner + SoftPOS & SBR Drucker',
+      badge: 'Empfohlen',
+    },
+    {
+      id: 'pos',
+      title: '🖥️ Theken-Kasse (POS)',
+      desc: 'Direktverkauf, Barzahlung, SoftPOS Kartenzahlung, Belegdruck',
+      badge: 'Nur Verkauf',
+    },
+    {
+      id: 'kds',
+      title: '🍳 Küchenmonitor (KDS)',
+      desc: 'Küchenbildschirm für Bestellungen, Fertigstellung markieren',
+      badge: 'Für die Küche',
+    },
+    {
+      id: 'pickup',
+      title: '📱 Ausgabe-Scanner (BYOD)',
+      desc: 'Mitarbeiter-Smartphone an der Essensausgabe, QR-Scan',
+      badge: 'Mobiles BYOD',
+    },
+    {
+      id: 'kiosk',
+      title: '🛎️ Selbstbedienungskiosk',
+      desc: 'Kundentablet an der Theke für eigenständige Bestellungen',
+      badge: 'Selbstbedienung',
+    },
+    {
+      id: 'fiscal_hub',
+      title: '🏢 Fiskal-Hub / Manager',
+      desc: 'Zentrale Fiskalisierung im Hintergrund (E-Belege / virtuelle Kasse)',
+      badge: 'Fiskalisierung',
+    },
+  ],
+};
 
 interface TerminalRoleConfiguratorProps {
   initialRole: string;
   initialCapabilities: Capabilities;
+  locale?: AdminLocale;
 }
 
 export function TerminalRoleConfigurator({
   initialRole,
   initialCapabilities,
+  locale = 'pl',
 }: TerminalRoleConfiguratorProps) {
   const [selectedRole, setSelectedRole] = useState(initialRole || 'all_in_one');
   const [caps, setCaps] = useState<Capabilities>(() => {
@@ -110,6 +191,8 @@ export function TerminalRoleConfigurator({
     }
     return ROLE_DEFAULTS[initialRole] || ROLE_DEFAULTS.all_in_one;
   });
+
+  const roles = ROLES[locale] || ROLES.pl;
 
   const handleRoleChange = (roleId: string) => {
     setSelectedRole(roleId);
@@ -127,14 +210,20 @@ export function TerminalRoleConfigurator({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-bold text-neutral-900">1. Profil i rola stanowiska pracy</h2>
+        <h2 className="text-base font-bold text-neutral-900">
+          {locale === 'pl' ? '1. Profil i rola stanowiska pracy' : locale === 'de' ? '1. Profil und Rolle des Arbeitsplatzes' : '1. Workstation profile & role'}
+        </h2>
         <p className="text-xs text-neutral-500 mt-0.5">
-          Wybierz przeznaczenie tego urządzenia. W foodtrucku tablet na ladzie zazwyczaj działa w trybie <strong className="text-neutral-700">All-in-One</strong>.
+          {locale === 'pl'
+            ? 'Wybierz przeznaczenie tego urządzenia. W foodtrucku tablet na ladzie zazwyczaj działa w trybie All-in-One.'
+            : locale === 'de'
+            ? 'Wählen Sie den Zweck dieses Geräts. Am Foodtruck läuft das Tablet an der Theke meist im All-in-One-Modus.'
+            : 'Select the purpose of this workstation. A countertop tablet typically runs in All-in-One mode.'}
         </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        {ROLES.map((r) => {
+        {roles.map((r) => {
           const isSelected = selectedRole === r.id;
           return (
             <label
@@ -171,7 +260,7 @@ export function TerminalRoleConfigurator({
       {/* Granular Capabilities */}
       <div className="pt-3 border-t border-neutral-100">
         <span className="text-xs font-semibold text-neutral-700 block mb-2">
-          Włączone moduły i funkcje na tym stanowisku:
+          {locale === 'pl' ? 'Włączone moduły i funkcje na tym stanowisku:' : locale === 'de' ? 'Aktivierte Module an diesem Arbeitsplatz:' : 'Enabled workstation modules & capabilities:'}
         </span>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
           <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
@@ -184,7 +273,7 @@ export function TerminalRoleConfigurator({
               onChange={() => handleCapToggle('can_sell')}
               className="rounded text-brand"
             />
-            <span>💳 Sprzedaż (POS)</span>
+            <span>💳 {locale === 'pl' ? 'Sprzedaż (POS)' : locale === 'de' ? 'Verkauf (POS)' : 'Sales (POS)'}</span>
           </label>
 
           <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
@@ -197,7 +286,7 @@ export function TerminalRoleConfigurator({
               onChange={() => handleCapToggle('can_kds')}
               className="rounded text-brand"
             />
-            <span>🍳 Kuchnia (KDS)</span>
+            <span>🍳 {locale === 'pl' ? 'Kuchnia (KDS)' : locale === 'de' ? 'Küche (KDS)' : 'Kitchen (KDS)'}</span>
           </label>
 
           <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
@@ -210,7 +299,7 @@ export function TerminalRoleConfigurator({
               onChange={() => handleCapToggle('can_pickup')}
               className="rounded text-brand"
             />
-            <span>📦 Wydawka (Skaner)</span>
+            <span>📦 {locale === 'pl' ? 'Wydawka (Skaner)' : locale === 'de' ? 'Ausgabe (Scanner)' : 'Pickup (Scanner)'}</span>
           </label>
 
           <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
@@ -223,7 +312,7 @@ export function TerminalRoleConfigurator({
               onChange={() => handleCapToggle('has_softpos')}
               className="rounded text-brand"
             />
-            <span>📱 SoftPOS (Karty)</span>
+            <span>📱 {locale === 'pl' ? 'SoftPOS (Karty)' : locale === 'de' ? 'SoftPOS (Karten)' : 'SoftPOS (Cards)'}</span>
           </label>
 
           <label className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
@@ -236,10 +325,11 @@ export function TerminalRoleConfigurator({
               onChange={() => handleCapToggle('has_printer')}
               className="rounded text-brand"
             />
-            <span>🖨️ Druk bonów</span>
+            <span>🖨️ {locale === 'pl' ? 'Druk bonów' : locale === 'de' ? 'Bondruck' : 'Receipt Printer'}</span>
           </label>
         </div>
       </div>
     </div>
   );
 }
+
