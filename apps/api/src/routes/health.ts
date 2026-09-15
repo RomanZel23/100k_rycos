@@ -1,11 +1,20 @@
 import { FastifyInstance } from 'fastify';
-import { checkDatabaseHealth } from '@rycos/database';
+import { checkDatabaseHealth, ensureDatabaseSchema } from '@rycos/database';
 
 export async function healthRoutes(fastify: FastifyInstance) {
   fastify.get('/health/live', async () => ({
     status: 'ok',
     uptimeSeconds: Math.floor(process.uptime()),
   }));
+
+  fastify.all('/health/migrate', async (_req, reply) => {
+    try {
+      await ensureDatabaseSchema();
+      return reply.send({ success: true, message: 'Database schema migration executed successfully.' });
+    } catch (err: any) {
+      return reply.code(500).send({ success: false, error: err.message });
+    }
+  });
 
   fastify.get('/health', async (_req, reply) => {
     const isDbHealthy = await checkDatabaseHealth();

@@ -448,6 +448,35 @@ export async function ensureDatabaseSchema() {
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "default_language" varchar(8) DEFAULT 'pl';
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "terms_and_conditions" text;
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "privacy_policy" text;
+
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "allow_pay_at_counter" boolean DEFAULT false NOT NULL;
+
+          ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_job_id" varchar(128);
+          ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_qr_code" text;
+          ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_status" varchar(32) DEFAULT 'none' NOT NULL;
+          ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_device_id" varchar(64);
+          ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_receipt_number" varchar(64);
+          ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_pdf_url" text;
+          ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "terminal_id" varchar(64);
+
+          CREATE TABLE IF NOT EXISTS "fiscal_receipts" (
+            "id" serial PRIMARY KEY NOT NULL,
+            "order_id" uuid NOT NULL REFERENCES "orders"("id") ON DELETE cascade,
+            "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+            "display_id" varchar(64) NOT NULL,
+            "request_id" varchar(128) NOT NULL,
+            "receipt_number" varchar(64) NOT NULL,
+            "jpk_id" varchar(128),
+            "job_id" varchar(128),
+            "gross_amount_grosze" integer NOT NULL,
+            "currency" varchar(4) DEFAULT 'PLN' NOT NULL,
+            "customer_nip" varchar(16),
+            "pdf_receipt_url" text,
+            "raw_result" jsonb,
+            "printed_at" timestamp,
+            "created_at" timestamp DEFAULT now() NOT NULL,
+            CONSTRAINT "fiscal_receipts_order_id_unique" UNIQUE("order_id")
+          );
         `);
       }
 
