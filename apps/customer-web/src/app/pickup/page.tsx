@@ -16,7 +16,11 @@ import {
   Volume2,
   VolumeX,
   History,
-  PackageCheck
+  PackageCheck,
+  ShoppingBag,
+  MapPin,
+  Car,
+  Check
 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { getApiBaseUrl } from '../../lib/api';
@@ -38,6 +42,11 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
   const [successOrder, setSuccessOrder] = useState<any | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [recentPickups, setRecentPickups] = useState<CompletedOrderLog[]>([]);
+  const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({});
+
+  const toggleItemCheck = (idx: number) => {
+    setCheckedItems((prev) => ({ ...prev, [idx]: !prev[idx] }));
+  };
 
   // Camera references
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -252,6 +261,7 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
     setSuccessOrder(null);
     setErrorMessage(null);
     setPin('');
+    setCheckedItems({});
     if (activeTab === 'camera') {
       startCamera();
     }
@@ -312,39 +322,164 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
       </header>
 
       {/* Main Action Area */}
-      <main className="flex-1 flex flex-col p-3 sm:p-4 max-w-sm sm:max-w-md mx-auto w-full justify-between overflow-y-auto">
+      <main className="flex-1 flex flex-col p-2.5 sm:p-4 max-w-md sm:max-w-lg mx-auto w-full min-h-0 overflow-hidden">
         {/* Success Confirmation Overlay Card */}
         {successOrder ? (
-          <div className="flex-1 flex flex-col justify-center items-center text-center p-5 sm:p-6 bg-emerald-950/40 border-2 border-emerald-500/80 rounded-3xl animate-in zoom-in-95 duration-200">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-500 text-neutral-950 flex items-center justify-center mb-3 sm:mb-4 shadow-lg shadow-emerald-500/20">
-              <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12" />
-            </div>
-
-            <span className="text-xs uppercase font-bold tracking-widest text-emerald-400">
-              Zamówienie Wydane!
-            </span>
-            <div className="text-4xl sm:text-5xl font-black text-white mt-1 mb-2 font-mono">
-              #{successOrder.orderNumber}
-            </div>
-
-            {successOrder.items && successOrder.items.length > 0 && (
-              <div className="w-full bg-neutral-900/90 rounded-2xl p-3 sm:p-4 my-3 sm:my-4 border border-neutral-800 text-left text-xs max-h-48 overflow-y-auto space-y-2">
-                {successOrder.items.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-start border-b border-neutral-800 pb-1.5 last:border-0 last:pb-0">
-                    <span className="font-semibold text-neutral-200">
-                      {item.quantity}x {item.name}
-                    </span>
-                    {item.specialInstructions && (
-                      <span className="text-[11px] text-amber-400 block">{item.specialInstructions}</span>
-                    )}
-                  </div>
-                ))}
+          <div className="flex-1 flex flex-col justify-between p-3.5 sm:p-5 bg-emerald-950/30 border-2 border-emerald-500/80 rounded-3xl animate-in zoom-in-95 duration-200 overflow-hidden min-h-0 shadow-2xl">
+            {/* Top Order Header */}
+            <div className="shrink-0 flex flex-col items-center text-center border-b border-emerald-500/25 pb-2 sm:pb-3">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-black text-xs uppercase tracking-widest">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Zamówienie Wydane!</span>
               </div>
-            )}
 
+              {/* Huge Order Number */}
+              <div className="text-5xl sm:text-6xl font-black text-white font-mono tracking-tight my-0.5 sm:my-1">
+                #{successOrder.orderNumber}
+              </div>
+
+              {/* Order Meta Badges */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mt-0.5">
+                {successOrder.orderType === 'takeaway' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs sm:text-sm font-black uppercase tracking-wide">
+                    <ShoppingBag className="w-3.5 h-3.5" /> NA WYNOS
+                  </span>
+                ) : successOrder.orderType === 'dine_in' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/40 text-xs sm:text-sm font-black uppercase tracking-wide">
+                    <Utensils className="w-3.5 h-3.5" /> NA MIEJSCU
+                  </span>
+                ) : null}
+
+                {successOrder.tableLabel && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs sm:text-sm font-black">
+                    <MapPin className="w-3.5 h-3.5" /> Stolik {successOrder.tableLabel}
+                  </span>
+                )}
+
+                {successOrder.parkingSpot && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-xs sm:text-sm font-black">
+                    <Car className="w-3.5 h-3.5" /> Parking {successOrder.parkingSpot}
+                  </span>
+                )}
+
+                {successOrder.brandName && (
+                  <span className="text-[11px] sm:text-xs font-bold text-neutral-400 bg-neutral-900 px-2 py-0.5 rounded-lg border border-neutral-800">
+                    {successOrder.brandName}
+                  </span>
+                )}
+              </div>
+
+              {successOrder.customerNote && (
+                <div className="mt-2 text-xs font-bold text-amber-200 bg-amber-950/60 border border-amber-500/40 px-3 py-1 rounded-xl max-w-full truncate">
+                  💬 {successOrder.customerNote}
+                </div>
+              )}
+            </div>
+
+            {/* CO WYDAĆ - Prominent Large Items List */}
+            <div className="flex-1 flex flex-col min-h-0 my-2 sm:my-3">
+              <div className="flex items-center justify-between pb-1.5 px-1 shrink-0">
+                <span className="text-xs font-black uppercase tracking-widest text-emerald-400">
+                  📦 Co wydać ({successOrder.items?.length || 0}):
+                </span>
+                <span className="text-[11px] font-medium text-neutral-400">
+                  Dotknij, aby odhaczyć
+                </span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-2.5 pr-0.5">
+                {(!successOrder.items || successOrder.items.length === 0) && (
+                  <div className="p-4 rounded-2xl bg-neutral-900 text-center text-neutral-400 text-sm">
+                    Brak szczegółów pozycji
+                  </div>
+                )}
+                {successOrder.items?.map((item: any, idx: number) => {
+                  const isChecked = checkedItems[idx];
+                  const addonsList = Array.isArray(item.addons)
+                    ? item.addons
+                    : typeof item.addons === 'string'
+                    ? (() => {
+                        try {
+                          return JSON.parse(item.addons);
+                        } catch {
+                          return [];
+                        }
+                      })()
+                    : [];
+
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => toggleItemCheck(idx)}
+                      className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer select-none ${
+                        isChecked
+                          ? 'bg-neutral-900/50 border-neutral-800 opacity-40 line-through'
+                          : 'bg-neutral-900 border-neutral-700/80 hover:border-emerald-500/60 shadow-lg'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5 sm:gap-3">
+                        <span
+                          className={`text-2xl sm:text-3xl font-black font-mono px-2.5 sm:px-3 py-1 rounded-xl min-w-[50px] sm:min-w-[56px] text-center shrink-0 border-2 transition-colors ${
+                            isChecked
+                              ? 'bg-neutral-800 text-neutral-500 border-neutral-700'
+                              : 'bg-emerald-950 text-emerald-400 border-emerald-500/60 shadow-sm'
+                          }`}
+                        >
+                          {item.quantity}x
+                        </span>
+
+                        <div className="flex-1 min-w-0">
+                          <span
+                            className={`text-lg sm:text-2xl font-black text-white leading-snug block break-words ${
+                              isChecked ? 'text-neutral-400 line-through' : ''
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+
+                          {addonsList.length > 0 && (
+                            <div className="flex flex-wrap gap-1 sm:gap-1.5 mt-1.5">
+                              {addonsList.map((a: any, aIdx: number) => (
+                                <span
+                                  key={aIdx}
+                                  className="text-xs sm:text-sm font-bold bg-amber-400/15 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-lg"
+                                >
+                                  + {typeof a === 'string' ? a : a.name || a.label}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {item.specialInstructions && (
+                            <div className="text-xs sm:text-sm font-bold text-amber-100 bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 rounded-xl mt-1.5 italic flex items-start gap-1.5">
+                              <span className="not-italic">⚠️</span>
+                              <span>„{item.specialInstructions}”</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="shrink-0 pt-0.5">
+                          <div
+                            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all ${
+                              isChecked
+                                ? 'bg-emerald-500 border-emerald-500 text-neutral-950'
+                                : 'border-neutral-600 bg-neutral-850 text-transparent'
+                            }`}
+                          >
+                            <Check className="w-4 h-4 stroke-[3]" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bottom Next Order Action Button */}
             <button
               onClick={handleNextScan}
-              className="w-full py-3.5 sm:py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-neutral-950 font-black text-sm sm:text-base transition-all shadow-lg mt-2 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-4 sm:py-4.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-neutral-950 font-black text-base sm:text-lg uppercase tracking-wider transition-all shadow-xl shadow-emerald-500/25 shrink-0 flex items-center justify-center gap-2 cursor-pointer mt-1"
             >
               <span>Następne zamówienie ➔</span>
             </button>
