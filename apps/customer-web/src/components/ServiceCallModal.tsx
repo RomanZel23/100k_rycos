@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Bell, Receipt, Utensils, X, CheckCircle2, Loader2 } from 'lucide-react';
 import { getApiBaseUrl } from '../lib/api';
+import { Language } from '../lib/i18n';
 
 interface ServiceCallModalProps {
   isOpen: boolean;
@@ -10,8 +11,68 @@ interface ServiceCallModalProps {
   brandId?: number;
   tableLabel?: string;
   parkingSpot?: string;
-  lang?: string;
+  lang?: Language;
 }
+
+const serviceTranslations = {
+  pl: {
+    title: 'Wezwij obsługę',
+    yourTable: 'Twój stolik',
+    table: 'Stolik',
+    parking: 'Parking',
+    sentTitle: 'Wezwanie wysłane!',
+    sentDesc: 'Obsługa została powiadomiona i już zmierza do Twojego',
+    option1Title: 'Podejdź do stolika',
+    option1Sub: 'Potrzebuję pomocy kelnera lub menu',
+    option2Title: 'Poproś o rachunek',
+    option2Sub: 'Chcę zapłacić gotówką lub kartą',
+    option3Title: 'Sztućce / serwetki / woda',
+    option3Sub: 'Drobna prośba do obsługi',
+    noteLabel: 'Dodatkowa uwaga (opcjonalnie):',
+    notePlaceholder: 'np. płatność kartą, dodatkowy sos',
+    sending: 'Wysyłanie...',
+    sendButton: 'Wyślij wezwanie do obsługi →',
+    sendError: 'Nie udało się wysłać wezwania',
+  },
+  en: {
+    title: 'Call staff',
+    yourTable: 'Your table',
+    table: 'Table',
+    parking: 'Parking spot',
+    sentTitle: 'Request sent!',
+    sentDesc: 'Staff has been notified and is heading to your',
+    option1Title: 'Come to table',
+    option1Sub: 'Need waiter assistance or physical menu',
+    option2Title: 'Request the bill',
+    option2Sub: 'Want to pay with cash or card',
+    option3Title: 'Cutlery / napkins / water',
+    option3Sub: 'Small request for staff',
+    noteLabel: 'Additional note (optional):',
+    notePlaceholder: 'e.g. card payment, extra sauce',
+    sending: 'Sending...',
+    sendButton: 'Send request to staff →',
+    sendError: 'Failed to send request',
+  },
+  de: {
+    title: 'Service rufen',
+    yourTable: 'Ihr Tisch',
+    table: 'Tisch',
+    parking: 'Parkplatz',
+    sentTitle: 'Anfrage gesendet!',
+    sentDesc: 'Das Personal wurde benachrichtigt und kommt zu Ihrem',
+    option1Title: 'Zum Tisch kommen',
+    option1Sub: 'Brauche Hilfe der Bedienung oder Speisekarte',
+    option2Title: 'Rechnung anfordern',
+    option2Sub: 'Möchte bar oder mit Karte zahlen',
+    option3Title: 'Besteck / Servietten / Wasser',
+    option3Sub: 'Kleine Bitte an das Personal',
+    noteLabel: 'Zusätzlicher Hinweis (optional):',
+    notePlaceholder: 'z.B. Kartenzahlung, extra Sauce',
+    sending: 'Wird gesendet...',
+    sendButton: 'Anfrage an Personal senden →',
+    sendError: 'Anfrage konnte nicht gesendet werden',
+  },
+};
 
 export function ServiceCallModal({
   isOpen,
@@ -21,6 +82,7 @@ export function ServiceCallModal({
   parkingSpot,
   lang = 'pl',
 }: ServiceCallModalProps) {
+  const t = serviceTranslations[lang] || serviceTranslations.pl;
   const [selectedType, setSelectedType] = useState<'call_waiter' | 'request_bill' | 'custom'>('call_waiter');
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,7 +107,7 @@ export function ServiceCallModal({
       });
 
       if (!res.ok) {
-        throw new Error('Nie udało się wysłać wezwania');
+        throw new Error(t.sendError);
       }
 
       setSent(true);
@@ -54,11 +116,17 @@ export function ServiceCallModal({
         onClose();
       }, 2500);
     } catch (err: any) {
-      alert(err.message || 'Wystąpił błąd');
+      alert(err.message || t.sendError);
     } finally {
       setLoading(false);
     }
   };
+
+  const spotLabel = tableLabel
+    ? `${t.table.toLowerCase()} ${tableLabel}`
+    : parkingSpot
+    ? `${t.parking.toLowerCase()} ${parkingSpot}`
+    : t.yourTable.toLowerCase();
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200 overflow-x-hidden">
@@ -75,9 +143,9 @@ export function ServiceCallModal({
             <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto animate-bounce">
               <CheckCircle2 size={36} />
             </div>
-            <h3 className="font-extrabold text-xl text-slate-900">Wezwanie wysłane!</h3>
+            <h3 className="font-extrabold text-xl text-slate-900">{t.sentTitle}</h3>
             <p className="text-sm text-slate-500">
-              Obsługa została powiadomiona i już zmierza do Twojego {tableLabel ? `stolika ${tableLabel}` : `miejsca ${parkingSpot}`}.
+              {t.sentDesc} {spotLabel}.
             </p>
           </div>
         ) : (
@@ -87,10 +155,10 @@ export function ServiceCallModal({
                 <span className="p-2 rounded-xl bg-brand-50 text-brand-600">
                   <Bell size={20} />
                 </span>
-                <h3 className="font-extrabold text-lg text-slate-900">Wezwij obsługę</h3>
+                <h3 className="font-extrabold text-lg text-slate-900">{t.title}</h3>
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                {tableLabel ? `Stolik: ${tableLabel}` : parkingSpot ? `Parking: ${parkingSpot}` : 'Twój stolik'}
+                {tableLabel ? `${t.table}: ${tableLabel}` : parkingSpot ? `${t.parking}: ${parkingSpot}` : t.yourTable}
               </p>
             </div>
 
@@ -108,8 +176,8 @@ export function ServiceCallModal({
                   <Bell size={18} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold">Podejdź do stolika</p>
-                  <p className="text-xs text-slate-400">Potrzebuję pomocy kelnera lub menu</p>
+                  <p className="text-sm font-bold">{t.option1Title}</p>
+                  <p className="text-xs text-slate-400">{t.option1Sub}</p>
                 </div>
               </button>
 
@@ -126,8 +194,8 @@ export function ServiceCallModal({
                   <Receipt size={18} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold">Poproś o rachunek</p>
-                  <p className="text-xs text-slate-400">Chcę zapłacić gotówką lub kartą</p>
+                  <p className="text-sm font-bold">{t.option2Title}</p>
+                  <p className="text-xs text-slate-400">{t.option2Sub}</p>
                 </div>
               </button>
 
@@ -144,21 +212,21 @@ export function ServiceCallModal({
                   <Utensils size={18} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold">Sztućce / serwetki / woda</p>
-                  <p className="text-xs text-slate-400">Drobna prośba do obsługi</p>
+                  <p className="text-sm font-bold">{t.option3Title}</p>
+                  <p className="text-xs text-slate-400">{t.option3Sub}</p>
                 </div>
               </button>
             </div>
 
             <div>
               <label className="text-xs font-bold text-slate-600 block mb-1">
-                Dodatkowa uwaga (opcjonalnie):
+                {t.noteLabel}
               </label>
               <input
                 type="text"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="np. płatność kartą, dodatkowy sos"
+                placeholder={t.notePlaceholder}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-brand-500"
               />
             </div>
@@ -171,10 +239,10 @@ export function ServiceCallModal({
               {loading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  <span>Wysyłanie...</span>
+                  <span>{t.sending}</span>
                 </>
               ) : (
-                <span>Wyślij wezwanie do obsługi &rarr;</span>
+                <span>{t.sendButton}</span>
               )}
             </button>
           </div>

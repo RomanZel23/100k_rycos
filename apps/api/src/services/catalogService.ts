@@ -174,6 +174,122 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
 
   const db = getDatabase();
 
+const DICTIONARY_FALLBACKS: Record<string, Record<string, string>> = {
+  en: {
+    // Categories
+    dania: 'Dishes',
+    'dania główne': 'Main Dishes',
+    kanapki: 'Sandwiches',
+    burgery: 'Burgers',
+    pizza: 'Pizza',
+    napoje: 'Drinks',
+    desery: 'Desserts',
+    przekąski: 'Snacks',
+    dodatki: 'Addons',
+    sałatki: 'Salads',
+    zupy: 'Soups',
+    alkohole: 'Alcohol',
+    piwo: 'Beers',
+    kawa: 'Coffee',
+    herbata: 'Tea',
+
+    // Addons
+    'wybierz sos': 'Choose sauce',
+    'sos czosnkowy': 'Garlic sauce',
+    'ostry sos chipotle': 'Spicy chipotle sauce',
+    'dodatki do burgera': 'Burger toppings',
+    'chrupiący bekon': 'Crispy bacon',
+    'podwójny cheddar': 'Double cheddar',
+    'dodatkowy ser': 'Extra cheese',
+    'sos pomidorowy': 'Tomato sauce',
+    'sos bbq': 'BBQ sauce',
+
+    // Dishes & Products
+    'chrupiący kurczak': 'Crispy Chicken',
+    'chrupiący kurczak w złocistej panierce, majonez truflowy, rukola, parmezan, limonka.':
+      'Crispy chicken strips in golden coating, truffle mayonnaise, fresh arugula, parmesan, lime.',
+    cheesbuger: 'Cheeseburger',
+    cheeseburger: 'Cheeseburger',
+    'super hotdog': 'Super Hot Dog',
+    'hotdog z bekonem i serem oraz awokado i japaleno':
+      'Hot dog with smoked bacon, melted cheese, avocado and jalapeno.',
+    hotdog: 'Hot Dog',
+    sandwich: 'Sandwich',
+    'rzemieślnicza lemoniada': 'Artisan Lemonade',
+    'cytryna, świeża mięta, odrobina agawy.': 'Lemon, fresh mint, a touch of agave.',
+    'warka jasne pełne': 'Warka Jasne Full',
+    'warka jasne pełne to klasycznie warzone i leżakowane piwo, które swój smak i aromat zawdzięcza użyciu mrożonych szyszek chmielu':
+      'Warka Jasne Full is a classically brewed and lagered beer that owes its taste and aroma to the use of frozen hop cones.',
+  },
+  de: {
+    // Categories
+    dania: 'Gerichte',
+    'dania główne': 'Hauptgerichte',
+    kanapki: 'Sandwiches',
+    burgery: 'Burger',
+    pizza: 'Pizza',
+    napoje: 'Getränke',
+    desery: 'Desserts',
+    przekąski: 'Snacks',
+    dodatki: 'Extras',
+    sałatki: 'Salate',
+    zupy: 'Suppen',
+    alkohole: 'Alkohol',
+    piwo: 'Bier',
+    kawa: 'Kaffee',
+    herbata: 'Tee',
+
+    // Addons
+    'wybierz sos': 'Sauce wählen',
+    'sos czosnkowy': 'Knoblauchsauce',
+    'ostry sos chipotle': 'Scharfe Chipotle-Sauce',
+    'dodatki do burgera': 'Burger-Extras',
+    'chrupiący bekon': 'Knuspriger Speck',
+    'podwójny cheddar': 'Doppelter Cheddar',
+    'dodatkowy ser': 'Zusätzlicher Käse',
+    'sos pomidorowy': 'Tomatensauce',
+    'sos bbq': 'BBQ-Sauce',
+
+    // Dishes & Products
+    'chrupiący kurczak': 'Knuspriges Hähnchen',
+    'chrupiący kurczak w złocistej panierce, majonez truflowy, rukola, parmezan, limonka.':
+      'Knusprige Hähnchenstreifen in goldener Panade, Trüffel-Mayonnaise, Rucola, Parmesan, Limette.',
+    cheesbuger: 'Cheeseburger',
+    cheeseburger: 'Cheeseburger',
+    'super hotdog': 'Super Hotdog',
+    'hotdog z bekonem i serem oraz awokado i japaleno':
+      'Hotdog mit geräuchertem Speck, geschmolzenem Käse, Avocado und Jalapeno.',
+    hotdog: 'Hotdog',
+    sandwich: 'Sandwich',
+    'rzemieślnicza lemoniada': 'Hausgemachte Limonade',
+    'cytryna, świeża mięta, odrobina agawy.': 'Frische Zitrone, Minze, ein Hauch von Agavendicksaft.',
+    'warka jasne pełne': 'Warka Jasne Vollbier',
+    'warka jasne pełne to klasycznie warzone i leżakowane piwo, które swój smak i aromat zawdzięcza użyciu mrożonych szyszek chmielu':
+      'Warka Jasne Vollbier ist ein traditionell gebrautes und gelagertes Bier, das seinen Geschmack gefrorenen Hopfenzapfen verdankt.',
+  },
+};
+
+function getTranslated(
+  entityType: string,
+  entityId: number,
+  attr: string,
+  raw: string | null | undefined,
+  lang: string,
+  translationsMap: Map<string, string>
+): string {
+  if (!raw) return '';
+  if (lang === 'pl') return raw;
+
+  const dbVal = translationsMap.get(`${entityType}:${entityId}:${attr}`);
+  if (dbVal) return dbVal;
+
+  const key = raw.toLowerCase().trim();
+  const fallback = DICTIONARY_FALLBACKS[lang]?.[key];
+  if (fallback) return fallback;
+
+  return raw;
+}
+
   // Load translations if non-Polish
   const translationsMap = new Map<string, string>();
   if (normalizedLang !== 'pl') {
@@ -350,7 +466,7 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
   const optionsByGroup = new Map<number, any[]>();
   for (const opt of optionRows) {
     if (!optionsByGroup.has(opt.groupId)) optionsByGroup.set(opt.groupId, []);
-    const translatedOptName = translationsMap.get(`addon_options:${opt.id}:name`) || opt.name;
+    const translatedOptName = getTranslated('addon_options', opt.id, 'name', opt.name, normalizedLang, translationsMap);
     optionsByGroup.get(opt.groupId)!.push({
       id: opt.id,
       name: translatedOptName,
@@ -364,7 +480,7 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
   const addonGroupsByProduct = new Map<number, AddonGroup[]>();
   for (const grp of productAddonGroupRows) {
     if (!addonGroupsByProduct.has(grp.productId)) addonGroupsByProduct.set(grp.productId, []);
-    const translatedGrpName = translationsMap.get(`addon_groups:${grp.groupId}:name`) || grp.groupName;
+    const translatedGrpName = getTranslated('addon_groups', grp.groupId, 'name', grp.groupName, normalizedLang, translationsMap);
     addonGroupsByProduct.get(grp.productId)!.push({
       id: grp.groupId,
       name: translatedGrpName,
@@ -380,8 +496,8 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
 
   // 7. Assemble Products
   const mappedProducts: Product[] = productRows.map((p) => {
-    const translatedName = translationsMap.get(`products:${p.id}:name`) || p.name;
-    const translatedDesc = translationsMap.get(`products:${p.id}:description`) || p.description;
+    const translatedName = getTranslated('products', p.id, 'name', p.name, normalizedLang, translationsMap);
+    const translatedDesc = getTranslated('products', p.id, 'description', p.description, normalizedLang, translationsMap);
     return {
       id: p.id,
       companyId: p.companyId,
@@ -411,7 +527,7 @@ export async function getMenuByBrandId(brandId: number, companyId: number, lang:
     categories: effectiveCategories.map((c) => ({
       id: c.id,
       companyId: c.companyId,
-      name: translationsMap.get(`categories:${c.id}:name`) || c.name,
+      name: getTranslated('categories', c.id, 'name', c.name, normalizedLang, translationsMap),
       position: c.position,
       translations: {},
     })),

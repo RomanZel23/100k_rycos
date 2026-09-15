@@ -515,6 +515,104 @@ export async function ensureDatabaseSchema() {
           FROM brands b
           JOIN products p ON p.company_id = b.company_id
           ON CONFLICT DO NOTHING;
+
+          -- Seed multilingual translations for categories (EN & DE)
+          INSERT INTO "content_translations" ("entity_type", "entity_id", "language", "attribute_name", "value")
+          SELECT 'categories', c.id, 'en', 'name', 
+            CASE 
+              WHEN c.name ILIKE '%dania%' THEN 'Dishes'
+              WHEN c.name ILIKE '%kanapki%' THEN 'Sandwiches'
+              WHEN c.name ILIKE '%burgery%' THEN 'Burgers'
+              WHEN c.name ILIKE '%pizza%' THEN 'Pizza'
+              WHEN c.name ILIKE '%napoje%' THEN 'Drinks'
+              ELSE c.name 
+            END
+          FROM categories c
+          WHERE NOT EXISTS (
+            SELECT 1 FROM content_translations 
+            WHERE entity_type = 'categories' AND entity_id = c.id AND language = 'en' AND attribute_name = 'name'
+          );
+
+          INSERT INTO "content_translations" ("entity_type", "entity_id", "language", "attribute_name", "value")
+          SELECT 'categories', c.id, 'de', 'name', 
+            CASE 
+              WHEN c.name ILIKE '%dania%' THEN 'Gerichte'
+              WHEN c.name ILIKE '%kanapki%' THEN 'Sandwiches'
+              WHEN c.name ILIKE '%burgery%' THEN 'Burger'
+              WHEN c.name ILIKE '%pizza%' THEN 'Pizza'
+              WHEN c.name ILIKE '%napoje%' THEN 'Getränke'
+              ELSE c.name 
+            END
+          FROM categories c
+          WHERE NOT EXISTS (
+            SELECT 1 FROM content_translations 
+            WHERE entity_type = 'categories' AND entity_id = c.id AND language = 'de' AND attribute_name = 'name'
+          );
+
+          -- Seed multilingual translations for products (EN & DE)
+          INSERT INTO "content_translations" ("entity_type", "entity_id", "language", "attribute_name", "value")
+          SELECT 'products', p.id, 'en', 'name',
+            CASE
+              WHEN p.name ILIKE '%hotdog%' THEN 'Super Hot Dog'
+              WHEN p.name ILIKE '%kurczak%' THEN 'Crispy Chicken'
+              WHEN p.name ILIKE '%chees%' THEN 'Cheeseburger'
+              WHEN p.name ILIKE '%sandwich%' THEN 'Sandwich'
+              WHEN p.name ILIKE '%lemoniada%' THEN 'Artisan Lemonade'
+              WHEN p.name ILIKE '%warka%' THEN 'Warka Jasne Full'
+              ELSE p.name
+            END
+          FROM products p
+          WHERE NOT EXISTS (
+            SELECT 1 FROM content_translations 
+            WHERE entity_type = 'products' AND entity_id = p.id AND language = 'en' AND attribute_name = 'name'
+          );
+
+          INSERT INTO "content_translations" ("entity_type", "entity_id", "language", "attribute_name", "value")
+          SELECT 'products', p.id, 'de', 'name',
+            CASE
+              WHEN p.name ILIKE '%hotdog%' THEN 'Super Hotdog'
+              WHEN p.name ILIKE '%kurczak%' THEN 'Knuspriges Hähnchen'
+              WHEN p.name ILIKE '%chees%' THEN 'Cheeseburger'
+              WHEN p.name ILIKE '%sandwich%' THEN 'Sandwich'
+              WHEN p.name ILIKE '%lemoniada%' THEN 'Hausgemachte Limonade'
+              WHEN p.name ILIKE '%warka%' THEN 'Warka Jasne Vollbier'
+              ELSE p.name
+            END
+          FROM products p
+          WHERE NOT EXISTS (
+            SELECT 1 FROM content_translations 
+            WHERE entity_type = 'products' AND entity_id = p.id AND language = 'de' AND attribute_name = 'name'
+          );
+
+          INSERT INTO "content_translations" ("entity_type", "entity_id", "language", "attribute_name", "value")
+          SELECT 'products', p.id, 'en', 'description',
+            CASE
+              WHEN p.name ILIKE '%kurczak%' THEN 'Crispy chicken strips in golden coating, truffle mayonnaise, fresh arugula, parmesan, lime.'
+              WHEN p.name ILIKE '%hotdog%' THEN 'Hot dog with smoked bacon, melted cheese, avocado and jalapeno.'
+              WHEN p.name ILIKE '%lemoniada%' THEN 'Lemon, fresh mint, a touch of agave.'
+              WHEN p.name ILIKE '%warka%' THEN 'Warka Jasne Full is a classically brewed and lagered beer that owes its taste and aroma to the use of frozen hop cones.'
+              ELSE p.description
+            END
+          FROM products p
+          WHERE p.description IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM content_translations 
+            WHERE entity_type = 'products' AND entity_id = p.id AND language = 'en' AND attribute_name = 'description'
+          );
+
+          INSERT INTO "content_translations" ("entity_type", "entity_id", "language", "attribute_name", "value")
+          SELECT 'products', p.id, 'de', 'description',
+            CASE
+              WHEN p.name ILIKE '%kurczak%' THEN 'Knusprige Hähnchenstreifen in goldener Panade, Trüffel-Mayonnaise, Rucola, Parmesan, Limette.'
+              WHEN p.name ILIKE '%hotdog%' THEN 'Hotdog mit geräuchertem Speck, geschmolzenem Käse, Avocado und Jalapeno.'
+              WHEN p.name ILIKE '%lemoniada%' THEN 'Frische Zitrone, Minze, ein Hauch von Agavendicksaft.'
+              WHEN p.name ILIKE '%warka%' THEN 'Warka Jasne Vollbier ist ein traditionell gebrautes und gelagertes Bier, das seinen Geschmack gefrorenen Hopfenzapfen verdankt.'
+              ELSE p.description
+            END
+          FROM products p
+          WHERE p.description IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM content_translations 
+            WHERE entity_type = 'products' AND entity_id = p.id AND language = 'de' AND attribute_name = 'description'
+          );
         `);
       }
 

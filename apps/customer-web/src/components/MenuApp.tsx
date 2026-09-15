@@ -349,7 +349,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                 <h1 className="font-extrabold text-base sm:text-2xl text-slate-900 tracking-tight truncate">
                   {menu?.brand.name}
                 </h1>
-                <span className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Otwarte" />
+                <span className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title={lang === 'de' ? 'Geöffnet' : lang === 'en' ? 'Open' : 'Otwarte'} />
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5 sm:mt-1">
                 <div className="flex items-center gap-1 min-w-0">
@@ -359,7 +359,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                       ? `${t.table}: ${tableLabel}`
                       : parkingSpot
                       ? `${t.parking}: ${parkingSpot}`
-                      : menu?.brand.locationName || 'Obsługa przy barze'}
+                      : menu?.brand.locationName || (lang === 'de' ? 'Bedienung an der Bar' : lang === 'en' ? 'Bar service' : 'Obsługa przy barze')}
                   </span>
                 </div>
               </div>
@@ -543,7 +543,13 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             </div>
           )}
           <p className="font-semibold text-slate-500">100k-RYCOS Ordering</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Szybkie i bezpieczne zamawianie przy stoliku i barze</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            {lang === 'de'
+              ? 'Schnelles und sicheres Bestellen am Tisch und an der Bar'
+              : lang === 'en'
+              ? 'Fast & secure ordering at table & bar'
+              : 'Szybkie i bezpieczne zamawianie przy stoliku i barze'}
+          </p>
         </footer>
       </main>
 

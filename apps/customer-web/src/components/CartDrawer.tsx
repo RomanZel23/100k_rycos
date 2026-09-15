@@ -168,7 +168,11 @@ export function CartDrawer({
                       className="w-full p-2.5 rounded-xl border-2 border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm"
                     />
                     <p className="text-[10px] text-slate-400 font-medium">
-                      Wpisz 10 cyfr NIP bez kresek i spacji
+                      {lang === 'de'
+                        ? '10 Ziffern ohne Bindestriche oder Leerzeichen eingeben'
+                        : lang === 'en'
+                        ? 'Enter 10 digits without dashes or spaces'
+                        : 'Wpisz 10 cyfr NIP bez kresek i spacji'}
                     </p>
                   </div>
                 )}
