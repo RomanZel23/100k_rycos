@@ -272,19 +272,6 @@ export async function adminFiscalDevicesRoutes(fastify: FastifyInstance) {
     );
   });
 
-  // GET /v1/admin/rycos/status - Check RYCOS integration status
-  fastify.get('/v1/admin/rycos/status', async (_req, reply) => {
-    return success(reply, {
-      configured: false,
-      linked: false,
-      client: null,
-      hub: null,
-      seats: [],
-      purchases: [],
-      portal_error: null,
-    });
-  });
-
   // DELETE /v1/admin/fiscal-devices/:id - Delete device
   fastify.delete('/v1/admin/fiscal-devices/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
