@@ -71,6 +71,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         companiesList = json.data || []
       }
     } catch {}
+
+    if (companiesList.length === 0) {
+      companiesList = [{ id: defaultCompanyId, name: 'Rycos Food Group', slug: 'rycos-food-group' }]
+    }
   }
 
   const isOverridden = platformAdmin && activeCompanyId !== defaultCompanyId

@@ -45,7 +45,7 @@ export function CompanySwitcher({
     });
   };
 
-  if (!companies || companies.length <= 1) {
+  if (!companies || companies.length === 0) {
     return null;
   }
 
