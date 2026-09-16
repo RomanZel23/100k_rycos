@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS "companies" (
 	"country" varchar(4) DEFAULT 'PL',
 	"currency" varchar(4) DEFAULT 'PLN',
 	"is_accepting_orders" boolean DEFAULT true NOT NULL,
+	"license_token" varchar(128),
+	"license_status" varchar(32) DEFAULT 'unconfigured',
+	"license_valid_until" timestamp,
+	"license_last_check_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "companies_slug_unique" UNIQUE("slug")
@@ -491,6 +495,10 @@ export async function ensureDatabaseSchema() {
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "default_language" varchar(8) DEFAULT 'pl';
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "terms_and_conditions" text;
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "privacy_policy" text;
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "license_token" varchar(128);
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "license_status" varchar(32) DEFAULT 'unconfigured';
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "license_valid_until" timestamp;
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "license_last_check_at" timestamp;
 
           ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "allow_pay_at_counter" boolean DEFAULT false NOT NULL;
 

@@ -31,6 +31,26 @@ export async function unpairDeviceAction(seatId: string): Promise<{ success: boo
   return (json.data ?? { success: true }) as { success: boolean }
 }
 
+export async function updateLicenseTokenAction(licenseToken: string): Promise<{ success: boolean; message?: string }> {
+  const res = await adminApi('/rycos/license-token', {
+    method: 'POST',
+    body: JSON.stringify({ licenseToken }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Nie udało się zapisać tokenu licencji' }))
+    throw new Error(err.message || err.error || 'Nie udało się zapisać tokenu licencji')
+  }
+  revalidatePath('/dashboard/licenses')
+  return { success: true }
+}
+
+export async function refreshLicenseStatusAction(): Promise<void> {
+  await adminApi('/rycos/check-license', {
+    method: 'POST',
+  }).catch(() => {})
+  revalidatePath('/dashboard/licenses')
+}
+
 export async function refreshLicensesAction(): Promise<void> {
   revalidatePath('/dashboard/licenses')
 }

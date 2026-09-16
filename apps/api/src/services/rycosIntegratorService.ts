@@ -403,6 +403,45 @@ class RycosIntegratorService {
 
     return baseResult;
   }
+
+  /**
+   * Create / generate a server solution license for a client via Integrator API v2
+   */
+  public async createSolutionLicense(
+    clientId: string,
+    options: {
+      solution?: string;
+      instance_name?: string;
+      valid_until?: string | null;
+      grace_days?: number;
+      notes?: string;
+    } = {}
+  ): Promise<{ license: any; token: string }> {
+    if (!this.isConfigured()) {
+      throw new Error('RYCOS Integrator API is not configured (missing RYCOS_INTEGRATOR_KEY)');
+    }
+
+    const payload = {
+      solution: options.solution || 'p_immo',
+      instance_name: options.instance_name || '100k-rycos',
+      valid_until: options.valid_until || null,
+      grace_days: options.grace_days ?? 14,
+      notes: options.notes || 'Created via 100k Self-Service Onboarding',
+    };
+
+    const res = await fetch(`${this.baseUrl}/api/v2/clients/${clientId}/solution-licenses`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Failed to create solution license (HTTP ${res.status})`);
+    }
+
+    return (await res.json()) as { license: any; token: string };
+  }
 }
 
 export const rycosIntegratorService = new RycosIntegratorService();

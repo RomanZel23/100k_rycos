@@ -5,6 +5,7 @@ import { success, error, validationError } from '../lib/response.js';
 import { hashPassword } from '../lib/password.js';
 import { initializePaymentPage, assertPaymentPage, captureTransaction } from '../services/saferpayClient.js';
 import { rycosIntegratorService } from '../services/rycosIntegratorService.js';
+import { rycosLicenseService } from '../services/rycosLicenseService.js';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 
@@ -298,6 +299,8 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
 
     // Step A: Register / find client in RYCOS Portal API by NIP
     let rycosClient = null;
+    let generatedLicenseToken: string | null = null;
+
     try {
       if (rycosIntegratorService.isConfigured()) {
         rycosClient = await rycosIntegratorService.createClient({
@@ -308,11 +311,28 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
           address_street: order.address || undefined,
         });
 
-        // Step B: Provision purchased seats in RYCOS Portal
         const plan = order.planDetails as any;
         const expiryDate = new Date();
         expiryDate.setMonth(expiryDate.getMonth() + (order.months || 1));
 
+        // Step B1: Provision server solution license if platform_100k included
+        if (rycosClient && plan.platform_100k > 0) {
+          try {
+            const solRes = await rycosIntegratorService.createSolutionLicense(rycosClient.id, {
+              solution: 'p_immo',
+              instance_name: `${order.companyName} (100k)`,
+              valid_until: expiryDate.toISOString(),
+              notes: `Self-Service Onboarding Order #${order.id} (${order.months}m)`,
+            });
+            if (solRes?.token) {
+              generatedLicenseToken = solRes.token;
+            }
+          } catch (solErr: any) {
+            console.error('[Onboarding] RYCOS Portal solution license provisioning warning:', solErr.message);
+          }
+        }
+
+        // Step B2: Provision purchased SBR device seats in RYCOS Portal
         if (rycosClient && (plan.seats_pf > 0 || plan.seats_f > 0 || plan.seats_p > 0 || plan.seats_0 > 0)) {
           await rycosIntegratorService.createPurchase(rycosClient.id, {
             bundle_type: 'flex',
@@ -341,9 +361,20 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         phone: order.phone || null,
         address: order.address || null,
         currency: 'PLN',
+        licenseToken: generatedLicenseToken,
+        licenseStatus: generatedLicenseToken ? 'active' : 'unconfigured',
         isAcceptingOrders: true,
       })
       .returning();
+
+    // Trigger initial heartbeat check if token was generated
+    if (generatedLicenseToken) {
+      rycosLicenseService.checkHeartbeat({
+        companyId: newCompany.id,
+        token: generatedLicenseToken,
+        instanceName: `${newCompany.name} (100k)`,
+      }).catch(() => {});
+    }
 
     // Step D: Create default location and brand
     const [newLoc] = await db

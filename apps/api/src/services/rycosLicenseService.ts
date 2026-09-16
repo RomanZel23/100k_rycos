@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { getDatabase, companies, eq } from '@rycos/database';
 
 export interface RycosServerLicenseStatus {
   checked: boolean;
@@ -15,50 +16,59 @@ export interface RycosServerLicenseStatus {
     expires_at: string | null;
   };
   checked_at?: string;
+  token_hint?: string;
   error?: string | null;
 }
 
 class RycosLicenseService {
-  private lastStatus: RycosServerLicenseStatus | null = null;
+  private cacheByCompanyId = new Map<number, RycosServerLicenseStatus>();
+  private defaultStatus: RycosServerLicenseStatus | null = null;
   private timer: NodeJS.Timeout | null = null;
 
   private get baseUrl(): string {
     return (env.RYCOS_PORTAL_URL || 'https://portal.rycos.eu').replace(/\/+$/, '');
   }
 
-  private get token(): string {
-    return env.RYCOS_LICENSE_TOKEN || env.RYCOS_SOLUTION_TOKEN || env.RYCOS_INTEGRATOR_KEY || '';
-  }
-
-  public isConfigured(): boolean {
-    return Boolean(this.token && this.token.trim().length > 0);
+  private get globalToken(): string {
+    return env.RYCOS_LICENSE_TOKEN || env.RYCOS_SOLUTION_TOKEN || '';
   }
 
   /**
-   * Send heartbeat meldunek to portal solution license endpoint
+   * Check heartbeat for a specific token or company
    */
-  public async sendHeartbeat(extraStats: Record<string, unknown> = {}): Promise<RycosServerLicenseStatus> {
-    if (!this.isConfigured()) {
-      const res: RycosServerLicenseStatus = {
+  public async checkHeartbeat(params: {
+    companyId?: number;
+    token?: string | null;
+    instanceName?: string;
+    extraStats?: Record<string, unknown>;
+  } = {}): Promise<RycosServerLicenseStatus> {
+    const rawToken = (params.token || '').trim() || this.globalToken;
+    const instanceName = params.instanceName || '100k-rycos';
+
+    if (!rawToken) {
+      const unconf: RycosServerLicenseStatus = {
         checked: true,
         configured: false,
         status: 'unconfigured',
-        error: 'Brak zdefiniowanego RYCOS_SOLUTION_TOKEN ani RYCOS_INTEGRATOR_KEY.',
+        error: 'Brak przypisanego tokenu licencji serwerowej.',
         checked_at: new Date().toISOString(),
       };
-      this.lastStatus = res;
-      return res;
+      if (params.companyId) {
+        this.cacheByCompanyId.set(params.companyId, unconf);
+      }
+      return unconf;
     }
 
     try {
       const payload = {
         version: '100k-v1.0.0',
         stats: {
-          instance_name: '100k-rycos',
+          instance_name: instanceName,
+          company_id: params.companyId || null,
           uptime_seconds: Math.floor(process.uptime()),
           memory_usage_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
           timestamp: new Date().toISOString(),
-          ...extraStats,
+          ...(params.extraStats || {}),
         },
       };
 
@@ -66,7 +76,7 @@ class RycosLicenseService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.token}`,
+          'Authorization': `Bearer ${rawToken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -76,48 +86,129 @@ class RycosLicenseService {
         const failStatus: RycosServerLicenseStatus = {
           checked: true,
           configured: true,
+          token_hint: rawToken.slice(-4),
           status: res.status === 401 ? 'revoked' : 'error',
           error: errorData.error || `HTTP ${res.status}`,
           checked_at: new Date().toISOString(),
         };
-        this.lastStatus = failStatus;
+
+        if (params.companyId) {
+          this.cacheByCompanyId.set(params.companyId, failStatus);
+          await this.updateCompanyDbStatus(params.companyId, failStatus.status || 'error', null);
+        }
         return failStatus;
       }
 
-      const data = (await res.json()) as RycosServerLicenseStatus;
-      this.lastStatus = {
+      const data = (await res.json()) as any;
+      const successStatus: RycosServerLicenseStatus = {
         ...data,
         checked: true,
         configured: true,
+        token_hint: rawToken.slice(-4),
+        checked_at: new Date().toISOString(),
       };
-      return this.lastStatus;
+
+      if (params.companyId) {
+        this.cacheByCompanyId.set(params.companyId, successStatus);
+        await this.updateCompanyDbStatus(
+          params.companyId,
+          successStatus.status || 'active',
+          successStatus.valid_until ? new Date(successStatus.valid_until) : null
+        );
+      } else {
+        this.defaultStatus = successStatus;
+      }
+
+      return successStatus;
     } catch (err: any) {
       console.error('[RycosLicenseService] Heartbeat error:', err.message);
       const errStatus: RycosServerLicenseStatus = {
         checked: true,
         configured: true,
+        token_hint: rawToken.slice(-4),
         status: 'error',
         error: err.message,
         checked_at: new Date().toISOString(),
       };
-      this.lastStatus = errStatus;
+
+      if (params.companyId) {
+        this.cacheByCompanyId.set(params.companyId, errStatus);
+      }
       return errStatus;
     }
   }
 
+  private async updateCompanyDbStatus(companyId: number, status: string, validUntil: Date | null): Promise<void> {
+    try {
+      const db = getDatabase();
+      await db
+        .update(companies)
+        .set({
+          licenseStatus: status,
+          licenseValidUntil: validUntil,
+          licenseLastCheckAt: new Date(),
+        })
+        .where(eq(companies.id, companyId));
+    } catch (dbErr: any) {
+      console.warn('[RycosLicenseService] Failed to update company license status in DB:', dbErr.message);
+    }
+  }
+
+  public getCachedCompanyStatus(companyId: number): RycosServerLicenseStatus | null {
+    return this.cacheByCompanyId.get(companyId) || null;
+  }
+
   public getLastStatus(): RycosServerLicenseStatus | null {
-    return this.lastStatus;
+    return this.defaultStatus;
   }
 
   /**
-   * Start 15-minute background telemetry heartbeat
+   * Compatibility alias for single heartbeat ping
    */
-  public startHeartbeatLoop(intervalMs: number = 15 * 60 * 1000): void {
+  public async sendHeartbeat(extraStats: Record<string, unknown> = {}): Promise<RycosServerLicenseStatus> {
+    return this.checkHeartbeat({ extraStats });
+  }
+
+  /**
+   * Run heartbeats for all companies having license_token in database
+   */
+  public async sendAllHeartbeats(): Promise<void> {
+    try {
+      const db = getDatabase();
+      const allCompanies = await db
+        .select({
+          id: companies.id,
+          name: companies.name,
+          licenseToken: companies.licenseToken,
+        })
+        .from(companies);
+
+      for (const comp of allCompanies) {
+        if (comp.licenseToken) {
+          await this.checkHeartbeat({
+            companyId: comp.id,
+            token: comp.licenseToken,
+            instanceName: `${comp.name} (100k)`,
+          });
+        }
+      }
+
+      if (this.globalToken) {
+        await this.checkHeartbeat({ token: this.globalToken });
+      }
+    } catch (err: any) {
+      console.error('[RycosLicenseService] sendAllHeartbeats error:', err.message);
+    }
+  }
+
+  /**
+   * Start background telemetry heartbeat loop (every 30 minutes)
+   */
+  public startHeartbeatLoop(intervalMs: number = 30 * 60 * 1000): void {
     if (this.timer) clearInterval(this.timer);
-    // Send immediate first ping
-    this.sendHeartbeat().catch(() => {});
+    this.sendAllHeartbeats().catch(() => {});
     this.timer = setInterval(() => {
-      this.sendHeartbeat().catch(() => {});
+      this.sendAllHeartbeats().catch(() => {});
     }, intervalMs);
   }
 

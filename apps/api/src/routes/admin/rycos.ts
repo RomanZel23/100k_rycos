@@ -18,6 +18,9 @@ export async function adminRycosRoutes(fastify: FastifyInstance) {
         id: companies.id,
         name: companies.name,
         nip: companies.nip,
+        licenseToken: companies.licenseToken,
+        licenseStatus: companies.licenseStatus,
+        licenseValidUntil: companies.licenseValidUntil,
       })
       .from(companies)
       .where(eq(companies.id, companyId))
@@ -26,10 +29,14 @@ export async function adminRycosRoutes(fastify: FastifyInstance) {
     const rawNip = company?.nip || null;
     const integratorData = await rycosIntegratorService.getCompanyLicensing(rawNip);
 
-    // Also get or refresh server license heartbeat
-    let serverLicense = rycosLicenseService.getLastStatus();
-    if (!serverLicense) {
-      serverLicense = await rycosLicenseService.sendHeartbeat();
+    // Get or refresh server license heartbeat for this specific company
+    let serverLicense = company?.id ? rycosLicenseService.getCachedCompanyStatus(company.id) : null;
+    if (!serverLicense && company) {
+      serverLicense = await rycosLicenseService.checkHeartbeat({
+        companyId: company.id,
+        token: company.licenseToken,
+        instanceName: `${company.name} (100k)`,
+      });
     }
 
     return success(reply, {
@@ -37,10 +44,79 @@ export async function adminRycosRoutes(fastify: FastifyInstance) {
         id: company?.id,
         name: company?.name,
         nip: rawNip,
+        has_license_token: Boolean(company?.licenseToken),
+        token_hint: company?.licenseToken ? company.licenseToken.slice(-4) : null,
       },
       integrator: integratorData,
       server_license: serverLicense,
     }, 'Licensing overview retrieved');
+  });
+
+  // POST /v1/admin/rycos/license-token - Save or update server license token for current company
+  fastify.post('/v1/admin/rycos/license-token', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    const body = (req.body ?? {}) as any;
+    const rawToken = typeof body.licenseToken === 'string' ? body.licenseToken.trim() : '';
+
+    const [company] = await db
+      .select({ id: companies.id, name: companies.name })
+      .from(companies)
+      .where(eq(companies.id, companyId))
+      .limit(1);
+
+    if (!company) {
+      return error(reply, 'Nie znaleziono firmy', 404);
+    }
+
+    // Save token to company record
+    await db
+      .update(companies)
+      .set({
+        licenseToken: rawToken || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(companies.id, companyId));
+
+    // Run immediate heartbeat verification
+    const freshStatus = await rycosLicenseService.checkHeartbeat({
+      companyId: company.id,
+      token: rawToken,
+      instanceName: `${company.name} (100k)`,
+    });
+
+    return success(reply, {
+      license_token: rawToken ? `${rawToken.slice(0, 5)}...${rawToken.slice(-4)}` : null,
+      server_license: freshStatus,
+    }, 'Token licencji serwerowej został zaktualizowany');
+  });
+
+  // POST /v1/admin/rycos/check-license - Trigger immediate license refresh for current company
+  fastify.post('/v1/admin/rycos/check-license', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+
+    const [company] = await db
+      .select({
+        id: companies.id,
+        name: companies.name,
+        licenseToken: companies.licenseToken,
+      })
+      .from(companies)
+      .where(eq(companies.id, companyId))
+      .limit(1);
+
+    if (!company) {
+      return error(reply, 'Nie znaleziono firmy', 404);
+    }
+
+    const freshStatus = await rycosLicenseService.checkHeartbeat({
+      companyId: company.id,
+      token: company.licenseToken,
+      instanceName: `${company.name} (100k)`,
+    });
+
+    return success(reply, { server_license: freshStatus }, 'Status licencji serwerowej odświeżony');
   });
 
   // POST /v1/admin/rycos/pin - Generate pairing PIN for a seat
@@ -120,13 +196,19 @@ export async function adminRycosRoutes(fastify: FastifyInstance) {
     const companyId = getCompanyId(req);
 
     const [company] = await db
-      .select({ nip: companies.nip })
+      .select({ id: companies.id, name: companies.name, nip: companies.nip, licenseToken: companies.licenseToken })
       .from(companies)
       .where(eq(companies.id, companyId))
       .limit(1);
 
     const licensing = await rycosIntegratorService.getCompanyLicensing(company?.nip);
-    await rycosLicenseService.sendHeartbeat();
+    if (company) {
+      await rycosLicenseService.checkHeartbeat({
+        companyId: company.id,
+        token: company.licenseToken,
+        instanceName: `${company.name} (100k)`,
+      });
+    }
 
     return success(reply, licensing, 'Licensing data synchronized');
   });
@@ -168,13 +250,20 @@ export async function adminRycosRoutes(fastify: FastifyInstance) {
     const companyId = getCompanyId(req);
 
     const [company] = await db
-      .select({ nip: companies.nip })
+      .select({ id: companies.id, name: companies.name, nip: companies.nip, licenseToken: companies.licenseToken })
       .from(companies)
       .where(eq(companies.id, companyId))
       .limit(1);
 
     const licensing = await rycosIntegratorService.getCompanyLicensing(company?.nip);
-    const serverLicense = rycosLicenseService.getLastStatus() || await rycosLicenseService.sendHeartbeat();
+    let serverLicense = company ? rycosLicenseService.getCachedCompanyStatus(company.id) : null;
+    if (!serverLicense && company) {
+      serverLicense = await rycosLicenseService.checkHeartbeat({
+        companyId: company.id,
+        token: company.licenseToken,
+        instanceName: `${company.name} (100k)`,
+      });
+    }
 
     return success(reply, {
       configured: rycosIntegratorService.isConfigured(),

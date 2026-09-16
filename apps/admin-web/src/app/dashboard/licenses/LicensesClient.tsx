@@ -2,13 +2,21 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { generatePairingPinAction, unpairDeviceAction, refreshLicensesAction } from './actions'
+import {
+  generatePairingPinAction,
+  unpairDeviceAction,
+  refreshLicensesAction,
+  updateLicenseTokenAction,
+  refreshLicenseStatusAction,
+} from './actions'
 
 export interface LicensingData {
   company: {
     id: number;
     name: string;
     nip: string | null;
+    has_license_token?: boolean;
+    token_hint?: string | null;
   };
   integrator: {
     configured: boolean;
@@ -67,6 +75,7 @@ export interface LicensingData {
       expires_at: string | null;
     };
     checked_at?: string;
+    token_hint?: string;
     error?: string | null;
   } | null;
 }
@@ -104,7 +113,40 @@ export function LicensesClient({ data }: { data: LicensingData }) {
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // License token management state
+  const [tokenModalOpen, setTokenModalOpen] = useState(false);
+  const [inputToken, setInputToken] = useState('');
+  const [savingToken, setSavingToken] = useState(false);
+  const [refreshingLicense, setRefreshingLicense] = useState(false);
+
   const { company, integrator, server_license } = data;
+
+  const handleSaveToken = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingToken(true);
+    setActionError(null);
+    try {
+      await updateLicenseTokenAction(inputToken);
+      setTokenModalOpen(false);
+      setInputToken('');
+    } catch (err: any) {
+      setActionError(err.message || 'Nie udało się zapisać tokenu');
+    } finally {
+      setSavingToken(false);
+    }
+  };
+
+  const handleRefreshLicense = async () => {
+    setRefreshingLicense(true);
+    setActionError(null);
+    try {
+      await refreshLicenseStatusAction();
+    } catch (err: any) {
+      setActionError(err.message || 'Nie udało się odświeżyć statusu licencji');
+    } finally {
+      setRefreshingLicense(false);
+    }
+  };
 
   const handleGeneratePin = async (seatId: string) => {
     setActionError(null);
@@ -151,39 +193,71 @@ export function LicensesClient({ data }: { data: LicensingData }) {
       {/* Top Banner / Integration & Server License Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Server License Heartbeat Card */}
-        <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Instancja Serwera</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-techbay-blue border border-blue-100">
-              <span className="h-1.5 w-1.5 rounded-full bg-techbay-blue animate-pulse" />
-              100k-rycos
-            </span>
-          </div>
-          <div>
-            <div className="text-lg font-bold text-neutral-900">
-              {server_license?.status === 'active' ? (
-                <span className="text-emerald-600 flex items-center gap-1.5">
-                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  Licencja Aktywna
-                </span>
-              ) : server_license?.status === 'grace' ? (
-                <span className="text-amber-600 flex items-center gap-1.5">
-                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  Okres karencji ({server_license.days_left ?? 0} dni)
-                </span>
-              ) : (
-                <span className="text-neutral-500">Połączono z Portalem</span>
-              )}
+        <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-2xs space-y-3 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Licencja Serwerowa Firmy</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-50 text-techbay-blue border border-blue-100">
+                <span className="h-1.5 w-1.5 rounded-full bg-techbay-blue animate-pulse" />
+                {server_license?.token_hint || company.token_hint ? `...${server_license?.token_hint || company.token_hint}` : 'Brak tokenu'}
+              </span>
             </div>
-            <p className="text-xs text-neutral-500 mt-1">
-              Portal: <code className="font-mono text-[11px] bg-neutral-100 px-1 py-0.5 rounded">https://portal.rycos.eu/admin/licenses</code>
-            </p>
-          </div>
-          {server_license?.valid_until && (
-            <div className="text-xs text-neutral-600 pt-1 border-t border-neutral-100">
-              Ważna do: <strong className="text-neutral-900">{new Date(server_license.valid_until).toLocaleDateString('pl-PL')}</strong>
+            <div>
+              <div className="text-lg font-bold text-neutral-900">
+                {server_license?.status === 'active' ? (
+                  <span className="text-emerald-600 flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    Licencja Aktywna
+                  </span>
+                ) : server_license?.status === 'grace' ? (
+                  <span className="text-amber-600 flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    Okres karencji ({server_license.days_left ?? 0} dni)
+                  </span>
+                ) : server_license?.status === 'expired' ? (
+                  <span className="text-red-600 flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />
+                    Licencja Wygasła
+                  </span>
+                ) : server_license?.status === 'revoked' ? (
+                  <span className="text-red-600 flex items-center gap-1.5">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" />
+                    Token Unieważniony
+                  </span>
+                ) : (
+                  <span className="text-neutral-500">Wymaga podpięcia tokenu</span>
+                )}
+              </div>
+              <p className="text-xs text-neutral-500 mt-1">
+                Portal: <code className="font-mono text-[11px] bg-neutral-100 px-1 py-0.5 rounded">portal.rycos.eu</code>
+              </p>
             </div>
-          )}
+            {server_license?.valid_until && (
+              <div className="text-xs text-neutral-600 pt-1 border-t border-neutral-100">
+                Ważna do: <strong className="text-neutral-900">{new Date(server_license.valid_until).toLocaleDateString('pl-PL')}</strong>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-neutral-100 flex items-center justify-between gap-2">
+            <button
+              onClick={() => {
+                setInputToken('');
+                setTokenModalOpen(true);
+              }}
+              className="text-xs font-semibold text-techbay-blue hover:underline cursor-pointer flex items-center gap-1"
+            >
+              🔑 {company.has_license_token || server_license?.token_hint ? 'Zmień token' : 'Wpisz token (sl_...)'}
+            </button>
+            <button
+              onClick={handleRefreshLicense}
+              disabled={refreshingLicense}
+              className="text-xs text-neutral-500 hover:text-neutral-800 cursor-pointer disabled:opacity-50"
+              title="Sprawdź status licencji w Portalu"
+            >
+              {refreshingLicense ? 'Odświeżanie...' : '⟳ Sprawdź'}
+            </button>
+          </div>
         </div>
 
         {/* Company NIP & Account Card */}
@@ -461,6 +535,64 @@ export function LicensesClient({ data }: { data: LicensingData }) {
                 Zamknij
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* License Token Management Modal */}
+      {tokenModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-techbay-blue">Token Licencji Serwerowej (Instance Token)</h3>
+                <p className="text-xs text-neutral-500">
+                  Firma: <strong>{company.name}</strong> (NIP: {company.nip || 'brak'})
+                </p>
+              </div>
+              <button
+                onClick={() => setTokenModalOpen(false)}
+                className="text-neutral-400 hover:text-neutral-700 text-lg p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveToken} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-neutral-700">
+                  Wklej token instancji z Portalu RYCOS (prefiks: <code className="font-mono text-brand">sl_...</code>)
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={inputToken}
+                  onChange={(e) => setInputToken(e.target.value)}
+                  placeholder="sl_i5nsd0iDS-PMD_05VrEWy9oPHD_b4t7oD49yZd7-byI"
+                  className="w-full rounded-xl border border-neutral-300 p-3 font-mono text-xs text-neutral-900 focus:border-techbay-blue focus:ring-1 focus:ring-techbay-blue focus:outline-none"
+                />
+                <p className="text-[11px] text-neutral-500">
+                  Token generowany jest w Portalu RYCOS (<strong>portal.rycos.eu</strong>) w karcie klienta w sekcji <em>Server licenses</em> lub automatycznie podczas zakupu na <em>100k.rycos.eu/go</em>.
+                </p>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2 border-t border-neutral-100">
+                <button
+                  type="button"
+                  onClick={() => setTokenModalOpen(false)}
+                  className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-100 transition"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingToken || !inputToken.trim()}
+                  className="rounded-lg bg-techbay-blue px-5 py-2.5 text-sm font-bold text-white hover:bg-techbay-blue-dark transition disabled:opacity-50"
+                >
+                  {savingToken ? 'Zapisywanie i weryfikacja...' : 'Zapisz i aktywuj'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

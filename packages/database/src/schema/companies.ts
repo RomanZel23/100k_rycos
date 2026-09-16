@@ -15,6 +15,10 @@ export const companies = pgTable('companies', {
   termsAndConditions: text('terms_and_conditions'),
   privacyPolicy: text('privacy_policy'),
   isAcceptingOrders: boolean('is_accepting_orders').default(true).notNull(),
+  licenseToken: varchar('license_token', { length: 128 }),
+  licenseStatus: varchar('license_status', { length: 32 }).default('unconfigured'),
+  licenseValidUntil: timestamp('license_valid_until'),
+  licenseLastCheckAt: timestamp('license_last_check_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
