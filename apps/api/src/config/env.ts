@@ -48,7 +48,8 @@ const envSchema = z.object({
   // RYCOS Portal & Licensing Integration
   RYCOS_PORTAL_URL: z.string().default(process.env.RYCOS_PORTAL_URL || 'https://portal.rycos.eu'),
   RYCOS_INTEGRATOR_KEY: z.string().default(process.env.RYCOS_INTEGRATOR_KEY || ''),
-  RYCOS_SOLUTION_TOKEN: z.string().default(process.env.RYCOS_SOLUTION_TOKEN || ''),
+  RYCOS_SOLUTION_TOKEN: z.string().default(process.env.RYCOS_SOLUTION_TOKEN || process.env.RYCOS_LICENSE_TOKEN || ''),
+  RYCOS_LICENSE_TOKEN: z.string().default(process.env.RYCOS_LICENSE_TOKEN || process.env.RYCOS_SOLUTION_TOKEN || ''),
 });
 
 const parsed = envSchema.safeParse(process.env);

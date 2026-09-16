@@ -27,7 +27,7 @@ class RycosLicenseService {
   }
 
   private get token(): string {
-    return env.RYCOS_SOLUTION_TOKEN || env.RYCOS_INTEGRATOR_KEY || '';
+    return env.RYCOS_LICENSE_TOKEN || env.RYCOS_SOLUTION_TOKEN || env.RYCOS_INTEGRATOR_KEY || '';
   }
 
   public isConfigured(): boolean {
