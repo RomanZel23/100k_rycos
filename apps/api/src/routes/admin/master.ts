@@ -40,8 +40,8 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
           currency: companies.currency,
           isAcceptingOrders: companies.isAcceptingOrders,
           createdAt: companies.createdAt,
-          ordersCount: sql<number>`(SELECT count(*)::int FROM orders WHERE orders.company_id = ${companies.id})`,
-          totalVolume: sql<string>`coalesce((SELECT sum(total_amount) FROM orders WHERE orders.company_id = ${companies.id}), 0)`,
+          ordersCount: sql<number>`(SELECT count(*)::int FROM orders WHERE orders.company_id::text = ${companies.id}::text)`,
+          totalVolume: sql<string>`coalesce((SELECT sum(total_amount) FROM orders WHERE orders.company_id::text = ${companies.id}::text), 0)`,
         })
         .from(companies)
         .orderBy(desc(companies.createdAt));
@@ -93,9 +93,9 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
           currency: companies.currency,
           isAcceptingOrders: companies.isAcceptingOrders,
           createdAt: companies.createdAt,
-          ordersCount: sql<number>`(SELECT count(*)::int FROM orders WHERE orders.company_id = ${companies.id})`,
-          brandsCount: sql<number>`(SELECT count(*)::int FROM brands WHERE brands.company_id = ${companies.id})`,
-          locationsCount: sql<number>`(SELECT count(*)::int FROM locations WHERE locations.company_id = ${companies.id})`,
+          ordersCount: sql<number>`(SELECT count(*)::int FROM orders WHERE orders.company_id::text = ${companies.id}::text)`,
+          brandsCount: sql<number>`(SELECT count(*)::int FROM brands WHERE brands.company_id::text = ${companies.id}::text)`,
+          locationsCount: sql<number>`(SELECT count(*)::int FROM locations WHERE locations.company_id::text = ${companies.id}::text)`,
         })
         .from(companies)
         .orderBy(desc(companies.createdAt));
