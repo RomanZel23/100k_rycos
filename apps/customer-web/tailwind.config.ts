@@ -10,12 +10,14 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: 'color-mix(in srgb, var(--brand-color, #f97316) 12%, white)',
-          100: 'color-mix(in srgb, var(--brand-color, #f97316) 24%, white)',
-          500: 'var(--brand-color, #f97316)',
-          600: 'color-mix(in srgb, var(--brand-color, #f97316) 85%, black)',
-          700: 'color-mix(in srgb, var(--brand-color, #f97316) 70%, black)',
-          text: 'var(--brand-text, #ffffff)',
+          DEFAULT: '#ED1C24',
+          50: '#FDF2F2',
+          100: '#FDE8E8',
+          200: '#FBD5D5',
+          500: '#ED1C24',
+          600: '#CC161D',
+          700: '#990E14',
+          text: '#ffffff',
         },
         techbay: {
           blue: '#002633',

@@ -147,7 +147,7 @@ export function GoSuccessClient({ orderToken }: { orderToken: string }) {
           {result ? (
             <a
               href={result.redirect_to || 'https://100k-admin.rycos.eu/dashboard/licenses'}
-              className="w-full inline-block rounded-xl bg-brand py-3.5 text-sm font-bold text-white hover:bg-brand-600 transition shadow-sm hover:shadow"
+              className="w-full inline-block rounded-xl bg-[#ED1C24] hover:bg-[#CC161D] py-3.5 text-sm font-bold text-white transition shadow-md hover:shadow-lg"
             >
               Przejdź do panelu 100k-admin →
             </a>

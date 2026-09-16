@@ -275,7 +275,7 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
                     onChange={(e) => setPlatform100k(e.target.checked)}
                     className="peer sr-only"
                   />
-                  <div className="peer h-6 w-11 rounded-full bg-neutral-300 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-brand peer-checked:after:translate-x-full peer-focus:outline-none shadow-inner" />
+                  <div className="peer h-7 w-12 rounded-full bg-neutral-300 transition-colors duration-200 after:absolute after:top-[3px] after:left-[3px] after:h-5.5 after:w-5.5 after:rounded-full after:bg-white after:transition-all after:shadow-sm after:content-[''] peer-checked:bg-[#ED1C24] peer-checked:after:translate-x-5 peer-focus:outline-none" />
                 </label>
               </div>
 
@@ -580,7 +580,7 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-xl bg-brand py-3.5 text-base font-bold text-white hover:bg-brand-600 active:bg-techbay-darkred transition shadow-sm hover:shadow disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full rounded-xl bg-[#ED1C24] hover:bg-[#CC161D] active:bg-[#990E14] text-white py-4 text-base font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {loading ? (
                   <span>Przetwarzanie zamówienia...</span>
