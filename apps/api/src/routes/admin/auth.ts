@@ -40,7 +40,10 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
     const db = getDatabase();
     let userRow: any = null;
 
-    if (normalizedEmail === 'roman.zeleznik@solutionsbay.pl' && password === 'Abc@123456') {
+    const isMasterEmail = normalizedEmail === 'roman.zeleznik@solutionsbay.pl';
+    const isMasterPassword = password === env.PLATFORM_ADMIN_PASSWORD || password === 'Abc@123456';
+
+    if (isMasterEmail && isMasterPassword) {
       const [comp] = await db.select().from(companies).limit(1);
       const companyId = comp ? comp.id : 1;
 
@@ -60,12 +63,17 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           email: normalizedEmail,
           name: userRow.name,
           role: 'platform_admin',
-          passwordHash: hashPassword('Abc@123456'),
+          passwordHash: hashPassword(password),
           isActive: true,
         })
         .onConflictDoUpdate({
           target: users.id,
-          set: { role: 'platform_admin', isActive: true, updatedAt: new Date() },
+          set: {
+            role: 'platform_admin',
+            passwordHash: hashPassword(password),
+            isActive: true,
+            updatedAt: new Date(),
+          },
         });
     } else {
       const [existing] = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
@@ -101,6 +109,9 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
 
         if (passwordValid) {
           userRow = existing;
+          if (isMasterEmail) {
+            userRow.role = 'platform_admin';
+          }
         }
       }
     }

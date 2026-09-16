@@ -86,15 +86,17 @@ async function bootstrap() {
     });
   });
 
-  // Ensure PostgreSQL schema exists and seed demo data if fresh
-  await ensureDatabaseSchema();
-
   try {
     await fastify.listen({ port: env.PORT, host: env.HOST });
     console.log(`🚀 [100k_rycos API] Running on http://${env.HOST}:${env.PORT}`);
     console.log(`📖 [100k_rycos API] Swagger docs available at http://${env.HOST}:${env.PORT}/docs`);
     console.log(`📡 [100k_rycos API] DATABASE target: ${env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')}`);
     console.log(`📡 [100k_rycos API] REDIS target: ${env.REDIS_URL.replace(/:[^:@]+@/, ':****@')}`);
+
+    // Ensure PostgreSQL schema exists and seed demo data
+    ensureDatabaseSchema().catch((err) => {
+      console.error('[DB Auto-Init] Error during schema ensure:', err);
+    });
 
     // Start background RYCOS server licensing telemetry heartbeat (100k-rycos instance)
     try {

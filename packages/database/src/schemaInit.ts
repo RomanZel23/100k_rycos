@@ -391,8 +391,13 @@ export async function ensureDatabaseSchema() {
   if (!raw) return;
 
   try {
-    // Acquire PostgreSQL session-level advisory lock so API and Worker never run DDL concurrently
-    await raw.unsafe(`SELECT pg_advisory_lock(100100);`);
+    // Acquire PostgreSQL non-blocking advisory lock so API and Worker never run DDL concurrently
+    const lockCheck: any = await raw.unsafe(`SELECT pg_try_advisory_lock(100100) AS acquired;`);
+    const acquired = lockCheck?.[0]?.acquired === true || lockCheck?.rows?.[0]?.acquired === true;
+    if (!acquired) {
+      console.log('ℹ️ [DB Auto-Init] Migration lock held by sibling process, skipping concurrent DDL');
+      return;
+    }
 
     try {
       const check: any = await raw.unsafe(`
@@ -697,12 +702,13 @@ export async function ensureDatabaseSchema() {
 
       // Ensure roman.zeleznik@solutionsbay.pl is seeded as platform_admin
       await raw.unsafe(`
-        INSERT INTO "users" ("id", "company_id", "email", "name", "role", "is_active", "created_at", "updated_at")
-        VALUES ('usr-roman-zeleznik', 1, 'roman.zeleznik@solutionsbay.pl', 'Roman Żeleźnik', 'platform_admin', true, NOW(), NOW())
+        INSERT INTO "users" ("id", "company_id", "email", "name", "role", "password_hash", "is_active", "created_at", "updated_at")
+        VALUES ('usr-roman-zeleznik', 1, 'roman.zeleznik@solutionsbay.pl', 'Roman Żeleźnik', 'platform_admin', 'scrypt:33f5fca0a34d2c8096353d230aba1fea:8f08cd31b01ef0d0e63da8a205c3c56fcd70e58af87de12a885cf850429661623d287b3cba98ff4377e3c884ab47ba9cf6f0455791045b2cfd06ed24c5344e87', true, NOW(), NOW())
         ON CONFLICT ("id") DO UPDATE SET
           "company_id" = 1,
           "role" = 'platform_admin',
           "name" = 'Roman Żeleźnik',
+          "password_hash" = COALESCE("users"."password_hash", 'scrypt:33f5fca0a34d2c8096353d230aba1fea:8f08cd31b01ef0d0e63da8a205c3c56fcd70e58af87de12a885cf850429661623d287b3cba98ff4377e3c884ab47ba9cf6f0455791045b2cfd06ed24c5344e87'),
           "is_active" = true,
           "updated_at" = NOW();
 

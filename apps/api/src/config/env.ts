@@ -21,6 +21,8 @@ const envSchema = z.object({
   SAFERPAY_API_USERNAME: z.string().default('API_278134_98615439'),
   SAFERPAY_API_PASSWORD: z.string().default(''),
   SAFERPAY_TEST_MODE: z.coerce.boolean().default(true),
+  // Platform SuperAdmin credentials override
+  PLATFORM_ADMIN_PASSWORD: z.string().default(process.env.PLATFORM_ADMIN_PASSWORD || 'Abc@123456'),
   // Public URLs for redirects and notifications
   PUBLIC_API_URL: z.string().default(process.env.PUBLIC_API_URL || 'https://100k-api.rycos.eu'),
   PUBLIC_CUSTOMER_URL: z.string().default(process.env.PUBLIC_CUSTOMER_URL || 'https://100k.rycos.eu'),
