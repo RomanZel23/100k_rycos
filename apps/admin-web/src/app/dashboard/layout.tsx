@@ -24,6 +24,7 @@ const NAV = [
   { href: '/dashboard/locations', key: 'nav.locations', defaultLabel: 'Locations', manager: true },
   { href: '/dashboard/terminals', key: 'nav.terminals', defaultLabel: 'POS terminals', manager: true },
   { href: '/dashboard/fiscal-devices', key: 'nav.fiscal', defaultLabel: 'Fiscal devices', manager: true },
+  { href: '/dashboard/licenses', key: 'nav.licenses', defaultLabel: 'Licencje RYCOS', manager: true },
   { href: '/dashboard/payment-gateways', key: 'nav.gateways', defaultLabel: 'Payment gateway', manager: true },
   { href: '/dashboard/qr-print', key: 'nav.qr', defaultLabel: 'QR Print', manager: true },
   { href: '/dashboard/users', key: 'nav.users', defaultLabel: 'Users', manager: true },

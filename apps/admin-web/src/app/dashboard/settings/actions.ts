@@ -5,7 +5,7 @@ import { adminApi } from '@/lib/api'
 import { FEATURE_KEYS } from './constants'
 
 const COMPANY_FIELDS = [
-  'name', 'address', 'email', 'phone', 'country', 'currency', 'business_type',
+  'name', 'nip', 'address', 'email', 'phone', 'country', 'currency', 'business_type',
   // active_languages retired — see /companies/languages + Settings → Languages section
   'default_language', 'terms_and_conditions', 'privacy_policy',
 ]

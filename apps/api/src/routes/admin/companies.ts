@@ -22,6 +22,7 @@ async function ensureBrandColumns() {
         "updated_at" timestamp DEFAULT now() NOT NULL,
         CONSTRAINT "company_settings_company_feature_unique" UNIQUE("company_id", "feature_key")
       );
+      ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "nip" varchar(32);
       ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "address" text;
       ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "phone" varchar(64);
       ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "business_type" varchar(64) DEFAULT 'product';
@@ -61,6 +62,7 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
     return success(reply, {
       ...company,
+      nip: company.nip || '',
       is_accepting_orders: company.isAcceptingOrders,
       business_type: company.businessType || 'product',
       address: company.address || '',
@@ -87,6 +89,7 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
     };
 
     if (body.name !== undefined) updateData.name = String(body.name).trim();
+    if (body.nip !== undefined) updateData.nip = String(body.nip).trim().replace(/\D/g, '');
     if (body.email !== undefined) updateData.email = body.email;
     if (body.currency !== undefined) updateData.currency = body.currency;
     if (body.country !== undefined) updateData.country = body.country;
@@ -109,6 +112,7 @@ export async function adminCompaniesRoutes(fastify: FastifyInstance) {
 
       return success(reply, {
         ...updated,
+        nip: updated.nip || '',
         is_accepting_orders: updated.isAcceptingOrders,
         business_type: updated.businessType || 'product',
         address: updated.address || '',

@@ -92,6 +92,14 @@ async function bootstrap() {
     console.log(`📖 [100k_rycos API] Swagger docs available at http://${env.HOST}:${env.PORT}/docs`);
     console.log(`📡 [100k_rycos API] DATABASE target: ${env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')}`);
     console.log(`📡 [100k_rycos API] REDIS target: ${env.REDIS_URL.replace(/:[^:@]+@/, ':****@')}`);
+
+    // Start background RYCOS server licensing telemetry heartbeat (100k-rycos instance)
+    try {
+      const { rycosLicenseService } = await import('./services/rycosLicenseService.js');
+      rycosLicenseService.startHeartbeatLoop();
+    } catch (e: any) {
+      console.warn('[RycosLicenseService] Could not start heartbeat loop:', e.message);
+    }
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

@@ -9,7 +9,7 @@ import { getTranslation } from '@/lib/i18n'
 import { getAdminLocale } from '@/lib/i18n-server'
 
 interface Company {
-  name: string; address: string; email: string; phone: string; country: string
+  name: string; nip?: string | null; address: string; email: string; phone: string; country: string
   currency: string; business_type: string; default_language: string
   terms_and_conditions: string | null; privacy_policy: string | null
 }
@@ -60,11 +60,15 @@ export default async function SettingsPage() {
         <h2 className="text-base font-bold text-techbay-blue">{getTranslation(locale, 'settings.company_details', 'Company details')}</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field name="name" label={getTranslation(locale, 'settings.company_name', 'Company name')} defaultValue={c.name} required />
+          <div>
+            <Field name="nip" label="NIP (identyfikator w portalu licencji RYCOS)" defaultValue={c.nip || ''} placeholder="np. 5252839211" />
+            <p className="mt-0.5 text-[11px] text-neutral-500">10-cyfrowy NIP wymagany do powiązania urządzeń SBR i licencji RYCOS.</p>
+          </div>
           <Field name="email" label={getTranslation(locale, 'settings.email', 'Email')} type="email" defaultValue={c.email} />
           <Field name="phone" label={getTranslation(locale, 'settings.phone', 'Phone')} defaultValue={c.phone} />
           <Field name="country" label={getTranslation(locale, 'settings.country', 'Country')} defaultValue={c.country} />
           <Field name="currency" label={getTranslation(locale, 'settings.currency', 'Currency')} defaultValue={c.currency} />
-          <div>
+          <div className="sm:col-span-2">
             <label className="label" htmlFor="business_type">{getTranslation(locale, 'settings.business_type', 'Business type')}</label>
             <select id="business_type" name="business_type" defaultValue={c.business_type || 'product'} className="input">
               {BUSINESS_TYPES.map((b) => <option key={b.v} value={b.v}>{b.l}</option>)}

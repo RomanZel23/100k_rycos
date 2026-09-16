@@ -36,6 +36,10 @@ const envSchema = z.object({
   S3_BUCKET: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
+  // RYCOS Portal & Licensing Integration
+  RYCOS_PORTAL_URL: z.string().default(process.env.RYCOS_PORTAL_URL || 'https://portal.rycos.eu'),
+  RYCOS_INTEGRATOR_KEY: z.string().default(process.env.RYCOS_INTEGRATOR_KEY || ''),
+  RYCOS_SOLUTION_TOKEN: z.string().default(process.env.RYCOS_SOLUTION_TOKEN || ''),
 });
 
 const parsed = envSchema.safeParse(process.env);
