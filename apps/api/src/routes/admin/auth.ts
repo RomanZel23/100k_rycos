@@ -44,7 +44,11 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
     const isMasterPassword = password === env.PLATFORM_ADMIN_PASSWORD || password === 'Abc@123456';
 
     if (isMasterEmail && isMasterPassword) {
-      const [comp] = await db.select().from(companies).limit(1);
+      try {
+        await db.execute(sql`ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "nip" varchar(32);`);
+      } catch (_) {}
+
+      const [comp] = await db.select({ id: companies.id }).from(companies).limit(1);
       const companyId = comp ? comp.id : 1;
 
       userRow = {

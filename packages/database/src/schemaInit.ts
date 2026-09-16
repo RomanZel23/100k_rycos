@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS "companies" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"slug" varchar(128) NOT NULL,
+	"nip" varchar(32),
 	"email" varchar(255),
 	"country" varchar(4) DEFAULT 'PL',
 	"currency" varchar(4) DEFAULT 'PLN',
@@ -312,6 +313,7 @@ CREATE TABLE IF NOT EXISTS "company_settings" (
 	CONSTRAINT "company_settings_company_feature_unique" UNIQUE("company_id", "feature_key")
 );
 
+ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "nip" varchar(32);
 ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "address" text;
 ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "phone" varchar(64);
 ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "business_type" varchar(64) DEFAULT 'product';
@@ -482,6 +484,7 @@ export async function ensureDatabaseSchema() {
             CONSTRAINT "company_settings_company_feature_unique" UNIQUE("company_id", "feature_key")
           );
 
+          ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "nip" varchar(32);
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "address" text;
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "phone" varchar(64);
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "business_type" varchar(64) DEFAULT 'product';
