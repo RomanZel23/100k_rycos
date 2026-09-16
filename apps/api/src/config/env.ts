@@ -22,8 +22,15 @@ const envSchema = z.object({
   SAFERPAY_API_PASSWORD: z.string().default(''),
   SAFERPAY_TEST_MODE: z.coerce.boolean().default(true),
   // Public URLs for redirects and notifications
-  PUBLIC_API_URL: z.string().default('https://100k-api.rycos.eu'),
-  PUBLIC_CUSTOMER_URL: z.string().default('https://100k.rycos.eu'),
+  PUBLIC_API_URL: z.string().default(process.env.PUBLIC_API_URL || 'https://100k-api.rycos.eu'),
+  PUBLIC_CUSTOMER_URL: z.string().default(process.env.PUBLIC_CUSTOMER_URL || 'https://100k.rycos.eu'),
+  PUBLIC_ADMIN_URL: z.string().default(process.env.PUBLIC_ADMIN_URL || 'https://100k-admin.rycos.eu'),
+  // SolutionsBay Saferpay Account for Platform Onboarding / Shop (100k.rycos.eu/go)
+  SOLUTIONSBAY_SAFERPAY_CUSTOMER_ID: z.string().default(process.env.SOLUTIONSBAY_SAFERPAY_CUSTOMER_ID || process.env.SAFERPAY_CUSTOMER_ID || '278134'),
+  SOLUTIONSBAY_SAFERPAY_TERMINAL_ID: z.string().default(process.env.SOLUTIONSBAY_SAFERPAY_TERMINAL_ID || process.env.SAFERPAY_TERMINAL_ID || '17770989'),
+  SOLUTIONSBAY_SAFERPAY_API_USERNAME: z.string().default(process.env.SOLUTIONSBAY_SAFERPAY_API_USERNAME || process.env.SAFERPAY_API_USERNAME || 'API_278134_98615439'),
+  SOLUTIONSBAY_SAFERPAY_API_PASSWORD: z.string().default(process.env.SOLUTIONSBAY_SAFERPAY_API_PASSWORD || process.env.SAFERPAY_API_PASSWORD || ''),
+  SOLUTIONSBAY_SAFERPAY_TEST_MODE: z.coerce.boolean().default(process.env.SOLUTIONSBAY_SAFERPAY_TEST_MODE !== undefined ? process.env.SOLUTIONSBAY_SAFERPAY_TEST_MODE === 'true' : true),
   // RYCOS MQTT Bridge (SBR-* and Fiscal Devices)
   RYCOS_MQTT_HOST: z.string().default(process.env.RYCOS_MQTT_HOST || 'rycos.eu'),
   RYCOS_MQTT_PORT: z.coerce.number().default(Number(process.env.RYCOS_MQTT_PORT) || 8883),

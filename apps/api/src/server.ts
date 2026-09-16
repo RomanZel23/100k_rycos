@@ -14,6 +14,8 @@ import { adminRoutes } from './routes/admin/index.js';
 import { storageRoutes } from './routes/storage.js';
 import { ensureDatabaseSchema } from '@rycos/database';
 
+import { onboardingRoutes } from './routes/onboarding.js';
+
 async function bootstrap() {
   const fastify = Fastify({
     logger: env.NODE_ENV !== 'production' ? { level: 'info' } : { level: 'warn' },
@@ -74,6 +76,7 @@ async function bootstrap() {
   await fastify.register(paymentRoutes);
   await fastify.register(adminRoutes);
   await fastify.register(storageRoutes);
+  await fastify.register(onboardingRoutes);
 
   // Error Handler
   fastify.setErrorHandler((error: any, _request, reply) => {

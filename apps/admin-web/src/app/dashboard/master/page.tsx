@@ -4,6 +4,7 @@ import { NoAccess } from '@/components/NoAccess';
 import { getTranslation } from '@/lib/i18n';
 import { getAdminLocale } from '@/lib/i18n-server';
 import { MasterCompaniesTable } from './MasterCompaniesTable';
+import { MasterPricingTable, type PricingItem } from './MasterPricingTable';
 
 interface MasterOverviewData {
   totalCompanies: number;
@@ -31,7 +32,18 @@ export default async function MasterSaasPage() {
   if (!isManager(user)) return <NoAccess />;
   const locale = await getAdminLocale();
 
-  const rawData: any = await adminApiData('/master/overview');
+  const [rawData, rawPricing]: [any, any] = await Promise.all([
+    adminApiData('/master/overview'),
+    adminApiData<PricingItem[]>('/master/pricing'),
+  ]);
+
+  const pricingItems: PricingItem[] = Array.isArray(rawPricing) && rawPricing.length > 0 ? rawPricing : [
+    { itemKey: 'platform_100k', title: 'Platforma 100k-RYCOS', description: 'Wysokowydajny silnik zamówień (100k/min), KDS, POS, Master SaaS', monthlyPricePln: 199, discount6mPercent: 10, discount12mPercent: 20 },
+    { itemKey: 'rycos_pf', title: 'SBR Pełna (POS + Kasa fiskalna + SoftPOS)', description: 'Wszystko w jednym na terminalu SBR: sprzedaż, e-paragony i płatności zbliżeniowe', monthlyPricePln: 89, discount6mPercent: 10, discount12mPercent: 20 },
+    { itemKey: 'rycos_f', title: 'SBR Fiskalna (Aplikasa)', description: 'Wirtualna kasa fiskalna zintegrowana z Centralnym Repozytorium Kas (MF)', monthlyPricePln: 49, discount6mPercent: 10, discount12mPercent: 20 },
+    { itemKey: 'rycos_p', title: 'SBR Płatnicza (SoftPOS)', description: 'Akceptacja płatności kartami VISA / MasterCard / Apple Pay / Google Pay (PIN-on-Glass)', monthlyPricePln: 39, discount6mPercent: 10, discount12mPercent: 20 },
+    { itemKey: 'rycos_0', title: 'SBR Podstawowa (POS)', description: 'Stanowisko kelnerskie / mobilny terminal zamówień POS', monthlyPricePln: 19, discount6mPercent: 10, discount12mPercent: 20 },
+  ];
 
   const totalCompanies = Number(rawData?.totalCompanies ?? rawData?.total_companies ?? 1);
   const activeCompanies = Number(rawData?.activeCompanies ?? rawData?.active_companies ?? 1);
@@ -171,6 +183,25 @@ export default async function MasterSaasPage() {
         </div>
 
         <MasterCompaniesTable initialCompanies={overview.companies} locale={locale} />
+      </div>
+
+      {/* Onboarding Shop Pricing Configuration */}
+      <div className="rounded-2xl border border-neutral-200 bg-white shadow-xs overflow-hidden">
+        <div className="border-b border-neutral-200 px-6 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-neutral-900">
+              {locale === 'pl' ? 'Zarządzanie Cennikiem Sklepu (100k.rycos.eu/go)' : 'Shop Pricing & Discounts'}
+            </h2>
+            <p className="text-xs text-neutral-500">
+              {locale === 'pl' ? 'Stawki abonamentowe, licencje SBR i rabaty czasowe dla nowych klientów' : 'Subscription rates and discounts for self-service checkout'}
+            </p>
+          </div>
+          <span className="rounded-lg bg-brand/10 text-brand px-3 py-1 font-mono text-xs font-bold">
+            Live Pricing
+          </span>
+        </div>
+
+        <MasterPricingTable initialPricing={pricingItems} />
       </div>
     </div>
   );

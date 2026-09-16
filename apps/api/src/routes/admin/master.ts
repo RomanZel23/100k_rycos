@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, companies, orders, locations, brands, eq, sql, desc } from '@rycos/database';
+import { getDatabase, companies, orders, locations, brands, platformPricing, eq, sql, desc } from '@rycos/database';
 import { requireAdminAuth } from '../../middleware/adminAuth.js';
 import { success, notFound, error } from '../../lib/response.js';
 
@@ -193,6 +193,43 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return error(reply, err.message || 'Nie udało się utworzyć firmy');
     }
+  });
+
+  // GET /v1/admin/master/pricing - Get current shop pricing
+  fastify.get('/v1/admin/master/pricing', async (_req, reply) => {
+    const db = getDatabase();
+    const rows = await db.select().from(platformPricing);
+    return success(reply, rows, 'Pricing list retrieved');
+  });
+
+  // PUT /v1/admin/master/pricing - Update pricing items
+  fastify.put('/v1/admin/master/pricing', async (req, reply) => {
+    const db = getDatabase();
+    const body = (req.body ?? {}) as any;
+    const items = Array.isArray(body.items) ? body.items : [];
+
+    for (const item of items) {
+      if (!item.itemKey && !item.item_key) continue;
+      const key = item.itemKey || item.item_key;
+      const monthlyPricePln = parseInt(String(item.monthlyPricePln || item.monthly_price_pln || 0), 10);
+      const discount6mPercent = parseInt(String(item.discount6mPercent || item.discount_6m_percent || 10), 10);
+      const discount12mPercent = parseInt(String(item.discount12mPercent || item.discount_12m_percent || 20), 10);
+
+      await db
+        .update(platformPricing)
+        .set({
+          title: item.title,
+          description: item.description,
+          monthlyPricePln,
+          discount6mPercent,
+          discount12mPercent,
+          updatedAt: new Date(),
+        })
+        .where(eq(platformPricing.itemKey, key));
+    }
+
+    const updated = await db.select().from(platformPricing);
+    return success(reply, updated, 'Cennik został pomyślnie zaktualizowany');
   });
 }
 

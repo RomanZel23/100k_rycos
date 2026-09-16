@@ -41,3 +41,19 @@ export async function createCompanyAction(data: {
   revalidatePath('/dashboard/master');
   return json.data;
 }
+
+export async function updatePricingAction(items: any[]): Promise<any> {
+  const res = await adminApi('/master/pricing', {
+    method: 'PUT',
+    body: JSON.stringify({ items }),
+  });
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.message || 'Nie udało się zaktualizować cennika');
+  }
+
+  const json = await res.json();
+  revalidatePath('/dashboard/master');
+  return json.data;
+}

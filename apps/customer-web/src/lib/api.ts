@@ -90,3 +90,87 @@ export async function initiatePayment(
   const json = await res.json();
   return json.data;
 }
+
+export async function fetchOnboardingPricing(): Promise<{
+  items: Array<{
+    itemKey: string;
+    title: string;
+    description: string;
+    monthlyPricePln: number;
+    discount6mPercent: number;
+    discount12mPercent: number;
+  }>;
+  discounts: Record<string, number>;
+  vat_rate: number;
+  currency: string;
+}> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/onboarding/pricing`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Nie udało się pobrać cennika');
+  const json = await res.json();
+  return json.data;
+}
+
+export async function checkoutOnboarding(payload: {
+  nip: string;
+  company_name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  password: string;
+  months: number;
+  plan: {
+    platform_100k: boolean;
+    seats_pf: number;
+    seats_f: number;
+    seats_p: number;
+    seats_0: number;
+  };
+}): Promise<{
+  order_token: string;
+  redirect_url: string;
+  amount_gross_pln: number;
+  amount_net_pln: number;
+  months: number;
+  discount_percent: number;
+}> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/onboarding/checkout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || err.message || 'Błąd inicjalizacji zamówienia');
+  }
+
+  const json = await res.json();
+  return json.data;
+}
+
+export async function finalizeOnboarding(orderToken: string): Promise<{
+  completed: boolean;
+  company_id: number;
+  company_name: string;
+  nip: string;
+  token: string;
+  redirect_to: string;
+}> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/onboarding/finalize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_token: orderToken }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || err.message || 'Błąd finalizacji zamówienia');
+  }
+
+  const json = await res.json();
+  return json.data;
+}
+

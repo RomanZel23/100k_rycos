@@ -129,6 +129,98 @@ class RycosIntegratorService {
   }
 
   /**
+   * Create new client in RYCOS Portal
+   */
+  public async createClient(data: {
+    nip: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    address_street?: string;
+    address_city?: string;
+    address_zip?: string;
+    address_country?: string;
+  }): Promise<RycosClient> {
+    if (!this.isConfigured()) {
+      throw new Error('RYCOS_INTEGRATOR_KEY is not configured on this server');
+    }
+
+    const cleanNip = this.cleanNip(data.nip);
+    const existing = await this.getClientByNip(cleanNip);
+    if (existing) {
+      return existing;
+    }
+
+    const payload = {
+      nip: cleanNip,
+      name: data.name.trim(),
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      address_street: data.address_street?.trim() || undefined,
+      address_city: data.address_city?.trim() || undefined,
+      address_zip: data.address_zip?.trim() || undefined,
+      address_country: data.address_country?.trim() || 'PL',
+    };
+
+    const res = await fetch(`${this.baseUrl}/api/v2/clients`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+      throw new Error(err.error || `Portal client creation failed: ${res.statusText}`);
+    }
+
+    const json = (await res.json()) as { client: RycosClient };
+    return json.client;
+  }
+
+  /**
+   * Create license purchase in RYCOS Portal for client
+   */
+  public async createPurchase(
+    clientId: string,
+    params: {
+      bundle_type?: 'flex' | 'start' | 'comfort';
+      seats_pf?: number;
+      seats_p?: number;
+      seats_f?: number;
+      seats_0?: number;
+      expires_at?: string;
+      notes?: string;
+    }
+  ): Promise<any> {
+    if (!this.isConfigured()) {
+      throw new Error('RYCOS_INTEGRATOR_KEY is not configured on this server');
+    }
+
+    const payload = {
+      bundle_type: params.bundle_type || 'flex',
+      seats_pf: params.seats_pf || 0,
+      seats_p: params.seats_p || 0,
+      seats_f: params.seats_f || 0,
+      seats_0: params.seats_0 || 0,
+      expires_at: params.expires_at || undefined,
+      notes: params.notes || undefined,
+    };
+
+    const res = await fetch(`${this.baseUrl}/api/v2/clients/${encodeURIComponent(clientId)}/purchases`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+      throw new Error(err.error || `Portal purchase creation failed: ${res.statusText}`);
+    }
+
+    return await res.json();
+  }
+
+  /**
    * Get all seats & paired devices for a client
    */
   public async getClientSeats(clientId: string): Promise<{ client: RycosClient; seats: RycosSeat[] } | null> {
