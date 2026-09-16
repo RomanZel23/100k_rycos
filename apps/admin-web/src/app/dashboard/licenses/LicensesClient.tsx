@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import QRCode from 'qrcode'
 import {
   generatePairingPinAction,
   unpairDeviceAction,
@@ -109,7 +110,7 @@ const TIER_LABELS: Record<string, { label: string; bg: string; text: string; des
 
 export function LicensesClient({ data }: { data: LicensingData }) {
   const [loadingSeatId, setLoadingSeatId] = useState<string | null>(null);
-  const [pinModal, setPinModal] = useState<{ pin: string; expiresAt: string; seatId: string } | null>(null);
+  const [pinModal, setPinModal] = useState<{ pin: string; expiresAt: string; seatId: string; qrUrl?: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -153,10 +154,24 @@ export function LicensesClient({ data }: { data: LicensingData }) {
     setLoadingSeatId(seatId);
     try {
       const res = await generatePairingPinAction(seatId);
+      let qrUrl = '';
+      try {
+        qrUrl = await QRCode.toDataURL(res.pin, {
+          width: 200,
+          margin: 1,
+          color: {
+            dark: '#002633',
+            light: '#ffffff',
+          },
+        });
+      } catch (qrErr) {
+        console.warn('QR code generation error:', qrErr);
+      }
       setPinModal({
         pin: res.pin,
         expiresAt: res.expires_at,
         seatId: res.seat_id,
+        qrUrl,
       });
       setCopied(false);
     } catch (err: any) {
@@ -498,39 +513,62 @@ export function LicensesClient({ data }: { data: LicensingData }) {
         )}
       </div>
 
-      {/* Pairing PIN Modal */}
+      {/* Pairing PIN & QR Modal */}
       {pinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in duration-150">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4 animate-in fade-in zoom-in duration-150 max-h-[90vh] overflow-y-auto">
             <div className="text-center space-y-1">
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">
                 📱
               </span>
-              <h3 className="text-lg font-black text-techbay-blue">Kod PIN do parowania urządzenia</h3>
+              <h3 className="text-lg font-black text-techbay-blue">Parowanie urządzenia</h3>
               <p className="text-xs text-neutral-500">
-                Wpisz ten kod na ekranie startowym aplikacji <strong>RYCOS POS / SBR</strong> na terminalu lub smartfonie.
+                Wpisz 6-cyfrowy PIN lub <strong>zeskanuj kod QR</strong> skanerem w aplikacji <strong>RYCOS POS / SBR</strong>.
               </p>
             </div>
 
-            <div className="rounded-xl bg-neutral-50 border-2 border-dashed border-techbay-blue/30 p-5 text-center space-y-2">
+            {/* PIN Code Box */}
+            <div className="rounded-xl bg-neutral-50 border-2 border-dashed border-techbay-blue/30 p-4 text-center space-y-1.5">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                Jednorazowy Kod PIN
+              </div>
               <div className="font-mono text-4xl font-black tracking-widest text-techbay-blue">
                 {pinModal.pin}
               </div>
               <p className="text-xs text-amber-700 font-medium">
-                Kod ważny przez 10 minut (do {new Date(pinModal.expiresAt).toLocaleTimeString('pl-PL')})
+                Ważny przez 10 minut (do {new Date(pinModal.expiresAt).toLocaleTimeString('pl-PL')})
               </p>
             </div>
 
-            <div className="flex gap-2">
+            {/* QR Code Box */}
+            {pinModal.qrUrl && (
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/50 p-4 text-center space-y-2 flex flex-col items-center">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-600 flex items-center gap-1.5">
+                  <span>📷</span> Szybkie parowanie skanerem QR
+                </div>
+                <div className="p-2.5 bg-white rounded-xl border border-neutral-200 shadow-xs">
+                  <img
+                    src={pinModal.qrUrl}
+                    alt={`Kod QR do PIN ${pinModal.pin}`}
+                    className="w-44 h-44 object-contain mx-auto"
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  W aplikacji wybierz <em>„Skanuj kod QR”</em> na ekranie logowania/parowania
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
               <button
                 onClick={handleCopyPin}
-                className="flex-1 rounded-lg bg-techbay-blue py-2.5 text-sm font-bold text-white hover:bg-techbay-blue-dark transition"
+                className="flex-1 rounded-lg bg-techbay-blue py-2.5 text-sm font-bold text-white hover:bg-techbay-blue-dark transition cursor-pointer"
               >
-                {copied ? '✓ Skopiowano!' : 'Kopiuj PIN'}
+                {copied ? '✓ Skopiowano PIN!' : 'Kopiuj PIN'}
               </button>
               <button
                 onClick={() => setPinModal(null)}
-                className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-100 transition"
+                className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-100 transition cursor-pointer"
               >
                 Zamknij
               </button>
