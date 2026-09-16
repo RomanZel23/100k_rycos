@@ -97,6 +97,9 @@ export const translations: Record<AdminLocale, Record<string, string>> = {
     'overview.warn.no_primary_fiscal_body': 'Żadne urządzenie nie jest oznaczone jako domyślne do fiskalizacji zamówień.',
     'overview.warn.no_gateway_title': 'Brak bramki płatności',
     'overview.warn.no_gateway_body': 'Klienci nie mogą płacić online dopóki nie podłączysz bramki SaferPay.',
+    'overview.company_load_error': 'Profil Twojej firmy nie został jeszcze skonfigurowany.',
+    'overview.setup_company_profile': 'Przejdź do Ustawień, aby uzupełnić dane firmy (nazwa, NIP, waluta).',
+    'overview.btn_settings': 'Uzupełnij profil firmy',
 
     // Orders Analytics
     'orders.title': 'Analityka zamówień',
@@ -476,6 +479,9 @@ export const translations: Record<AdminLocale, Record<string, string>> = {
     'overview.warn.no_primary_fiscal_body': 'No fiscal device is set as primary. Orders routed without a device have nowhere to fiscalize.',
     'overview.warn.no_gateway_title': 'No payment gateway',
     'overview.warn.no_gateway_body': 'Customers cannot pay online until you connect SaferPay gateway.',
+    'overview.company_load_error': 'Your company profile is not configured yet.',
+    'overview.setup_company_profile': 'Go to Settings to fill in company details (name, VAT/NIP, currency).',
+    'overview.btn_settings': 'Configure company profile',
 
     // Orders Analytics
     'orders.title': 'Orders analytics',
@@ -855,6 +861,9 @@ export const translations: Record<AdminLocale, Record<string, string>> = {
     'overview.warn.no_primary_fiscal_body': 'Kein Fiskalgerät als Standard definiert.',
     'overview.warn.no_gateway_title': 'Kein Zahlungsgateway',
     'overview.warn.no_gateway_body': 'Kunden können erst online zahlen, wenn SaferPay angebunden ist.',
+    'overview.company_load_error': 'Ihr Firmenprofil ist noch nicht konfiguriert.',
+    'overview.setup_company_profile': 'Gehen Sie zu Einstellungen, um die Firmendaten auszufüllen (Name, USt-IdNr./NIP, Währung).',
+    'overview.btn_settings': 'Firmenprofil einrichten',
 
     // Orders Analytics
     'orders.title': 'Bestellanalysen',

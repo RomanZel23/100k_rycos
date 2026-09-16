@@ -127,7 +127,19 @@ export default async function DashboardPage() {
       ))}
 
       {!company ? (
-        <div className="card mt-6 text-sm text-neutral-500">Couldn’t load your company details. Please try again shortly.</div>
+        <div className="card mt-6 border-blue-200 bg-blue-50/50 p-5 space-y-2">
+          <p className="text-sm font-bold text-techbay-blue">
+            {getTranslation(locale, 'overview.company_load_error', 'Profil Twojej firmy nie został jeszcze skonfigurowany.')}
+          </p>
+          <p className="text-xs text-neutral-600">
+            {getTranslation(locale, 'overview.setup_company_profile', 'Przejdź do Ustawień, aby uzupełnić dane firmy (nazwa, NIP, waluta).')}
+          </p>
+          <div className="pt-2">
+            <Link href="/dashboard/settings" className="btn-brand text-xs py-1.5 px-3 inline-block">
+              {getTranslation(locale, 'overview.btn_settings', 'Uzupełnij profil firmy')} →
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="card sm:col-span-2">
