@@ -24,15 +24,47 @@ export async function adminApi(path: string, init: RequestInit = {}): Promise<Re
   const isForm = hasBody && typeof FormData !== 'undefined' && init.body instanceof FormData
   const sendJson = hasBody && !isForm
 
-  return fetch(`${process.env.ADMIN_API_URL}${path}`, {
+  const headers = {
+    ...(sendJson ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(init.headers || {}),
+  }
+
+  const candidateUrls = [
+    process.env.ADMIN_API_URL,
+    'http://api:8000/v1/admin',
+    'http://127.0.0.1:8000/v1/admin',
+    'https://100k-api.rycos.eu/v1/admin',
+  ].filter(Boolean) as string[];
+
+  const uniqueUrls = Array.from(new Set(candidateUrls));
+
+  for (let i = 0; i < uniqueUrls.length; i++) {
+    const baseUrl = uniqueUrls[i];
+    try {
+      const res = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        headers,
+        cache: 'no-store',
+      });
+      if (res.status !== 502 && res.status !== 503 && res.status !== 504) {
+        return res;
+      }
+      if (i === uniqueUrls.length - 1) {
+        return res;
+      }
+    } catch (err) {
+      if (i === uniqueUrls.length - 1) {
+        throw err;
+      }
+    }
+  }
+
+  return fetch(`${process.env.ADMIN_API_URL || 'https://100k-api.rycos.eu/v1/admin'}${path}`, {
     ...init,
-    headers: {
-      ...(sendJson ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.headers || {}),
-    },
+    headers,
     cache: 'no-store',
-  })
+  });
 }
 
 // Convenience: GET and return the admin-api envelope's `data`, or null on error.
