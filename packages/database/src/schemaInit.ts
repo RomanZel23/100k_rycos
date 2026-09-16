@@ -337,6 +337,41 @@ ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_job_id" varchar(64);
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_qr_code" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
 
+CREATE TABLE IF NOT EXISTS "platform_pricing" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"item_key" varchar(64) NOT NULL UNIQUE,
+	"title" varchar(128) NOT NULL,
+	"description" text,
+	"monthly_price_pln" integer NOT NULL,
+	"discount_6m_percent" integer DEFAULT 10 NOT NULL,
+	"discount_12m_percent" integer DEFAULT 20 NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "onboarding_orders" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"order_token" varchar(64) NOT NULL UNIQUE,
+	"nip" varchar(32) NOT NULL,
+	"company_name" varchar(255) NOT NULL,
+	"email" varchar(255) NOT NULL,
+	"phone" varchar(64),
+	"address" text,
+	"admin_password_hash" text NOT NULL,
+	"months" integer DEFAULT 1 NOT NULL,
+	"plan_details" jsonb NOT NULL,
+	"net_amount_grosze" integer NOT NULL,
+	"gross_amount_grosze" integer NOT NULL,
+	"saferpay_token" varchar(128),
+	"saferpay_transaction_id" varchar(128),
+	"status" varchar(32) DEFAULT 'pending' NOT NULL,
+	"created_company_id" integer,
+	"created_user_id" varchar(64),
+	"rycos_client_id" varchar(64),
+	"error_details" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"completed_at" timestamp
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_brand_product" ON "brand_products" ("brand_id", "product_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_entity_translation" ON "content_translations" ("entity_type", "entity_id", "language", "attribute_name");
 CREATE UNIQUE INDEX IF NOT EXISTS "uq_product_addon_group" ON "product_addon_groups" ("product_id", "group_id");
@@ -477,6 +512,50 @@ export async function ensureDatabaseSchema() {
             "created_at" timestamp DEFAULT now() NOT NULL,
             CONSTRAINT "fiscal_receipts_order_id_unique" UNIQUE("order_id")
           );
+
+          CREATE TABLE IF NOT EXISTS "platform_pricing" (
+            "id" bigserial PRIMARY KEY NOT NULL,
+            "item_key" varchar(64) NOT NULL UNIQUE,
+            "title" varchar(128) NOT NULL,
+            "description" text,
+            "monthly_price_pln" integer NOT NULL,
+            "discount_6m_percent" integer DEFAULT 10 NOT NULL,
+            "discount_12m_percent" integer DEFAULT 20 NOT NULL,
+            "updated_at" timestamp DEFAULT now() NOT NULL
+          );
+
+          CREATE TABLE IF NOT EXISTS "onboarding_orders" (
+            "id" bigserial PRIMARY KEY NOT NULL,
+            "order_token" varchar(64) NOT NULL UNIQUE,
+            "nip" varchar(32) NOT NULL,
+            "company_name" varchar(255) NOT NULL,
+            "email" varchar(255) NOT NULL,
+            "phone" varchar(64),
+            "address" text,
+            "admin_password_hash" text NOT NULL,
+            "months" integer DEFAULT 1 NOT NULL,
+            "plan_details" jsonb NOT NULL,
+            "net_amount_grosze" integer NOT NULL,
+            "gross_amount_grosze" integer NOT NULL,
+            "saferpay_token" varchar(128),
+            "saferpay_transaction_id" varchar(128),
+            "status" varchar(32) DEFAULT 'pending' NOT NULL,
+            "created_company_id" integer,
+            "created_user_id" varchar(64),
+            "rycos_client_id" varchar(64),
+            "error_details" text,
+            "created_at" timestamp DEFAULT now() NOT NULL,
+            "completed_at" timestamp
+          );
+
+          INSERT INTO "platform_pricing" ("item_key", "title", "description", "monthly_price_pln", "discount_6m_percent", "discount_12m_percent")
+          VALUES
+            ('platform_100k', 'Platforma 100k-RYCOS', 'Wysokowydajny silnik zamówień (100k/min), KDS, POS, Master SaaS', 199, 10, 20),
+            ('rycos_pf', 'SBR Pełna (POS + Kasa fiskalna + SoftPOS)', 'Wszystko w jednym na terminalu SBR: sprzedaż, e-paragony i płatności zbliżeniowe', 89, 10, 20),
+            ('rycos_f', 'SBR Fiskalna (Aplikasa)', 'Wirtualna kasa fiskalna zintegrowana z Centralnym Repozytorium Kas (MF)', 49, 10, 20),
+            ('rycos_p', 'SBR Płatnicza (SoftPOS)', 'Akceptacja płatności kartami VISA / MasterCard / Apple Pay / Google Pay (PIN-on-Glass)', 39, 10, 20),
+            ('rycos_0', 'SBR Podstawowa (POS)', 'Stanowisko kelnerskie / mobilny terminal zamówień POS', 19, 10, 20)
+          ON CONFLICT ("item_key") DO NOTHING;
         `);
       }
 

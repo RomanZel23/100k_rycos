@@ -42,18 +42,22 @@ export async function createCompanyAction(data: {
   return json.data;
 }
 
-export async function updatePricingAction(items: any[]): Promise<any> {
-  const res = await adminApi('/master/pricing', {
-    method: 'PUT',
-    body: JSON.stringify({ items }),
-  });
+export async function updatePricingAction(items: any[]): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const res = await adminApi('/master/pricing', {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+    });
 
-  if (!res.ok) {
-    const json = await res.json().catch(() => ({}));
-    throw new Error(json.message || 'Nie udało się zaktualizować cennika');
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      return { success: false, error: json.message || 'Nie udało się zaktualizować cennika' };
+    }
+
+    const json = await res.json();
+    revalidatePath('/dashboard/master');
+    return { success: true, data: json.data };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Błąd połączenia z serwerem API' };
   }
-
-  const json = await res.json();
-  revalidatePath('/dashboard/master');
-  return json.data;
 }

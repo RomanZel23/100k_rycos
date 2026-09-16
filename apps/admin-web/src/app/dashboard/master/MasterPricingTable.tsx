@@ -52,9 +52,13 @@ export function MasterPricingTable({ initialPricing }: { initialPricing: Pricing
     setSaving(true);
     setMsg(null);
     try {
-      await updatePricingAction(items);
-      setMsg({ type: 'success', text: 'Cennik został pomyślnie zaktualizowany!' });
-      setTimeout(() => setMsg(null), 3000);
+      const res = await updatePricingAction(items);
+      if (res.success) {
+        setMsg({ type: 'success', text: 'Cennik został pomyślnie zaktualizowany!' });
+        setTimeout(() => setMsg(null), 3000);
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Błąd zapisu cennika' });
+      }
     } catch (err: any) {
       setMsg({ type: 'error', text: err.message || 'Błąd zapisu cennika' });
     } finally {
