@@ -34,9 +34,13 @@ export async function login(formData: FormData) {
             successData = json.data;
             break;
           }
-        } else if (res.status === 401 || res.status === 403 || res.status === 422) {
+        } else {
           const json = await res.json().catch(() => ({}));
-          lastErrorMsg = json?.message || json?.error || 'Nieprawidłowy login lub hasło';
+          if (res.status === 401 || res.status === 403 || res.status === 422) {
+            lastErrorMsg = json?.message || json?.error || 'Nieprawidłowy login lub hasło';
+          } else {
+            lastErrorMsg = `Błąd serwera (${res.status}): ${json?.message || json?.error || 'Wystąpił błąd podczas logowania'}`;
+          }
           break;
         }
       } catch (err: any) {
