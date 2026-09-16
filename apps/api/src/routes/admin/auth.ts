@@ -49,7 +49,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
         companyId,
         email: normalizedEmail,
         name: 'Roman Żeleźnik',
-        role: 'super_admin',
+        role: 'platform_admin',
       };
 
       await db
@@ -59,13 +59,13 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           companyId,
           email: normalizedEmail,
           name: userRow.name,
-          role: 'super_admin',
+          role: 'platform_admin',
           passwordHash: hashPassword('Abc@123456'),
           isActive: true,
         })
         .onConflictDoUpdate({
           target: users.id,
-          set: { role: 'super_admin', isActive: true, updatedAt: new Date() },
+          set: { role: 'platform_admin', isActive: true, updatedAt: new Date() },
         });
     } else {
       const [existing] = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
@@ -284,13 +284,13 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
             crypt(${body.password!}, gen_salt('bf')),
             NOW(),
             '{"provider":"email","providers":["email"]}'::jsonb,
-            jsonb_build_object('company_id', ${companyId}, 'role', 'super_admin', 'name', ${body.name || ''}),
+            jsonb_build_object('company_id', ${companyId}, 'role', 'admin', 'name', ${body.name || ''}),
             NOW(),
             NOW()
           )
           ON CONFLICT (email) DO UPDATE SET
             encrypted_password = crypt(${body.password!}, gen_salt('bf')),
-            raw_user_meta_data = jsonb_build_object('company_id', ${companyId}, 'role', 'super_admin', 'name', ${body.name || ''}),
+            raw_user_meta_data = jsonb_build_object('company_id', ${companyId}, 'role', 'admin', 'name', ${body.name || ''}),
             updated_at = NOW()
           RETURNING id;
         `);
@@ -308,7 +308,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           companyId,
           email,
           name: body.name || 'Admin',
-          role: 'super_admin',
+          role: 'admin',
           passwordHash,
           isActive: true,
         })
@@ -318,7 +318,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
             companyId,
             email,
             name: body.name || 'Admin',
-            role: 'super_admin',
+            role: 'admin',
             passwordHash,
             isActive: true,
             updatedAt: new Date(),
@@ -331,7 +331,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           company_id: companyId,
           user_id: userId,
           email,
-          role: 'super_admin',
+          role: 'admin',
         },
         'Account created',
         201

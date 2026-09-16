@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { Logo } from '@/components/Logo'
 import { NavLink } from '@/components/NavLink'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
-import { currentUser, isManager } from '@/lib/auth'
+import { currentUser, isManager, isPlatformAdmin } from '@/lib/auth'
 import { getTranslation } from '@/lib/i18n'
 import { getAdminLocale } from '@/lib/i18n-server'
 
@@ -16,6 +16,7 @@ async function signOut() {
 }
 
 // `manager: true` items are hidden from staff (operational users).
+// `platformAdminOnly: true` items are visible ONLY to platform operators (SolutionsBay / Roman).
 const NAV = [
   { href: '/dashboard', key: 'nav.overview', defaultLabel: 'Overview', manager: false },
   { href: '/dashboard/orders', key: 'nav.orders', defaultLabel: 'Orders', manager: true },
@@ -28,9 +29,9 @@ const NAV = [
   { href: '/dashboard/payment-gateways', key: 'nav.gateways', defaultLabel: 'Payment gateway', manager: true },
   { href: '/dashboard/qr-print', key: 'nav.qr', defaultLabel: 'QR Print', manager: true },
   { href: '/dashboard/users', key: 'nav.users', defaultLabel: 'Users', manager: true },
-  { href: '/dashboard/master', key: 'nav.master', defaultLabel: 'Platform SaaS (Master)', manager: true },
+  { href: '/dashboard/master', key: 'nav.master', defaultLabel: 'Platform SaaS (Master)', manager: true, platformAdminOnly: true },
   { href: '/dashboard/billing', key: 'nav.billing', defaultLabel: 'Billing', manager: true },
-  { href: '/dashboard/stress-test', key: 'nav.stress_test', defaultLabel: 'Stress Test (100k)', manager: true },
+  { href: '/dashboard/stress-test', key: 'nav.stress_test', defaultLabel: 'Stress Test (100k)', manager: true, platformAdminOnly: true },
   { href: '/dashboard/settings', key: 'nav.settings', defaultLabel: 'Settings', manager: true },
 ]
 
@@ -38,8 +39,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const user = await currentUser()
   if (!user) redirect('/login')
   const manager = isManager(user)
+  const platformAdmin = isPlatformAdmin(user)
   const locale = await getAdminLocale()
-  const nav = NAV.filter((item) => !item.manager || manager)
+  const nav = NAV.filter((item) => {
+    if (item.platformAdminOnly && !platformAdmin) return false
+    if (item.manager && !manager) return false
+    return true
+  })
 
   return (
     <div className="flex min-h-screen">

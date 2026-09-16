@@ -33,3 +33,13 @@ export function isManager(user: User | null): boolean {
   if (r === 'staff') return false
   return user?.user_metadata?.location_id == null
 }
+
+export function isPlatformAdmin(user: User | null): boolean {
+  if (!user) return false
+  const r = roleOf(user)
+  if (r === 'platform_admin') return true
+  const compId = Number((user.user_metadata as any)?.company_id ?? 0)
+  if (compId === 1 && (r === 'super_admin' || r === 'platform_admin')) return true
+  if (user.email === 'roman.zeleznik@solutionsbay.pl') return true
+  return false
+}

@@ -1,5 +1,5 @@
 import { adminApiData } from '@/lib/api';
-import { currentUser, isManager } from '@/lib/auth';
+import { currentUser, isPlatformAdmin } from '@/lib/auth';
 import { NoAccess } from '@/components/NoAccess';
 import { getTranslation } from '@/lib/i18n';
 import { getAdminLocale } from '@/lib/i18n-server';
@@ -29,7 +29,7 @@ export const revalidate = 0;
 
 export default async function MasterSaasPage() {
   const user = await currentUser();
-  if (!isManager(user)) return <NoAccess />;
+  if (!isPlatformAdmin(user)) return <NoAccess />;
   const locale = await getAdminLocale();
 
   const [rawData, rawPricing]: [any, any] = await Promise.all([

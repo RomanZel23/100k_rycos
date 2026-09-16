@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { getDatabase, companies, orders, locations, brands, platformPricing, eq, sql, desc } from '@rycos/database';
-import { requireAdminAuth } from '../../middleware/adminAuth.js';
+import { requirePlatformAdmin } from '../../middleware/adminAuth.js';
 import { success, notFound, error } from '../../lib/response.js';
 
 export async function adminMasterRoutes(fastify: FastifyInstance) {
-  fastify.addHook('preHandler', requireAdminAuth);
+  fastify.addHook('preHandler', requirePlatformAdmin);
 
   // GET /v1/admin/master/overview - Global platform KPIs
   fastify.get('/v1/admin/master/overview', async (_req, reply) => {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { getDatabase, orders, orderItems, orderEvents, products, brands, eq, and, sql } from '@rycos/database';
-import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
+import { requirePlatformAdmin, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, error, validationError } from '../../lib/response.js';
 
 interface StressTestPayload {
@@ -12,7 +12,7 @@ interface StressTestPayload {
 }
 
 export async function adminStressTestRoutes(fastify: FastifyInstance) {
-  fastify.addHook('preHandler', requireAdminAuth);
+  fastify.addHook('preHandler', requirePlatformAdmin);
 
   // GET /v1/admin/stress-test/stats - Get test orders count & db latency
   fastify.get('/v1/admin/stress-test/stats', async (req, reply) => {

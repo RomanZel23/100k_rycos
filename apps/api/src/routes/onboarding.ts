@@ -255,10 +255,10 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
       const secret = env.SUPABASE_JWT_SECRET || '100k_secret_jwt_key_development';
       const authToken = jwt.sign(
         {
-          sub: existingUser?.id || order.createdUserId || 'super-admin',
+          sub: existingUser?.id || order.createdUserId || 'admin',
           email: order.email,
           company_id: order.createdCompanyId,
-          role: 'super_admin',
+          role: existingUser?.role || 'admin',
         },
         secret,
         { expiresIn: '30d' }
@@ -367,7 +367,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         allowPayAtCounter: true,
       });
 
-    // Step E: Create SuperAdmin user account
+    // Step E: Create Company Admin user account
     const userId = `usr_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
     await db
       .insert(users)
@@ -377,7 +377,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         email: order.email,
         passwordHash: order.adminPasswordHash,
         name: order.companyName,
-        role: 'super_admin',
+        role: 'admin',
         isActive: true,
       });
 
@@ -400,7 +400,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         sub: userId,
         email: order.email,
         company_id: newCompany.id,
-        role: 'super_admin',
+        role: 'admin',
       },
       secret,
       { expiresIn: '30d' }

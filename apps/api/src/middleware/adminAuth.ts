@@ -1,7 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
-import { unauthorized } from '../lib/response.js';
+import { unauthorized, forbidden } from '../lib/response.js';
 
 export interface AuthUser {
   id?: string;
@@ -38,7 +38,7 @@ export function resolveUser(req: FastifyRequest): AuthUser | null {
         email: 'admin@100k.rycos.eu',
         name: 'Developer Admin',
         company_id: compId,
-        role: 'super_admin',
+        role: compId === 1 ? 'platform_admin' : 'admin',
       };
     }
   }
@@ -52,7 +52,7 @@ export function resolveUser(req: FastifyRequest): AuthUser | null {
         email: 'admin@100k-rycos.eu',
         name: 'Demo Admin',
         company_id: 1,
-        role: 'super_admin',
+        role: 'platform_admin',
       };
     }
     return null;
@@ -78,7 +78,7 @@ export function resolveUser(req: FastifyRequest): AuthUser | null {
       id: meta.id || claims.sub,
       email: meta.email || claims.email,
       company_id: companyId,
-      role: meta.role || 'super_admin',
+      role: meta.role || claims.role || 'admin',
       location_id: meta.location_id ?? null,
     };
   } catch (err) {
@@ -92,6 +92,27 @@ export async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply)
     return unauthorized(reply, 'Brak autoryzacji do panelu administracyjnego');
   }
   req.user = user;
+}
+
+export function isPlatformAdmin(user: AuthUser | null): boolean {
+  if (!user) return false;
+  const role = String(user.role || '').toLowerCase();
+  if (role === 'platform_admin') return true;
+  if (user.company_id === 1 && (role === 'super_admin' || role === 'platform_admin')) return true;
+  if (user.email === 'roman.zeleznik@solutionsbay.pl') return true;
+  return false;
+}
+
+export async function requirePlatformAdmin(req: FastifyRequest, reply: FastifyReply) {
+  const user = resolveUser(req);
+  if (!user) {
+    return unauthorized(reply, 'Brak autoryzacji do panelu administracyjnego');
+  }
+  req.user = user;
+
+  if (!isPlatformAdmin(user)) {
+    return forbidden(reply, 'Dostęp zabroniony. Ta sekcja wymaga uprawnień Platform Admin (Operator Platformy)');
+  }
 }
 
 export function getCompanyId(req: FastifyRequest): number {

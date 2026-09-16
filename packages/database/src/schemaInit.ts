@@ -695,13 +695,13 @@ export async function ensureDatabaseSchema() {
         `);
       }
 
-      // Ensure roman.zeleznik@solutionsbay.pl is seeded as super_admin
+      // Ensure roman.zeleznik@solutionsbay.pl is seeded as platform_admin
       await raw.unsafe(`
         INSERT INTO "users" ("id", "company_id", "email", "name", "role", "is_active", "created_at", "updated_at")
-        VALUES ('usr-roman-zeleznik', 1, 'roman.zeleznik@solutionsbay.pl', 'Roman Żeleźnik', 'super_admin', true, NOW(), NOW())
+        VALUES ('usr-roman-zeleznik', 1, 'roman.zeleznik@solutionsbay.pl', 'Roman Żeleźnik', 'platform_admin', true, NOW(), NOW())
         ON CONFLICT ("id") DO UPDATE SET
           "company_id" = 1,
-          "role" = 'super_admin',
+          "role" = 'platform_admin',
           "name" = 'Roman Żeleźnik',
           "is_active" = true,
           "updated_at" = NOW();
@@ -722,13 +722,13 @@ export async function ensureDatabaseSchema() {
               crypt('Abc@123456', gen_salt('bf')),
               NOW(),
               '{"provider":"email","providers":["email"]}'::jsonb,
-              '{"company_id":1,"role":"super_admin","name":"Roman Żeleźnik"}'::jsonb,
+              '{"company_id":1,"role":"platform_admin","name":"Roman Żeleźnik"}'::jsonb,
               NOW(),
               NOW()
             )
             ON CONFLICT (email) DO UPDATE SET
               encrypted_password = crypt('Abc@123456', gen_salt('bf')),
-              raw_user_meta_data = '{"company_id":1,"role":"super_admin","name":"Roman Żeleźnik"}'::jsonb,
+              raw_user_meta_data = '{"company_id":1,"role":"platform_admin","name":"Roman Żeleźnik"}'::jsonb,
               updated_at = NOW();
 
             IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'identities') THEN
