@@ -275,7 +275,7 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
                     onChange={(e) => setPlatform100k(e.target.checked)}
                     className="peer sr-only"
                   />
-                  <div className="peer h-7 w-12 rounded-full bg-neutral-300 transition-colors duration-200 after:absolute after:top-[3px] after:left-[3px] after:h-5.5 after:w-5.5 after:rounded-full after:bg-white after:transition-all after:shadow-sm after:content-[''] peer-checked:bg-[#ED1C24] peer-checked:after:translate-x-5 peer-focus:outline-none" />
+                  <div className="peer h-6 w-11 rounded-full bg-neutral-300 transition-colors duration-200 after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-md after:transition-all after:content-[''] peer-checked:bg-[#ED1C24] peer-checked:after:translate-x-full peer-focus:outline-none" />
                 </label>
               </div>
 
