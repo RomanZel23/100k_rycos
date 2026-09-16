@@ -106,33 +106,93 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // PUT /v1/admin/master/companies/:id/status - Toggle company active status
-  fastify.put('/v1/admin/master/companies/:id/status', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const companyId = parseInt(id, 10);
+  // POST /v1/admin/master/companies - Create a new company/tenant
+  fastify.post('/v1/admin/master/companies', async (req, reply) => {
     const body = (req.body ?? {}) as any;
     const db = getDatabase();
 
-    const isAcceptingOrders = body.isAcceptingOrders !== undefined
-      ? Boolean(body.isAcceptingOrders)
-      : body.is_accepting_orders !== undefined
-      ? Boolean(body.is_accepting_orders)
-      : true;
+    const companyName = String(body.company_name || body.name || '').trim();
+    if (!companyName) {
+      return error(reply, 'Nazwa firmy jest wymagana', 400);
+    }
+
+    const email = String(body.email || '').trim().toLowerCase();
+    const country = String(body.country || 'PL').trim().toUpperCase();
+    const currency = String(body.currency || 'PLN').trim().toUpperCase();
+    const businessType = String(body.business_type || 'product').trim();
+    const address = body.address ? String(body.address).trim() : null;
+    const phone = body.phone ? String(body.phone).trim() : null;
+    const ownerName = body.owner_name ? String(body.owner_name).trim() : companyName;
+    const ownerPassword = body.owner_password ? String(body.owner_password).trim() : 'Start@123';
+
+    // Generate unique slug
+    let baseSlug = companyName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    if (!baseSlug) baseSlug = `company-${Date.now()}`;
+
+    let slug = baseSlug;
+    let counter = 1;
+    while (true) {
+      const [existing] = await db.select().from(companies).where(eq(companies.slug, slug)).limit(1);
+      if (!existing) break;
+      counter++;
+      slug = `${baseSlug}-${counter}`;
+    }
 
     try {
-      const [updated] = await db
-        .update(companies)
-        .set({ isAcceptingOrders, updatedAt: new Date() })
-        .where(eq(companies.id, companyId))
+      const [newCompany] = await db
+        .insert(companies)
+        .values({
+          name: companyName,
+          slug,
+          email: email || `${slug}@rycos.eu`,
+          country,
+          currency,
+          businessType,
+          address,
+          phone,
+          isAcceptingOrders: true,
+        })
         .returning();
 
-      if (!updated) {
-        return notFound(reply, 'Company not found');
-      }
+      // Create default location
+      const [defaultLocation] = await db
+        .insert(locations)
+        .values({
+          companyId: newCompany.id,
+          name: 'Lokal Główny',
+          address: address || null,
+          isActive: true,
+        })
+        .returning();
 
-      return success(reply, updated, 'Company status updated');
+      // Create default brand
+      const [defaultBrand] = await db
+        .insert(brands)
+        .values({
+          companyId: newCompany.id,
+          locationId: defaultLocation.id,
+          name: companyName,
+          slug: `${slug}-menu`,
+          currency,
+          menuLayout: 'list',
+          language: 'pl',
+          isActive: true,
+        })
+        .returning();
+
+      return success(reply, {
+        ...newCompany,
+        defaultLocationId: defaultLocation.id,
+        defaultBrandId: defaultBrand.id,
+        defaultBrandSlug: defaultBrand.slug,
+      }, 'Firma została pomyślnie utworzona');
     } catch (err: any) {
-      return error(reply, err.message || 'Failed to update company status');
+      return error(reply, err.message || 'Nie udało się utworzyć firmy');
     }
   });
 }
+
