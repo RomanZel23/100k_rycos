@@ -269,10 +269,11 @@ export async function adminRycosRoutes(fastify: FastifyInstance) {
       configured: rycosIntegratorService.isConfigured(),
       linked: Boolean(licensing.client),
       client: licensing.client,
-      seats: licensing.seats,
-      tier_summary: licensing.tierSummary,
+      seats: licensing.seats ?? [],
+      purchases: [],
+      tier_summary: licensing.tierSummary ?? { total: 0, paired: 0, available: 0, byTier: {} },
       server_license: serverLicense,
-      portal_error: licensing.error,
+      portal_error: licensing.error ?? null,
     });
   });
 }

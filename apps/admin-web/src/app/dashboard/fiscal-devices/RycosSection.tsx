@@ -101,8 +101,10 @@ export async function RycosSection({ pin, pinExpires, locale = 'pl' }: { pin?: s
   }
 
   // ── Linked ─────────────────────────────────────────────────────────────
-  const available = s.seats.filter((x) => x.status === 'available')
-  const paired = s.seats.filter((x) => x.status === 'paired')
+  const seats = Array.isArray(s.seats) ? s.seats : []
+  const purchases = Array.isArray(s.purchases) ? s.purchases : []
+  const available = seats.filter((x) => x.status === 'available')
+  const paired = seats.filter((x) => x.status === 'paired')
 
   return (
     <section className="mt-10">
@@ -169,14 +171,14 @@ export async function RycosSection({ pin, pinExpires, locale = 'pl' }: { pin?: s
           )}
         </div>
 
-        {s.seats.length === 0 ? (
+        {seats.length === 0 ? (
           <p className="mt-3 text-sm text-neutral-500">
             {locale === 'pl' ? 'Brak licencji. Zamów licencje poniżej.' : 'No seats yet. Order some below.'}
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-neutral-100">
-            {s.seats.map((seat) => {
-              const hubDev = s.hub?.devices.find((d) => d.display_id === seat.devices?.display_id)
+            {seats.map((seat) => {
+              const hubDev = s.hub?.devices?.find((d) => d.display_id === seat.devices?.display_id)
               return (
                 <li key={seat.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                   <div className="flex flex-wrap items-center gap-2">
@@ -229,11 +231,11 @@ export async function RycosSection({ pin, pinExpires, locale = 'pl' }: { pin?: s
       </div>
 
       {/* Renewal */}
-      {s.purchases.length > 0 && (
+      {purchases.length > 0 && (
         <div className="card mt-4">
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">{locale === 'pl' ? 'Przedłuż licencje' : 'Renew licences'}</p>
           <ul className="mt-2 space-y-2">
-            {s.purchases.map((p) => (
+            {purchases.map((p) => (
               <li key={p.purchase_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span>
                   {p.seat_count} {locale === 'pl' ? 'stanowisk' : 'seats'}
