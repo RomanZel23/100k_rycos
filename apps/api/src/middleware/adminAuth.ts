@@ -116,7 +116,17 @@ export async function requirePlatformAdmin(req: FastifyRequest, reply: FastifyRe
 }
 
 export function getCompanyId(req: FastifyRequest): number {
-  return req.user?.company_id || 1;
+  const user = req.user || resolveUser(req);
+  if (user && isPlatformAdmin(user)) {
+    const overrideHeader = req.headers['x-company-id'];
+    if (overrideHeader) {
+      const parsed = parseInt(String(overrideHeader), 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+  }
+  return user?.company_id || 1;
 }
 
 export function getAuthUser(req: FastifyRequest): AuthUser | null {

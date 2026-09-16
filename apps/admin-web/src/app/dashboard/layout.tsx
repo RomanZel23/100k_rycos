@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { Logo } from '@/components/Logo'
 import { NavLink } from '@/components/NavLink'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
-import { currentUser, isManager, isPlatformAdmin } from '@/lib/auth'
+import { currentUser, isManager, isPlatformAdmin, companyIdOf } from '@/lib/auth'
 import { getTranslation } from '@/lib/i18n'
 import { getAdminLocale } from '@/lib/i18n-server'
 
@@ -35,6 +35,15 @@ const NAV = [
   { href: '/dashboard/settings', key: 'nav.settings', defaultLabel: 'Settings', manager: true },
 ]
 
+import { adminApi } from '@/lib/api'
+import { CompanySwitcher } from '@/components/CompanySwitcher'
+import { switchActiveCompany } from './actions'
+
+async function resetActiveCompany() {
+  'use server'
+  await switchActiveCompany(null)
+}
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUser()
   if (!user) redirect('/login')
@@ -47,12 +56,41 @@ export default async function DashboardLayout({ children }: { children: React.Re
     return true
   })
 
+  // Multi-tenant company switcher for Platform Admin
+  let companiesList: Array<{ id: number; name: string; slug: string; nip?: string | null }> = []
+  const cookieStore = await cookies()
+  const defaultCompanyId = companyIdOf(user)
+  const activeCompanyIdCookie = cookieStore.get('active_company_id')?.value
+  const activeCompanyId = activeCompanyIdCookie ? parseInt(activeCompanyIdCookie, 10) : defaultCompanyId
+
+  if (platformAdmin) {
+    try {
+      const res = await adminApi('/master/companies')
+      if (res.ok) {
+        const json = await res.json()
+        companiesList = json.data || []
+      }
+    } catch {}
+  }
+
+  const isOverridden = platformAdmin && activeCompanyId !== defaultCompanyId
+  const currentCompany = companiesList.find((c) => c.id === activeCompanyId)
+
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-64 flex-col border-r border-neutral-200 bg-white shadow-xs">
         <div className="border-b border-neutral-100 px-5 py-4">
           <Logo />
         </div>
+
+        {/* Multi-tenant Company Switcher (visible for Platform Super-Admin) */}
+        {platformAdmin && companiesList.length > 0 && (
+          <CompanySwitcher
+            companies={companiesList}
+            activeCompanyId={activeCompanyId}
+            defaultCompanyId={defaultCompanyId}
+          />
+        )}
 
         {/* Language Switcher bar */}
         <div className="px-3 pt-3">
@@ -92,13 +130,38 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="border-t border-neutral-100 p-3 bg-neutral-50/50">
           <p className="truncate px-3 pb-2 text-xs font-medium text-neutral-400">{user.email}</p>
           <form action={signOut}>
-            <button className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-neutral-600 hover:bg-neutral-100 hover:text-brand transition">
+            <button className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-neutral-600 hover:bg-neutral-100 hover:text-brand transition cursor-pointer">
               {getTranslation(locale, 'nav.sign_out', 'Sign out')}
             </button>
           </form>
         </div>
       </aside>
-      <main className="flex-1 p-8">{children}</main>
+
+      <main className="flex-1 flex flex-col min-w-0 bg-neutral-50/60">
+        {/* Super-Admin Active Company Override Banner */}
+        {isOverridden && currentCompany && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-8 py-2.5 flex items-center justify-between text-xs text-amber-900 sticky top-0 z-30 backdrop-blur-xs">
+            <div className="flex items-center gap-2 font-medium">
+              <span className="text-base">🏢</span>
+              <span>
+                <strong>Tryb Super-Admin:</strong> Przeglądasz i edytujesz dane firmy{' '}
+                <strong className="text-techbay-blue underline">{currentCompany.name}</strong> (ID: {currentCompany.id}
+                {currentCompany.nip ? `, NIP: ${currentCompany.nip}` : ''})
+              </span>
+            </div>
+            <form action={resetActiveCompany}>
+              <button
+                type="submit"
+                className="rounded-lg bg-white border border-amber-300 px-3 py-1 font-bold text-amber-900 hover:bg-amber-100 transition shadow-2xs cursor-pointer"
+              >
+                Wróć do firmy domyślnej
+              </button>
+            </form>
+          </div>
+        )}
+
+        <div className="flex-1 p-8">{children}</div>
+      </main>
     </div>
   )
 }

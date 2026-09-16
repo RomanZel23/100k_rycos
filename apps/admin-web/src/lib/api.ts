@@ -6,6 +6,7 @@ import { createClient } from './supabase/server'
 export async function adminApi(path: string, init: RequestInit = {}): Promise<Response> {
   const cookieStore = await cookies()
   let token = cookieStore.get('rycos_token')?.value
+  const activeCompanyId = cookieStore.get('active_company_id')?.value
 
   if (!token) {
     try {
@@ -27,6 +28,7 @@ export async function adminApi(path: string, init: RequestInit = {}): Promise<Re
   const headers = {
     ...(sendJson ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(activeCompanyId ? { 'X-Company-Id': activeCompanyId } : {}),
     ...(init.headers || {}),
   }
 

@@ -1,7 +1,23 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { cookies } from 'next/headers'
 import { adminApi } from '@/lib/api'
+
+export async function switchActiveCompany(companyId: number | null): Promise<void> {
+  const cookieStore = await cookies()
+  if (companyId == null || companyId <= 0) {
+    cookieStore.delete('active_company_id')
+  } else {
+    cookieStore.set('active_company_id', String(companyId), {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 30 * 86400,
+    })
+  }
+  revalidatePath('/dashboard', 'layout')
+}
 
 // Mark the "locations" onboarding step as handled for companies that operate as a
 // single location (orders go company-wide). Stored as a company setting.

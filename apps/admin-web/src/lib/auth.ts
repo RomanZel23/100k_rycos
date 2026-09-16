@@ -43,3 +43,7 @@ export function isPlatformAdmin(user: User | null): boolean {
   if (user.email === 'roman.zeleznik@solutionsbay.pl') return true
   return false
 }
+
+export function companyIdOf(user: User | null): number {
+  return Number((user?.user_metadata as any)?.company_id ?? 1) || 1
+}
