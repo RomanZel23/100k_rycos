@@ -44,11 +44,15 @@ export async function updateBrand(formData: FormData): Promise<void> {
     const rawTables = String(formData.get('tables') || '').trim()
     body.tables = rawTables ? rawTables.split(/[,\n]/).map((s) => s.trim()).filter(Boolean) : null
   }
+  if (formData.has('has_product_picker') || formData.has('product_id')) {
+    const product_ids = formData.getAll('product_id').map((x) => parseInt(String(x))).filter((n) => !Number.isNaN(n))
+    body.product_ids = product_ids
+  }
   const res = await adminApi(`/brands/${id}`, { method: 'PUT', body: JSON.stringify(body) })
   if (!res.ok) await failTo(`/dashboard/brands/${id}`, res, 'Failed to save brand details')
   revalidatePath('/dashboard/brands')
   revalidatePath(`/dashboard/brands/${id}`)
-  redirect(`/dashboard/brands/${id}?notice=` + encodeURIComponent('Details saved'))
+  redirect(`/dashboard/brands/${id}?notice=` + encodeURIComponent('Zmiany zostały pomyślnie zapisane'))
 }
 
 export async function toggleBrandStatus(formData: FormData): Promise<void> {
@@ -70,8 +74,9 @@ export async function assignProducts(formData: FormData): Promise<void> {
   const product_ids = formData.getAll('product_id').map((x) => parseInt(String(x))).filter((n) => !Number.isNaN(n))
   const res = await adminApi(`/brands/${id}/products`, { method: 'PUT', body: JSON.stringify({ product_ids }) })
   if (!res.ok) await failTo(`/dashboard/brands/${id}`, res, 'Failed to save menu')
+  revalidatePath('/dashboard/brands')
   revalidatePath(`/dashboard/brands/${id}`)
-  redirect(`/dashboard/brands/${id}?notice=` + encodeURIComponent(`Menu saved (${product_ids.length} product${product_ids.length === 1 ? '' : 's'})`))
+  redirect(`/dashboard/brands/${id}?notice=` + encodeURIComponent(`Karta dań została zapisana (${product_ids.length} ${product_ids.length === 1 ? 'pozycja' : 'pozycji'})`))
 }
 
 export async function uploadBrandImage(formData: FormData): Promise<void> {

@@ -7,6 +7,11 @@ const nextConfig = {
       { protocol: 'http', hostname: '**' },
     ],
   },
+  async rewrites() {
+    return [
+      { source: '/m/:slug', destination: '/:slug' },
+    ];
+  },
 };
 
 export default nextConfig;

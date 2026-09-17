@@ -220,7 +220,7 @@ export default async function EditBrandPage({
           <BrandColorPicker initialActiveColor={colors.active} initialBgColor={colors.bg} />
         </div>
         <div className="pt-2">
-          <button className="btn-brand sm:w-auto sm:px-6">{getTranslation(locale, 'btn.save', 'Save')}</button>
+          <button className="btn-brand sm:w-auto sm:px-6">{locale === 'pl' ? 'Zapisz szczegóły marki' : getTranslation(locale, 'btn.save', 'Save')}</button>
         </div>
       </form>
 
@@ -258,8 +258,8 @@ export default async function EditBrandPage({
         <input type="hidden" name="id" value={brand.id} />
         <h2 className="text-base font-semibold">{locale === 'pl' ? 'Karta dań — produkty w tej marce' : locale === 'de' ? 'Speisekarte — Produkte dieser Marke' : 'Menu — products in this brand'}</h2>
         <p className="mb-3 mt-1 text-sm text-neutral-500">{locale === 'pl' ? 'Wybierz, które pozycje mają być widoczne dla klientów zamawiających z tej marki.' : locale === 'de' ? 'Wählen Sie die Produkte aus, die Kunden sehen können.' : 'Choose which products appear when customers order from this brand.'}</p>
-        <BrandMenuPicker products={products ?? []} initial={brandProductIds} />
-        <button className="btn-brand mt-3 sm:w-auto sm:px-6">{getTranslation(locale, 'btn.save', 'Save menu')}</button>
+        <BrandMenuPicker key={`${brand.id}-${brandProductIds.join(',')}`} products={products ?? []} initial={brandProductIds} />
+        <button className="btn-brand mt-3 sm:w-auto sm:px-6">{locale === 'pl' ? 'Zapisz kartę dań marki' : getTranslation(locale, 'btn.save', 'Save menu')}</button>
       </form>
 
       {/* Danger zone */}

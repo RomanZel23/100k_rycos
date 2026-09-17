@@ -423,18 +423,14 @@ function getTranslated(
 
   const productIds = assignedProducts.map((p) => p.productId);
 
-  // Fallback to all company products if brand has no explicit products bound yet
+  // Return only products explicitly assigned to this brand (empty if none assigned)
   const productRows = productIds.length > 0
     ? await db
         .select()
         .from(products)
         .where(and(eq(products.companyId, companyId), inArray(products.id, productIds), eq(products.isAvailable, true)))
         .orderBy(products.productOrder)
-    : await db
-        .select()
-        .from(products)
-        .where(and(eq(products.companyId, companyId), eq(products.isAvailable, true)))
-        .orderBy(products.productOrder);
+    : [];
 
   if (productRows.length === 0) {
     const emptyResponse: MenuResponse = {

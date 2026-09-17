@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export interface PickerProduct {
   id: number
@@ -19,11 +19,33 @@ export function BrandMenuPicker({ products, initial = [] }: { products: PickerPr
   const [selected, setSelected] = useState<Set<number>>(new Set(initial))
   const [q, setQ] = useState('')
 
+  // Keep selected in sync whenever initial prop updates (e.g. server revalidation or brand switch)
+  useEffect(() => {
+    setSelected(new Set(initial))
+  }, [JSON.stringify(initial)])
+
   const move = (id: number, add: boolean) => {
     const next = new Set(selected)
     add ? next.add(id) : next.delete(id)
     setSelected(next)
   }
+
+  const addAll = () => {
+    const next = new Set(selected)
+    for (const p of list) {
+      if (match(p)) next.add(p.id)
+    }
+    setSelected(next)
+  }
+
+  const removeAll = () => {
+    const next = new Set(selected)
+    for (const p of list) {
+      if (match(p)) next.delete(p.id)
+    }
+    setSelected(next)
+  }
+
   const match = (p: PickerProduct) => (p?.name || '').toLowerCase().includes(q.toLowerCase())
   const list = Array.isArray(products) ? products : []
   const available = list.filter((p) => p && !selected.has(p.id) && match(p))
@@ -31,11 +53,35 @@ export function BrandMenuPicker({ products, initial = [] }: { products: PickerPr
 
   return (
     <div>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className="input mb-3" />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Column title={`Available (${available.length})`} products={available} action="add" onClick={(id) => move(id, true)} />
-        <Column title={`In this menu (${chosen.length})`} products={chosen} action="remove" onClick={(id) => move(id, false)} highlight />
+      <div className="flex flex-col sm:flex-row gap-2 mb-3 items-stretch sm:items-center justify-between">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Szukaj produktów…"
+          className="input flex-1"
+        />
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={addAll}
+            className="px-3 py-2 text-xs font-semibold rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors"
+          >
+            + Dodaj wszystkie
+          </button>
+          <button
+            type="button"
+            onClick={removeAll}
+            className="px-3 py-2 text-xs font-semibold rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors"
+          >
+            × Usuń wszystkie
+          </button>
+        </div>
       </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Column title={`Dostępne produkty (${available.length})`} products={available} action="add" onClick={(id) => move(id, true)} />
+        <Column title={`Przypisane do tej marki (${chosen.length})`} products={chosen} action="remove" onClick={(id) => move(id, false)} highlight />
+      </div>
+      <input type="hidden" name="has_product_picker" value="true" />
       {[...selected].map((id) => <input key={id} type="hidden" name="product_id" value={id} />)}
     </div>
   )

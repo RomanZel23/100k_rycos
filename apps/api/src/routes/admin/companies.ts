@@ -535,6 +535,24 @@ function generateShortSlug(length = 5): string {
       return notFound(reply, 'Brand not found');
     }
 
+    if (body.product_ids !== undefined || body.productIds !== undefined) {
+      const rawList = Array.isArray(body.product_ids)
+        ? body.product_ids
+        : Array.isArray(body.productIds)
+        ? body.productIds
+        : [];
+      const targetIds: number[] = rawList.map((x: any) => parseInt(String(x), 10)).filter(Number.isFinite);
+
+      await db.delete(brandProducts).where(eq(brandProducts.brandId, brandId));
+
+      if (targetIds.length > 0) {
+        await db
+          .insert(brandProducts)
+          .values(targetIds.map((pid: number) => ({ brandId, productId: pid })))
+          .onConflictDoNothing();
+      }
+    }
+
     invalidateBrandMenuCache(brandId).catch(() => {});
 
     return success(reply, {
@@ -650,6 +668,20 @@ function generateShortSlug(length = 5): string {
           isActive: body.isActive !== false,
         })
         .returning();
+
+      // Auto-assign existing company products to the new brand so it has a populated menu by default
+      const { products } = await import('@rycos/database');
+      const companyProducts = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(eq(products.companyId, companyId));
+
+      if (companyProducts.length > 0) {
+        await db
+          .insert(brandProducts)
+          .values(companyProducts.map((p) => ({ brandId: inserted.id, productId: p.id })))
+          .onConflictDoNothing();
+      }
 
       return success(reply, {
         ...inserted,
