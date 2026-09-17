@@ -1,6 +1,6 @@
 {
   "name": "100k-rycos",
-  "version": "1.0.0",
+  "version": "1.8.0",
   "private": true,
   "description": "High-performance restaurant ordering, realtime KDS and RYCOS fiscalization system",
   "packageManager": "pnpm@10.13.1",

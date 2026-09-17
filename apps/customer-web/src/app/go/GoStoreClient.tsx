@@ -22,8 +22,12 @@ interface GoStoreClientProps {
 }
 
 export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
-  // Navigation step: 1 = Configuration & GUS Registration, 2 = Payment Review & Saferpay
-  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+  // Navigation:
+  // Step 1: Opis systemu 100k-RYCOS oraz rejestracja firmy (NIP + auto GUS)
+  // Step 2: Wybór okresu/pakietów i podsumowanie
+  // Step 3: Płatność online Saferpay
+  // Step 4: Ustawienie hasła i przejście do panelu admina (/go/success)
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
   // Configuration
   const [months, setMonths] = useState<number>(1);
@@ -42,7 +46,7 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
 
   // GUS lookup state
   const [gusLoading, setGusLoading] = useState(false);
-  const [gusSuccess, setGusSuccess] = useState(false);
+  const [lastSearchedNip, setLastSearchedNip] = useState('');
   const [gusNotice, setGusNotice] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -77,17 +81,14 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
   const totalGrossPln = totalNetPln + vatPln;
 
   // Handle GUS lookup
-  const handleGusLookup = async (nipToSearch?: string) => {
-    const rawNip = nipToSearch || nip;
-    const cleanNip = rawNip.replace(/^PL/i, '').replace(/[^0-9]/g, '');
-    if (cleanNip.length !== 10) {
-      setGusNotice('Podaj poprawny 10-cyfrowy NIP, aby pobrać dane z GUS');
-      return;
-    }
+  const handleGusLookup = async (nipToSearch: string) => {
+    const cleanNip = nipToSearch.replace(/^PL/i, '').replace(/[^0-9]/g, '');
+    if (cleanNip.length !== 10) return;
+    if (cleanNip === lastSearchedNip) return;
 
+    setLastSearchedNip(cleanNip);
     setGusLoading(true);
     setGusNotice(null);
-    setGusSuccess(false);
 
     try {
       const data = await lookupGus(cleanNip);
@@ -96,29 +97,28 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
         if (data.formattedAddress) {
           setAddress(data.formattedAddress);
         }
-        setGusSuccess(true);
-        setGusNotice(`Dane pobrane z bazy GUS (REGON: ${data.regon})`);
       }
     } catch (err: any) {
       setGusNotice(err.message || 'Nie udało się pobrać danych z GUS. Możesz wpisać je ręcznie.');
-      setGusSuccess(false);
     } finally {
       setGusLoading(false);
     }
   };
 
-  // Auto lookup when user finishes typing 10 digits
+  // Instant lookup as soon as 10 digits are reached
   const handleNipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setNip(val);
     const digits = val.replace(/^PL/i, '').replace(/[^0-9]/g, '');
-    if (digits.length === 10 && !companyName) {
+    if (digits.length === 10) {
       handleGusLookup(digits);
+    } else {
+      setLastSearchedNip('');
     }
   };
 
-  // Validation before going to Step 2
-  const handleProceedToPayment = (e: React.FormEvent) => {
+  // Step 1 Validation -> Proceed to Step 2
+  const handleProceedToStep2 = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -128,15 +128,11 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
       return;
     }
     if (!companyName.trim()) {
-      setErrorMsg('Podaj nazwę firmy (lub pobierz automatycznie z GUS)');
+      setErrorMsg('Podaj nazwę firmy');
       return;
     }
     if (!email.includes('@')) {
-      setErrorMsg('Podaj poprawny adres e-mail do faktury i kontaktu');
-      return;
-    }
-    if (!platform100k && seatsPf === 0 && seatsF === 0 && seatsP === 0 && seats0 === 0) {
-      setErrorMsg('Wybierz przynajmniej jeden pakiet lub stanowisko');
+      setErrorMsg('Podaj poprawny adres e-mail');
       return;
     }
 
@@ -144,7 +140,21 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Submit payment on Step 2
+  // Step 2 Validation -> Proceed to Step 3 (Payment)
+  const handleProceedToStep3 = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    if (!platform100k && seatsPf === 0 && seatsF === 0 && seatsP === 0 && seats0 === 0) {
+      setErrorMsg('Wybierz przynajmniej jeden pakiet lub stanowisko');
+      return;
+    }
+
+    setCurrentStep(3);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Step 3 Execute payment -> Saferpay redirect
   const handleExecutePayment = async () => {
     setErrorMsg(null);
     setLoading(true);
@@ -219,6 +229,7 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
       <div className="bg-white border-b border-neutral-200/80 shadow-2xs">
         <div className="mx-auto max-w-6xl px-4 py-3">
           <div className="flex items-center justify-center gap-2 sm:gap-6 text-xs font-bold">
+            {/* Step 1 */}
             <div
               onClick={() => setCurrentStep(1)}
               className={`flex items-center gap-2 cursor-pointer transition ${
@@ -230,14 +241,22 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
               }`}>
                 1
               </span>
-              <span>1. Konfiguracja & Dane z GUS</span>
+              <span>1. Rejestracja firmy</span>
             </div>
 
             <div className="w-8 sm:w-12 h-0.5 bg-neutral-200" />
 
+            {/* Step 2 */}
             <div
+              onClick={() => {
+                if (companyName && email) setCurrentStep(2);
+              }}
               className={`flex items-center gap-2 transition ${
-                currentStep === 2 ? 'text-brand font-black' : 'text-neutral-400'
+                currentStep === 2
+                  ? 'text-brand font-black'
+                  : currentStep > 2
+                  ? 'text-neutral-600 cursor-pointer'
+                  : 'text-neutral-400'
               }`}
             >
               <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
@@ -245,32 +264,186 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
               }`}>
                 2
               </span>
-              <span>2. Płatność Saferpay</span>
+              <span>2. Wybór pakietu</span>
             </div>
 
             <div className="w-8 sm:w-12 h-0.5 bg-neutral-200" />
 
-            <div className="flex items-center gap-2 text-neutral-400">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-100 text-neutral-400 text-xs font-black">
+            {/* Step 3 */}
+            <div
+              className={`flex items-center gap-2 transition ${
+                currentStep === 3 ? 'text-brand font-black' : 'text-neutral-400'
+              }`}
+            >
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
+                currentStep === 3 ? 'bg-brand text-white shadow-xs' : 'bg-neutral-100 text-neutral-400'
+              }`}>
                 3
               </span>
-              <span className="hidden sm:inline">3. Hasło & Panel Admina</span>
-              <span className="sm:hidden">3. Aktywacja</span>
+              <span>3. Płatność Saferpay</span>
+            </div>
+
+            <div className="w-8 sm:w-12 h-0.5 bg-neutral-200" />
+
+            {/* Step 4 */}
+            <div className="flex items-center gap-2 text-neutral-400">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-100 text-neutral-400 text-xs font-black">
+                4
+              </span>
+              <span>4. Hasło & Panel Admina</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* EKRAN 1: OPIS SYSTEMU, KONFIGURACJA PAKIETU & DANE FIRMY Z GUS */}
+      {/* EKRAN 1: OPIS SYSTEMU 100K-RYCOS ORAZ REJESTRACJA FIRMY (NIP + AUTO GUS) */}
       {/* ========================================================================= */}
       {currentStep === 1 && (
+        <main className="mx-auto max-w-4xl px-4 py-10 space-y-8">
+          {/* Opis systemu */}
+          <section className="text-center space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white px-3.5 py-1 text-xs font-semibold text-neutral-600 border border-neutral-200 shadow-xs mb-1">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Krok 1 z 4: Błyskawiczna rejestracja podmiotu
+            </div>
+            <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-techbay-blue">
+              Witaj w platformie <span className="text-brand">100k-RYCOS</span>
+            </h1>
+            <p className="mx-auto max-w-2xl text-sm sm:text-base text-neutral-600 leading-relaxed">
+              Wysokowydajny silnik zamówień gastronomicznych obsługujący do 100 000 zamówień/minutę, wirtualne kasy fiskalne online (Aplikasa) zintegrowane z MF, płatności zbliżeniowe SoftPOS oraz ekran kuchenny KDS i terminale kelnerskie.
+            </p>
+          </section>
+
+          {/* Formularz rejestracji firmy */}
+          <form onSubmit={handleProceedToStep2} className="rounded-2xl border border-neutral-200/90 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+            <div className="border-b border-neutral-100 pb-4">
+              <h2 className="text-lg sm:text-xl font-black text-techbay-blue">
+                Dane firmy
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Wpisz 10-cyfrowy NIP — nazwa firmy i adres siedziby zostaną pobrane i uzupełnione automatycznie.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* NIP Field */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
+                  NIP firmy <span className="text-brand">*</span>
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    required
+                    maxLength={10}
+                    placeholder="Wpisz 10 cyfr NIP (np. 5261040828)"
+                    value={nip}
+                    onChange={handleNipChange}
+                    className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-3 text-base font-mono font-bold text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
+                  />
+                  {gusLoading && (
+                    <div className="absolute right-3 flex items-center gap-1.5 text-xs text-brand font-semibold animate-pulse">
+                      <div className="h-4 w-4 border-2 border-brand/30 border-t-brand rounded-full animate-spin" />
+                      <span>Pobieranie danych...</span>
+                    </div>
+                  )}
+                </div>
+
+                {gusNotice && (
+                  <div className="mt-2 p-2.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                    {gusNotice}
+                  </div>
+                )}
+              </div>
+
+              {/* Pełna nazwa firmy */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
+                  Pełna nazwa firmy <span className="text-brand">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Nazwa pobrana automatycznie lub wpisz ręcznie"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs font-semibold"
+                />
+              </div>
+
+              {/* Adres siedziby */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
+                  Adres siedziby firmy
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ulica, numer, kod pocztowy, miejscowość"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
+                    E-mail kontaktowy i do faktury <span className="text-brand">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="twoj-email@restauracja.pl"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
+                    Telefon kontaktowy
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+48 600 000 000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700 font-medium">
+                {errorMsg}
+              </div>
+            )}
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-[#ED1C24] hover:bg-[#CC161D] active:bg-[#990E14] text-white py-4 text-base font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Dalej: Wybierz pakiet i licencje</span>
+                <span>→</span>
+              </button>
+            </div>
+          </form>
+        </main>
+      )}
+
+      {/* ========================================================================= */}
+      {/* EKRAN 2: WYBÓR OKRESU / PAKIETÓW I PODSUMOWANIE */}
+      {/* ========================================================================= */}
+      {currentStep === 2 && (
         <>
-          {/* Hero Section */}
           <section className="mx-auto max-w-6xl px-4 pt-8 pb-6 text-center space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-neutral-600 border border-neutral-200 shadow-xs mb-1">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Krok 1 z 3: Natychmiastowa aktywacja i licencjonowanie online
+              Krok 2 z 4: Wybór pakietu i konfiguracja
             </div>
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-techbay-blue">
               Wybierz pakiet <span className="text-brand">100k-RYCOS</span> i terminale SBR
@@ -281,8 +454,8 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
           </section>
 
           <main className="mx-auto max-w-6xl px-4 pb-20">
-            <form onSubmit={handleProceedToPayment} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              {/* Left Column: Configuration & Form (7 cols) */}
+            <form onSubmit={handleProceedToStep3} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Left Column: Period & Device Selectors (7 cols) */}
               <div className="lg:col-span-7 space-y-6">
                 {/* 1. Period Selector */}
                 <div className="rounded-2xl border border-neutral-200/90 bg-white p-6 shadow-sm space-y-4">
@@ -495,131 +668,9 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
                     </div>
                   </div>
                 </div>
-
-                {/* 3. Company Details with GUS API Verification */}
-                <div className="rounded-2xl border border-neutral-200/90 bg-white p-6 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-                    <h2 className="text-lg font-bold text-techbay-blue flex items-center gap-2.5">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-techbay-blue text-xs font-bold text-white">
-                        3
-                      </span>
-                      Dane Firmy (Weryfikacja GUS BIR)
-                    </h2>
-                    <span className="text-xs text-neutral-400 font-medium">Pobierane z rejestru REGON</span>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* NIP Field with GUS Lookup Button */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
-                        NIP firmy <span className="text-brand">*</span>
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          required
-                          placeholder="np. 5261040828 (10 cyfr)"
-                          value={nip}
-                          onChange={handleNipChange}
-                          className="flex-1 rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs font-mono font-bold"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleGusLookup()}
-                          disabled={gusLoading}
-                          className="px-4 py-2.5 rounded-xl bg-techbay-blue hover:bg-techbay-blue-light text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                        >
-                          {gusLoading ? (
-                            <span>Pobieranie z GUS...</span>
-                          ) : (
-                            <>
-                              <span>🏛️</span>
-                              <span>Pobierz z GUS</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Notice/Success banner */}
-                      {gusNotice && (
-                        <div className={`mt-2 p-2.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
-                          gusSuccess
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                            : 'bg-amber-50 text-amber-800 border border-amber-200'
-                        }`}>
-                          <span>{gusSuccess ? '✓' : 'ℹ️'}</span>
-                          <span>{gusNotice}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
-                          Pełna nazwa firmy <span className="text-brand">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Nazwa pobrana z GUS lub ręczna"
-                          value={companyName}
-                          onChange={(e) => setCompanyName(e.target.value)}
-                          className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
-                          E-mail kontaktowy i do faktury <span className="text-brand">*</span>
-                        </label>
-                        <input
-                          type="email"
-                          required
-                          placeholder="twoj-email@restauracja.pl"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
-                          Telefon kontaktowy
-                        </label>
-                        <input
-                          type="tel"
-                          placeholder="+48 600 000 000"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-techbay-blue/80 mb-1.5">
-                          Adres siedziby firmy
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Adres pobrany z GUS"
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          className="w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-techbay-blue placeholder-neutral-400 focus:border-techbay-blue focus:ring-2 focus:ring-techbay-lightblue/30 focus:outline-none transition shadow-2xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="bg-neutral-50 p-3 rounded-xl border border-neutral-200/80 text-xs text-neutral-500 flex items-center gap-2">
-                      <span className="text-base">🔒</span>
-                      <span>
-                        Hasło dostępowe do panelu <strong>100k-admin.rycos.eu</strong> ustawisz wygodnie na 3. ekranie, zaraz po potwierdzeniu płatności.
-                      </span>
-                    </div>
-                  </div>
-                </div>
               </div>
 
-              {/* Right Column: Order Summary & Next Step (5 cols) */}
+              {/* Right Column: Order Summary (Pic 1 Style) */}
               <div className="lg:col-span-5">
                 <div className="sticky top-20 rounded-2xl border border-neutral-200/90 bg-white p-6 shadow-md space-y-5">
                   <h2 className="text-xl font-bold text-techbay-blue border-b border-neutral-100 pb-4 flex items-center justify-between">
@@ -696,14 +747,15 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
                     <span>→</span>
                   </button>
 
-                  <div className="space-y-2 pt-2 text-[11px] text-neutral-500 text-center">
-                    <div className="flex items-center justify-center gap-2 text-neutral-600 font-medium">
-                      <span>🏛️ Weryfikacja GUS</span>
-                      <span>•</span>
-                      <span>🔒 Bezpieczne dane</span>
-                      <span>•</span>
-                      <span>⚡ Natychmiastowy dostęp</span>
-                    </div>
+                  <div className="flex items-center justify-between text-xs text-neutral-500 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(1)}
+                      className="text-neutral-500 hover:text-techbay-blue transition underline cursor-pointer"
+                    >
+                      ← Wróć do danych firmy
+                    </button>
+                    <span className="font-mono text-neutral-400">{nip}</span>
                   </div>
                 </div>
               </div>
@@ -713,31 +765,28 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
       )}
 
       {/* ========================================================================= */}
-      {/* EKRAN 2: PŁATNOŚĆ ONLINE (SAFERPAY) */}
+      {/* EKRAN 3: PŁATNOŚĆ ONLINE (SAFERPAY) */}
       {/* ========================================================================= */}
-      {currentStep === 2 && (
+      {currentStep === 3 && (
         <main className="mx-auto max-w-4xl px-4 py-10">
           <div className="mb-6 flex items-center justify-between">
             <button
               type="button"
-              onClick={() => setCurrentStep(1)}
+              onClick={() => setCurrentStep(2)}
               className="inline-flex items-center gap-2 text-sm font-bold text-neutral-600 hover:text-techbay-blue transition cursor-pointer"
             >
               <span>←</span>
-              <span>Wróć do edycji konfiguracji</span>
+              <span>Wróć do wyboru pakietu</span>
             </button>
-            <span className="text-xs text-neutral-400 font-semibold">Krok 2 z 3</span>
+            <span className="text-xs text-neutral-400 font-semibold">Krok 3 z 4</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
             {/* Left: Summary of buyer and plan (7 cols) */}
             <div className="md:col-span-7 space-y-6">
               <div className="rounded-2xl border border-neutral-200/90 bg-white p-6 shadow-sm space-y-4">
-                <h2 className="text-lg font-bold text-techbay-blue border-b border-neutral-100 pb-3 flex items-center justify-between">
-                  <span>Dane zamawiającego</span>
-                  <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    Zweryfikowano z GUS
-                  </span>
+                <h2 className="text-lg font-bold text-techbay-blue border-b border-neutral-100 pb-3">
+                  Dane zamawiającego
                 </h2>
 
                 <div className="space-y-2.5 text-sm">
@@ -780,7 +829,7 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
                   <span>Bezpieczna bramka płatnicza SolutionsBay</span>
                 </h3>
                 <p className="text-xs text-neutral-500 leading-relaxed">
-                  Płatność jest realizowana przez certyfikowany system Saferpay (Wordline).
+                  Płatność jest realizowana przez certyfikowany system Saferpay (Worldline).
                   Twoje transakcje są chronione standardem PCI DSS poziomu 1.
                 </p>
                 <div className="flex items-center gap-4 pt-1 text-xs text-neutral-600 font-semibold">
@@ -846,7 +895,7 @@ export function GoStoreClient({ initialPricing }: GoStoreClientProps) {
                 </button>
 
                 <p className="text-[11px] text-neutral-400 text-center leading-relaxed">
-                  Zostaniesz bezpiecznie przekierowany na stronę płatności Saferpay, a po transakcji na Ekran 3 w celu utworzenia hasła administratora.
+                  Zostaniesz bezpiecznie przekierowany na stronę płatności Saferpay, a po transakcji na Ekran 4 w celu utworzenia hasła administratora.
                 </p>
               </div>
             </div>

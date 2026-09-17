@@ -115,9 +115,9 @@ export function GoSuccessClient({ orderToken }: { orderToken: string }) {
           />
         </div>
 
-        {/* Step 3 Badge */}
+        {/* Step 4 Badge */}
         <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold text-neutral-600 border border-neutral-200 shadow-2xs">
-          <span>Krok 3 z 3:</span>
+          <span>Krok 4 z 4:</span>
           <span className="text-brand">Hasło dostępu & Aktywacja platformy</span>
         </div>
 
