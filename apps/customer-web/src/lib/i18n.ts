@@ -126,6 +126,12 @@ export interface Translations {
   orderNotFound: string;
   orderNotFoundSub: string;
   fetchingOrderStatus: string;
+
+  // Exit Confirmation
+  exitConfirmTitle: string;
+  exitConfirmMessage: string;
+  exitConfirmStay: string;
+  exitConfirmLeave: string;
 }
 
 export const i18n: Record<Language, Translations> = {
@@ -233,6 +239,10 @@ export const i18n: Record<Language, Translations> = {
     orderNotFound: 'Nie znaleziono zamówienia',
     orderNotFoundSub: 'Upewnij się, że link z kodem QR jest poprawny.',
     fetchingOrderStatus: 'Pobieranie statusu zamówienia...',
+    exitConfirmTitle: 'Czy na pewno chcesz wyjść?',
+    exitConfirmMessage: 'Twoje wybrane pozycje i stolik zostaną zachowane. Możesz kontynuować przeglądanie menu.',
+    exitConfirmStay: 'Zostań w menu',
+    exitConfirmLeave: 'Opuść stronę',
   },
 
   en: {
@@ -339,6 +349,10 @@ export const i18n: Record<Language, Translations> = {
     orderNotFound: 'Order not found',
     orderNotFoundSub: 'Please ensure your QR code link is correct.',
     fetchingOrderStatus: 'Loading order status...',
+    exitConfirmTitle: 'Are you sure you want to leave?',
+    exitConfirmMessage: 'Your selected items and table will be preserved. You can continue browsing the menu.',
+    exitConfirmStay: 'Stay in menu',
+    exitConfirmLeave: 'Leave page',
   },
 
   de: {
@@ -445,5 +459,9 @@ export const i18n: Record<Language, Translations> = {
     orderNotFound: 'Bestellung nicht gefunden',
     orderNotFoundSub: 'Bitte überprüfen Sie den QR-Code-Link.',
     fetchingOrderStatus: 'Bestellstatus wird geladen...',
+    exitConfirmTitle: 'Möchten Sie das Menü wirklich verlassen?',
+    exitConfirmMessage: 'Ihre ausgewählten Artikel und Ihr Tisch bleiben gespeichert. Sie können die Speisekarte weiter durchsuchen.',
+    exitConfirmStay: 'Im Menü bleiben',
+    exitConfirmLeave: 'Seite verlassen',
   },
 };

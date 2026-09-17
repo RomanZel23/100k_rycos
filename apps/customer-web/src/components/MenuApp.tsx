@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
@@ -65,6 +65,117 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isTncOpen, setIsTncOpen] = useState(false);
   const [isPpOpen, setIsPpOpen] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  // Refs for tracking modal states during popstate (Android Back button)
+  const allowExitRef = useRef(false);
+  const selectedProductRef = useRef(selectedProduct);
+  selectedProductRef.current = selectedProduct;
+  const isCartOpenRef = useRef(isCartOpen);
+  isCartOpenRef.current = isCartOpen;
+  const isPaymentOpenRef = useRef(isPaymentOpen);
+  isPaymentOpenRef.current = isPaymentOpen;
+  const isShareOpenRef = useRef(isShareOpen);
+  isShareOpenRef.current = isShareOpen;
+  const isHistoryOpenRef = useRef(isHistoryOpen);
+  isHistoryOpenRef.current = isHistoryOpen;
+  const isServiceCallOpenRef = useRef(isServiceCallOpen);
+  isServiceCallOpenRef.current = isServiceCallOpen;
+  const isTncOpenRef = useRef(isTncOpen);
+  isTncOpenRef.current = isTncOpen;
+  const isPpOpenRef = useRef(isPpOpen);
+  isPpOpenRef.current = isPpOpen;
+  const cartItemsRef = useRef(cartItems);
+  cartItemsRef.current = cartItems;
+  const placedOrderIdRef = useRef(placedOrderId);
+  placedOrderIdRef.current = placedOrderId;
+
+  // Intercept Android/Browser Back Button to prevent accidental page exit
+  useEffect(() => {
+    // Push an initial history entry to serve as the back-button trap
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      // If user explicitly confirmed exit, allow browser to navigate back
+      if (allowExitRef.current) {
+        return;
+      }
+
+      // If any modal/drawer is open, close it first and stay in the menu
+      if (selectedProductRef.current) {
+        setSelectedProduct(null);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+      if (isCartOpenRef.current) {
+        setIsCartOpen(false);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+      if (isPaymentOpenRef.current) {
+        setIsPaymentOpen(false);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+      if (isShareOpenRef.current) {
+        setIsShareOpen(false);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+      if (isHistoryOpenRef.current) {
+        setIsHistoryOpen(false);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+      if (isServiceCallOpenRef.current) {
+        setIsServiceCallOpen(false);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+      if (isTncOpenRef.current) {
+        setIsTncOpen(false);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+      if (isPpOpenRef.current) {
+        setIsPpOpen(false);
+        window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+        return;
+      }
+
+      // If on the main menu without open modals, trigger confirmation modal
+      window.history.pushState({ rycosMenuGuard: true }, '', window.location.href);
+      setShowExitConfirm(true);
+    };
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (cartItemsRef.current.length > 0) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  const handleConfirmExit = () => {
+    allowExitRef.current = true;
+    setShowExitConfirm(false);
+    // Go back past our guarded history entry
+    window.history.go(-2);
+  };
+
+  const handleStayInMenu = () => {
+    setShowExitConfirm(false);
+  };
 
   // Monitor stored orders for active status badge & banner
   useEffect(() => {
@@ -322,13 +433,14 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             : 'bg-white px-3 sm:px-5 pt-3.5 sm:pt-5 pb-3 sm:pb-4 border-b border-slate-100 shadow-2xs'
         }`}
       >
-        <div className="flex items-center justify-between gap-2 min-w-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+        {/* Row 1: Brand Logo & Title on left, Action buttons (Share & History) on right */}
+        <div className="flex items-center justify-between gap-2.5 min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             {menu?.brand.logoUrl ? (
               <div
                 className={`${
                   menu?.brand.bannerUrl
-                    ? 'w-14 h-14 sm:w-20 sm:h-20 -mt-10 sm:-mt-14 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-white shadow-md bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden'
+                    ? 'w-12 h-12 sm:w-16 sm:h-16 -mt-8 sm:-mt-12 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-white shadow-md bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden'
                     : 'w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl border border-slate-200 shadow-xs bg-white p-1 flex items-center justify-center shrink-0 overflow-hidden'
                 }`}
               >
@@ -340,39 +452,30 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                 />
               </div>
             ) : menu?.brand.bannerUrl ? (
-              <div className="w-14 h-14 sm:w-16 sm:h-16 -mt-10 sm:-mt-12 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-white shadow-md bg-slate-900 text-white font-black text-base sm:text-xl flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 -mt-8 sm:-mt-12 rounded-xl sm:rounded-2xl border-2 sm:border-4 border-white shadow-md bg-slate-900 text-white font-black text-base sm:text-xl flex items-center justify-center shrink-0">
                 {menu?.brand.name?.charAt(0) || '🍽️'}
               </div>
             ) : null}
 
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <h1 className="font-extrabold text-base sm:text-2xl text-slate-900 tracking-tight truncate">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h1 className="font-black text-base sm:text-2xl text-slate-900 tracking-tight leading-snug truncate">
                   {menu?.brand.name}
                 </h1>
-                <span className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" title={lang === 'de' ? 'Geöffnet' : lang === 'en' ? 'Open' : 'Otwarte'} />
-              </div>
-              <div className="flex items-center gap-1.5 text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">
-                <div className="flex items-center gap-1 min-w-0">
-                  <MapPin size={14} className="text-brand-500 shrink-0" />
-                  <span className="truncate font-medium">
-                    {tableLabel
-                      ? `${t.table}: ${tableLabel}`
-                      : parkingSpot
-                      ? `${t.parking}: ${parkingSpot}`
-                      : menu?.brand.locationName || (lang === 'de' ? 'Bedienung an der Bar' : lang === 'en' ? 'Bar service' : 'Obsługa przy barze')}
-                  </span>
-                </div>
+                <span
+                  className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"
+                  title={lang === 'de' ? 'Geöffnet' : lang === 'en' ? 'Open' : 'Otwarte'}
+                />
               </div>
             </div>
           </div>
 
-          {/* Right actions: Share, History Button & Language Switcher */}
+          {/* Quick Action Buttons: Share & History */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {menu?.brand.settings?.show_sharing !== false && (
               <button
                 onClick={() => setIsShareOpen(true)}
-                className="p-2 sm:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
+                className="p-2 sm:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
                 title={lang === 'de' ? 'Menü teilen' : lang === 'en' ? 'Share menu' : 'Udostępnij menu'}
               >
                 <Share2 size={16} />
@@ -381,7 +484,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
             <button
               onClick={() => setIsHistoryOpen(true)}
-              className="relative p-2 sm:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
+              className="relative p-2 sm:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200/80 text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center active:scale-95 shadow-2xs"
               title={t.orderHistory}
             >
               <Clock size={16} />
@@ -389,36 +492,50 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white animate-pulse" />
               )}
             </button>
+          </div>
+        </div>
 
-            <div className="flex items-center gap-0.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-black shrink-0">
-              <button
-                onClick={() => handleSelectLanguage('pl')}
-                className={`px-2 py-1 rounded-lg transition-all ${
-                  lang === 'pl' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title="Polski"
-              >
-                PL
-              </button>
-              <button
-                onClick={() => handleSelectLanguage('en')}
-                className={`px-2 py-1 rounded-lg transition-all ${
-                  lang === 'en' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title="English"
-              >
-                EN
-              </button>
-              <button
-                onClick={() => handleSelectLanguage('de')}
-                className={`px-2 py-1 rounded-lg transition-all ${
-                  lang === 'de' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title="Deutsch"
-              >
-                DE
-              </button>
-            </div>
+        {/* Row 2: Location/Table Badge on left, Language Switcher on right */}
+        <div className="mt-2.5 pt-2 sm:pt-2.5 border-t border-slate-100/90 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 min-w-0 bg-slate-50 border border-slate-200/70 px-2.5 py-1 rounded-lg">
+            <MapPin size={13} className="text-brand-500 shrink-0" />
+            <span className="truncate font-semibold">
+              {tableLabel
+                ? `${t.table}: ${tableLabel}`
+                : parkingSpot
+                ? `${t.parking}: ${parkingSpot}`
+                : menu?.brand.locationName || (lang === 'de' ? 'Bedienung an der Bar' : lang === 'en' ? 'Bar service' : 'Obsługa przy barze')}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-lg border border-slate-200/80 text-[11px] font-black shrink-0">
+            <button
+              onClick={() => handleSelectLanguage('pl')}
+              className={`px-2 py-0.5 rounded-md transition-all ${
+                lang === 'pl' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Polski"
+            >
+              PL
+            </button>
+            <button
+              onClick={() => handleSelectLanguage('en')}
+              className={`px-2 py-0.5 rounded-md transition-all ${
+                lang === 'en' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="English"
+            >
+              EN
+            </button>
+            <button
+              onClick={() => handleSelectLanguage('de')}
+              className={`px-2 py-0.5 rounded-md transition-all ${
+                lang === 'de' ? 'bg-white text-slate-900 shadow-xs font-black' : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Deutsch"
+            >
+              DE
+            </button>
           </div>
         </div>
 
@@ -653,6 +770,39 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         content={menu?.brand.privacyPolicy || ''}
         lang={lang}
       />
+
+      {/* Exit Confirmation Modal (Android/Browser Back Button Protection) */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 text-center animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4 shadow-xs">
+              <span className="text-2xl">👋</span>
+            </div>
+            <h3 className="text-lg font-black text-slate-900 mb-2">
+              {t.exitConfirmTitle}
+            </h3>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+              {t.exitConfirmMessage}
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={handleStayInMenu}
+                className="w-full py-3.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm transition-all active:scale-98 shadow-md"
+              >
+                {t.exitConfirmStay}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExit}
+                className="w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition-all active:scale-98"
+              >
+                {t.exitConfirmLeave}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
