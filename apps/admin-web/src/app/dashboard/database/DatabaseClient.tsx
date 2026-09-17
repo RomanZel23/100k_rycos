@@ -5,6 +5,7 @@ import type { AdminLocale } from '@/lib/i18n';
 import { getTranslation } from '@/lib/i18n';
 import type { TableMeta, ColumnMeta } from './actions';
 import {
+  fetchDatabaseTablesAction,
   fetchTableRowsAction,
   insertTableRowAction,
   updateTableRowAction,
@@ -14,14 +15,17 @@ import {
 
 interface DatabaseClientProps {
   initialTables: TableMeta[];
+  initialError?: string | null;
   locale?: AdminLocale;
 }
 
-export function DatabaseClient({ initialTables, locale = 'pl' }: DatabaseClientProps) {
+export function DatabaseClient({ initialTables, initialError = null, locale = 'pl' }: DatabaseClientProps) {
   const [activeTab, setActiveTab] = useState<'tables' | 'sql'>('tables');
 
   // Tables state
-  const [tables] = useState<TableMeta[]>(initialTables);
+  const [tables, setTables] = useState<TableMeta[]>(initialTables);
+  const [isLoadingTables, setIsLoadingTables] = useState<boolean>(false);
+  const [tableListError, setTableListError] = useState<string | null>(initialError || null);
   const [selectedTableName, setSelectedTableName] = useState<string>(
     initialTables.length > 0 ? initialTables[0].name : ''
   );
@@ -108,6 +112,28 @@ export function DatabaseClient({ initialTables, locale = 'pl' }: DatabaseClientP
       setCurrentPage(res.page);
     }
   };
+
+  const loadTables = async () => {
+    setIsLoadingTables(true);
+    setTableListError(null);
+    const res = await fetchDatabaseTablesAction();
+    setIsLoadingTables(false);
+
+    if (res.success && res.tables) {
+      setTables(res.tables);
+      if (res.tables.length > 0) {
+        setSelectedTableName((prev) => (prev && res.tables.some((t) => t.name === prev) ? prev : res.tables[0].name));
+      }
+    } else {
+      setTableListError(res.error || 'Nie udało się pobrać listy tabel');
+    }
+  };
+
+  useEffect(() => {
+    if (tables.length === 0) {
+      loadTables();
+    }
+  }, []);
 
   useEffect(() => {
     if (selectedTableName) {
@@ -403,7 +429,29 @@ export function DatabaseClient({ initialTables, locale = 'pl' }: DatabaseClientP
               <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">
                 {locale === 'pl' ? 'Tabele' : 'Tables'} ({tables.length})
               </span>
+              <button
+                type="button"
+                onClick={loadTables}
+                disabled={isLoadingTables}
+                title={locale === 'pl' ? 'Odśwież listę tabel' : 'Refresh tables list'}
+                className="text-xs font-bold text-neutral-500 hover:text-neutral-900 disabled:opacity-50 cursor-pointer p-1 rounded-md hover:bg-neutral-100"
+              >
+                {isLoadingTables ? '⟳ ...' : '⟳'}
+              </button>
             </div>
+
+            {tableListError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-[11px] font-bold text-red-700 space-y-1.5">
+                <p>⚠️ {tableListError}</p>
+                <button
+                  type="button"
+                  onClick={loadTables}
+                  className="w-full py-1 rounded bg-red-100 hover:bg-red-200 text-red-800 text-[10px] font-bold cursor-pointer"
+                >
+                  {locale === 'pl' ? 'Ponów próbę' : 'Retry'}
+                </button>
+              </div>
+            )}
 
             {/* Table search filter */}
             <input
@@ -416,34 +464,52 @@ export function DatabaseClient({ initialTables, locale = 'pl' }: DatabaseClientP
 
             {/* List */}
             <div className="space-y-1 max-h-[600px] overflow-y-auto pr-1">
-              {filteredTables.map((t) => {
-                const isSelected = t.name === selectedTableName;
-                return (
+              {isLoadingTables && tables.length === 0 ? (
+                <p className="text-center py-4 text-xs text-neutral-400 animate-pulse">
+                  {locale === 'pl' ? 'Ładowanie tabel...' : 'Loading tables...'}
+                </p>
+              ) : filteredTables.length === 0 ? (
+                <div className="text-center py-6 space-y-2">
+                  <p className="text-xs text-neutral-400">
+                    {tableListError
+                      ? (locale === 'pl' ? 'Błąd połączenia z bazą' : 'Database connection error')
+                      : (locale === 'pl' ? 'Brak tabel w bazie' : 'No tables found')}
+                  </p>
                   <button
-                    key={t.name}
                     type="button"
-                    onClick={() => setSelectedTableName(t.name)}
-                    className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-neutral-900 text-white shadow-xs'
-                        : 'text-neutral-700 hover:bg-neutral-100'
-                    }`}
+                    onClick={loadTables}
+                    className="px-3 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-[11px] font-bold text-neutral-700 cursor-pointer"
                   >
-                    <span className="truncate font-mono">{t.name}</span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                    ⟳ {locale === 'pl' ? 'Pobierz tabele' : 'Fetch tables'}
+                  </button>
+                </div>
+              ) : (
+                filteredTables.map((t) => {
+                  const isSelected = t.name === selectedTableName;
+                  return (
+                    <button
+                      key={t.name}
+                      type="button"
+                      onClick={() => setSelectedTableName(t.name)}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-neutral-800 text-neutral-300'
-                          : 'bg-neutral-100 text-neutral-500'
+                          ? 'bg-neutral-900 text-white shadow-xs'
+                          : 'text-neutral-700 hover:bg-neutral-100'
                       }`}
                     >
-                      ~{t.rowCountEst}
-                    </span>
-                  </button>
-                );
-              })}
-              {filteredTables.length === 0 && (
-                <p className="text-center py-4 text-xs text-neutral-400">Brak tabel</p>
+                      <span className="truncate font-mono">{t.name}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
+                          isSelected
+                            ? 'bg-neutral-800 text-neutral-300'
+                            : 'bg-neutral-100 text-neutral-500'
+                        }`}
+                      >
+                        ~{t.rowCountEst}
+                      </span>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>

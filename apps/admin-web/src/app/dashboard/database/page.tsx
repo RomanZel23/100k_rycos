@@ -15,7 +15,11 @@ export default async function DatabasePage() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <DatabaseClient initialTables={res.tables || []} locale={locale} />
+      <DatabaseClient
+        initialTables={res.tables || []}
+        initialError={res.success ? null : res.error || null}
+        locale={locale}
+      />
     </div>
   );
 }

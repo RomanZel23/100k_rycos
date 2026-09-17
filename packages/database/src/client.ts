@@ -23,9 +23,18 @@ export function getDatabase(connectionString?: string) {
   return dbInstance;
 }
 
-export function getRawClient() {
+export function getRawClient(connectionString?: string): postgres.Sql {
+  if (client) return client;
+  getDatabase(connectionString);
   if (!client) {
-    getDatabase();
+    const url = connectionString || process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres';
+    const maxConnections = parseInt(process.env.DATABASE_MAX_CONNECTIONS || '20', 10);
+    client = postgres(url, {
+      max: maxConnections,
+      idle_timeout: 20,
+      connect_timeout: 10,
+      onnotice: () => {},
+    });
   }
   return client;
 }
