@@ -35,6 +35,7 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
           id: companies.id,
           name: companies.name,
           slug: companies.slug,
+          nip: companies.nip,
           email: companies.email,
           country: companies.country,
           currency: companies.currency,
@@ -49,7 +50,7 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
       const mappedCompanies = compRows.map((c) => ({
         id: c.id,
         name: c.name,
-        nip: null,
+        nip: c.nip,
         country: c.country,
         currency: c.currency,
         status: c.isAcceptingOrders ? 'active' : 'suspended',
@@ -116,6 +117,7 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
       return error(reply, 'Nazwa firmy jest wymagana', 400);
     }
 
+    const nip = body.nip ? String(body.nip).trim() : null;
     const email = String(body.email || '').trim().toLowerCase();
     const country = String(body.country || 'PL').trim().toUpperCase();
     const currency = String(body.currency || 'PLN').trim().toUpperCase();
@@ -148,6 +150,7 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
         .values({
           name: companyName,
           slug,
+          nip,
           email: email || `${slug}@rycos.eu`,
           country,
           currency,
@@ -192,6 +195,46 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
       }, 'Firma została pomyślnie utworzona');
     } catch (err: any) {
       return error(reply, err.message || 'Nie udało się utworzyć firmy');
+    }
+  });
+
+  // PUT /v1/admin/master/companies/:companyId/status - Update company status (active / suspended)
+  fastify.put('/v1/admin/master/companies/:companyId/status', async (req, reply) => {
+    const { companyId } = req.params as { companyId: string };
+    const body = (req.body ?? {}) as any;
+    const db = getDatabase();
+    const id = parseInt(companyId, 10);
+    if (!id || isNaN(id)) return error(reply, 'Nieprawidłowe ID firmy', 400);
+
+    const rawStatus = String(body.status || '').trim().toLowerCase();
+    const isAcceptingOrders = rawStatus === 'active';
+    const licenseStatus = rawStatus === 'active' ? 'active' : 'suspended';
+
+    try {
+      const [updated] = await db
+        .update(companies)
+        .set({
+          isAcceptingOrders,
+          licenseStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(companies.id, id))
+        .returning();
+
+      if (!updated) return error(reply, 'Nie znaleziono firmy', 404);
+
+      return success(
+        reply,
+        {
+          id: updated.id,
+          name: updated.name,
+          status: updated.isAcceptingOrders ? 'active' : 'suspended',
+          isAcceptingOrders: updated.isAcceptingOrders,
+        },
+        isAcceptingOrders ? 'Firma została aktywowana' : 'Firma została zawieszona'
+      );
+    } catch (err: any) {
+      return error(reply, err.message || 'Nie udało się zmienić statusu firmy', 500);
     }
   });
 
