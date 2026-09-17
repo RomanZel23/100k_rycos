@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell, Camera, KeyRound, QrCode, Download, Smartphone } from 'lucide-react';
+import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell, Camera, KeyRound, QrCode, Download, Smartphone, ChevronRight, ChevronLeft, Eye, X, Undo2 } from 'lucide-react';
 import { getApiBaseUrl } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
 import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
@@ -53,7 +53,13 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
   const wsRef = useRef<WebSocket | null>(null);
 
   // Mobile tab state
-  const [activeMobileTab, setActiveMobileTab] = useState<'new' | 'preparing' | 'ready'>('preparing');
+  const [activeMobileTab, setActiveMobileTab] = useState<'new' | 'preparing' | 'ready' | 'completed'>('preparing');
+
+  // Fourth column (Wydane) collapse state - default false (minimized)
+  const [isCompletedExpanded, setIsCompletedExpanded] = useState(false);
+
+  // Selected completed order for details modal
+  const [selectedCompletedOrder, setSelectedCompletedOrder] = useState<KdsOrder | null>(null);
 
   // Verification modal state
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -160,7 +166,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
   const loadOrders = async () => {
     try {
       const companyId = terminal?.company_id || 1;
-      const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders`, {
+      const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders?limit=100`, {
         headers: {
           'x-company-id': String(companyId),
           ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
@@ -169,10 +175,10 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
       if (res.ok) {
         const json = await res.json();
         const data = json.data || [];
-        const active = data.filter((o: any) =>
-          ['paid', 'in_progress', 'ready_to_collect', 'preparing', 'ready_for_pickup'].includes(o.status)
+        const relevant = data.filter((o: any) =>
+          ['paid', 'in_progress', 'ready_to_collect', 'preparing', 'ready_for_pickup', 'completed'].includes(o.status)
         );
-        setOrders(active);
+        setOrders(relevant);
       }
     } catch (e) {
       console.warn('Failed to load KDS orders:', e);
@@ -263,9 +269,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
 
     // Optimistic update
     setOrders((prev) =>
-      prev
-        .map((o) => (o.id === orderId ? { ...o, status: canonicalStatus as any } : o))
-        .filter((o) => o.status !== 'completed')
+      prev.map((o) => (o.id === orderId ? { ...o, status: canonicalStatus as any } : o))
     );
 
     try {
@@ -299,6 +303,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
   const newOrders = orders.filter((o) => o.status === 'paid');
   const preparingOrders = orders.filter((o) => o.status === 'in_progress' || o.status === 'preparing');
   const readyOrders = orders.filter((o) => o.status === 'ready_to_collect' || o.status === 'ready_for_pickup');
+  const completedOrders = orders.filter((o) => o.status === 'completed');
 
   return (
     <div className="h-[100dvh] max-h-[100dvh] w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
@@ -450,17 +455,17 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
       )}
 
       {/* Mobile Column Tabs */}
-      <div className="md:hidden flex items-center gap-2 p-2.5 sm:p-3 bg-slate-900/95 border-b border-slate-800 shrink-0">
+      <div className="md:hidden flex items-center gap-1.5 p-2 bg-slate-900/95 border-b border-slate-800 shrink-0 overflow-x-auto">
         <button
           onClick={() => setActiveMobileTab('new')}
-          className={`flex-1 py-3.5 px-3 rounded-2xl text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer min-h-[56px] ${
+          className={`flex-1 py-3 px-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[48px] whitespace-nowrap ${
             activeMobileTab === 'new'
-              ? 'bg-amber-400 text-slate-950 shadow-xl font-black scale-[1.02]'
+              ? 'bg-amber-400 text-slate-950 shadow-md font-black scale-[1.02]'
               : 'bg-slate-800/90 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <span>Nowe</span>
-          <span className={`px-2.5 py-0.5 rounded-full text-sm font-black ${
+          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
             activeMobileTab === 'new' ? 'bg-slate-950 text-amber-400' : 'bg-slate-700 text-amber-300'
           }`}>
             {newOrders.length}
@@ -469,14 +474,14 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
 
         <button
           onClick={() => setActiveMobileTab('preparing')}
-          className={`flex-1 py-3.5 px-3 rounded-2xl text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer min-h-[56px] ${
+          className={`flex-1 py-3 px-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[48px] whitespace-nowrap ${
             activeMobileTab === 'preparing'
-              ? 'bg-blue-500 text-white shadow-xl font-black scale-[1.02]'
+              ? 'bg-blue-500 text-white shadow-md font-black scale-[1.02]'
               : 'bg-slate-800/90 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <span>W kuchni</span>
-          <span className={`px-2.5 py-0.5 rounded-full text-sm font-black ${
+          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
             activeMobileTab === 'preparing' ? 'bg-slate-950 text-blue-300' : 'bg-slate-700 text-blue-300'
           }`}>
             {preparingOrders.length}
@@ -485,25 +490,41 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
 
         <button
           onClick={() => setActiveMobileTab('ready')}
-          className={`flex-1 py-3.5 px-3 rounded-2xl text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer min-h-[56px] ${
+          className={`flex-1 py-3 px-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[48px] whitespace-nowrap ${
             activeMobileTab === 'ready'
-              ? 'bg-emerald-500 text-slate-950 shadow-xl font-black scale-[1.02]'
+              ? 'bg-emerald-500 text-slate-950 shadow-md font-black scale-[1.02]'
               : 'bg-slate-800/90 text-slate-300 hover:bg-slate-750'
           }`}
         >
           <span>Gotowe</span>
-          <span className={`px-2.5 py-0.5 rounded-full text-sm font-black ${
+          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
             activeMobileTab === 'ready' ? 'bg-slate-950 text-emerald-300' : 'bg-slate-700 text-emerald-300'
           }`}>
             {readyOrders.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveMobileTab('completed')}
+          className={`flex-1 py-3 px-2 rounded-xl text-xs sm:text-sm font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[48px] whitespace-nowrap ${
+            activeMobileTab === 'completed'
+              ? 'bg-slate-700 text-white shadow-md font-black scale-[1.02] border border-slate-600'
+              : 'bg-slate-800/70 text-slate-400 hover:bg-slate-750'
+          }`}
+        >
+          <span>Wydane</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
+            activeMobileTab === 'completed' ? 'bg-slate-950 text-slate-200' : 'bg-slate-700/80 text-slate-400'
+          }`}>
+            {completedOrders.length}
+          </span>
+        </button>
       </div>
 
       {/* Kanban Board */}
-      <main className="flex-1 p-2.5 sm:p-4 md:p-6 grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6 overflow-hidden">
+      <main className="flex-1 p-2.5 sm:p-4 md:p-5 flex flex-col md:flex-row gap-3 md:gap-4 overflow-hidden">
         {/* Kolumna 1: Nowe / Opłacone */}
-        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden ${
+        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden flex-1 min-w-0 ${
           activeMobileTab === 'new' ? 'flex flex-1' : 'hidden md:flex'
         }`}>
           <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
@@ -592,7 +613,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
         </section>
 
         {/* Kolumna 2: W przygotowaniu */}
-        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden ${
+        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden flex-1 min-w-0 ${
           activeMobileTab === 'preparing' ? 'flex flex-1' : 'hidden md:flex'
         }`}>
           <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
@@ -680,7 +701,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
         </section>
 
         {/* Kolumna 3: Gotowe do odbioru */}
-        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden ${
+        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden flex-1 min-w-0 ${
           activeMobileTab === 'ready' ? 'flex flex-1' : 'hidden md:flex'
         }`}>
           <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
@@ -767,7 +788,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
                     </button>
                     <button
                       onClick={() => updateStatus(order.id, 'completed')}
-                      className="py-4 sm:py-3.5 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-base uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-emerald-500/25 min-h-[64px] flex items-center justify-center gap-2"
+                      className="py-4 sm:py-4 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black rounded-2xl text-lg sm:text-base uppercase tracking-wider transition-all cursor-pointer shadow-xl shadow-emerald-500/25 min-h-[64px] flex items-center justify-center gap-2"
                     >
                       <span>Wydano ✓</span>
                     </button>
@@ -777,7 +798,226 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
             )}
           </div>
         </section>
+
+        {/* Kolumna 4: Wydane (Zminimalizowana - Desktop) */}
+        {!isCompletedExpanded && (
+          <button
+            onClick={() => setIsCompletedExpanded(true)}
+            className="hidden md:flex w-14 shrink-0 bg-slate-900/60 hover:bg-slate-850 border border-slate-800/80 hover:border-slate-700 rounded-2xl flex-col items-center justify-between py-5 px-1.5 transition-all cursor-pointer group shadow-lg select-none"
+            title="Rozwiń kolumnę wydanych zamówień"
+          >
+            <div className="flex flex-col items-center gap-2">
+              <CheckCircle2 size={22} className="text-slate-500 group-hover:text-emerald-400 transition-colors" />
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-600 group-hover:bg-emerald-400 transition-colors" />
+            </div>
+
+            <div className="[writing-mode:vertical-rl] rotate-180 font-black text-xs uppercase tracking-widest text-slate-400 group-hover:text-white transition-colors flex items-center gap-2 py-4">
+              <span>Wydane</span>
+              <ChevronLeft size={16} className="rotate-90 group-hover:-translate-y-1 transition-transform text-slate-500 group-hover:text-emerald-400" />
+            </div>
+
+            <span className="px-2 py-0.5 rounded-full bg-slate-800 group-hover:bg-emerald-500/20 text-slate-300 group-hover:text-emerald-300 text-xs font-black transition-colors">
+              {completedOrders.length}
+            </span>
+          </button>
+        )}
+
+        {/* Kolumna 4: Wydane (Rozwinięta na Desktopie LUB aktywna na Mobile) */}
+        <section className={`bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 sm:p-4 flex-col overflow-hidden ${
+          isCompletedExpanded ? 'hidden md:flex w-80 lg:w-96 shrink-0 animate-in fade-in slide-in-from-right-4 duration-200' : 'hidden'
+        } ${activeMobileTab === 'completed' ? '!flex flex-1' : ''}`}>
+          <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-800 mb-2.5 sm:mb-3 shrink-0">
+            <h2 className="font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              <span>Wydane</span>
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-black">
+                {completedOrders.length}
+              </span>
+              <button
+                onClick={() => setIsCompletedExpanded(false)}
+                className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-bold transition-colors cursor-pointer"
+                title="Zminimalizuj kolumnę"
+              >
+                <span className="text-[10px]">Zwiń</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-3 overflow-y-auto pr-1">
+            {completedOrders.length === 0 ? (
+              <div className="h-48 flex items-center justify-center text-slate-500 text-sm font-bold text-center p-4">
+                Brak wydanych dań
+              </div>
+            ) : (
+              completedOrders.map((order) => (
+                <div
+                  key={order.id}
+                  onClick={() => setSelectedCompletedOrder(order)}
+                  className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-2xl p-3 sm:p-3.5 shadow-md hover:shadow-xl transition-all cursor-pointer space-y-2 group"
+                >
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl sm:text-2xl font-black text-slate-200 font-mono group-hover:text-emerald-400 transition-colors">
+                        #{order.orderNumber}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-mono">
+                        PIN: {order.collectionPin}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {getMinutesAgo(order.createdAt)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold truncate text-slate-300 flex items-center gap-1.5">
+                      <MapPin size={13} className="text-slate-500 shrink-0" />
+                      {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
+                    </span>
+                    <span className="text-emerald-400 font-mono font-black text-xs">
+                      {Number(order.totalAmount || 0).toFixed(2)} zł
+                    </span>
+                  </div>
+
+                  {/* Skrót pozycji */}
+                  <div className="text-xs text-slate-400 space-y-1 bg-slate-950/40 p-2 rounded-xl border border-slate-800/50">
+                    {order.items?.slice(0, 3).map((it, i) => (
+                      <div key={i} className="flex items-center justify-between text-[11px] truncate">
+                        <span className="truncate text-slate-300">{it.quantity}x {it.name}</span>
+                      </div>
+                    ))}
+                    {order.items && order.items.length > 3 && (
+                      <p className="text-[10px] text-slate-500 italic">+ {order.items.length - 3} więcej pozycji...</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
+                    <span className="text-emerald-500/90 font-bold flex items-center gap-1">
+                      ✓ Wydano
+                    </span>
+                    <span className="text-slate-400 group-hover:text-white font-bold transition-colors">
+                      Szczegóły 🔍
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
       </main>
+
+      {/* Modal Szczegółów Wydanego Zamówienia */}
+      {selectedCompletedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border-2 border-slate-700 p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-black">
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-2xl font-black font-mono text-emerald-400">
+                      #{selectedCompletedOrder.orderNumber}
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-xl bg-slate-800 text-slate-300 font-mono text-xs font-bold border border-slate-700">
+                      PIN: {selectedCompletedOrder.collectionPin}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Wydane · {getMinutesAgo(selectedCompletedOrder.createdAt)}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedCompletedOrder(null)}
+                className="w-9 h-9 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between bg-slate-950/60 p-3 rounded-2xl border border-slate-800 text-xs">
+              <span className="flex items-center gap-2 font-bold text-slate-200">
+                <MapPin size={16} className="text-emerald-400" />
+                {selectedCompletedOrder.tableLabel
+                  ? `Stolik: ${selectedCompletedOrder.tableLabel}`
+                  : selectedCompletedOrder.parkingSpot
+                  ? `Miejsce parkingowe: ${selectedCompletedOrder.parkingSpot}`
+                  : 'Odbiór na wynos / Bar'}
+              </span>
+              <span className="font-mono font-black text-emerald-400 text-sm">
+                {Number(selectedCompletedOrder.totalAmount || 0).toFixed(2)} PLN
+              </span>
+            </div>
+
+            {/* Pozycje zamówienia */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Zamówione pozycje ({selectedCompletedOrder.items?.length || 0}):
+              </h4>
+              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                {selectedCompletedOrder.items?.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-slate-950/50 border border-slate-800/80 rounded-2xl p-3 space-y-1.5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-emerald-400 font-mono text-lg min-w-[36px] bg-emerald-400/10 border border-emerald-400/30 px-1.5 py-0.5 rounded-lg text-center font-black shrink-0">
+                        {item.quantity}x
+                      </span>
+                      <span className="font-bold text-white text-base leading-tight pt-0.5">
+                        {item.name}
+                      </span>
+                    </div>
+                    {item.addons && item.addons.length > 0 && (
+                      <div className="pl-[48px] text-xs text-emerald-300/90 font-medium flex flex-wrap gap-1.5">
+                        {item.addons.map((a, aIdx) => (
+                          <span key={aIdx} className="bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                            + {a.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {item.specialInstructions && (
+                      <div className="text-xs text-amber-200 bg-amber-500/15 border border-amber-500/30 p-2.5 rounded-xl ml-1 italic font-semibold">
+                        ⚠️ „{item.specialInstructions}”
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  updateStatus(selectedCompletedOrder.id, 'ready_to_collect');
+                  setSelectedCompletedOrder(null);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-amber-500/30"
+                title="Cofnij do gotowych do odbioru"
+              >
+                <Undo2 size={15} />
+                <span>Przywróć do gotowych</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedCompletedOrder(null)}
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-colors cursor-pointer"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Verification Modal (Keypad & Camera Scanner) */}
       <PinVerificationModal
