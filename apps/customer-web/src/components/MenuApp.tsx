@@ -150,19 +150,10 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
       setShowExitConfirm(true);
     };
 
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (cartItemsRef.current.length > 0) {
-        event.preventDefault();
-        event.returnValue = '';
-      }
-    };
-
     window.addEventListener('popstate', handlePopState);
-    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
 
@@ -387,6 +378,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         parkingSpot: parkingSpot || null,
       });
 
+      setCartItems([]);
       setIsCartOpen(false);
       setIsPaymentOpen(true);
     } catch (err: any) {
