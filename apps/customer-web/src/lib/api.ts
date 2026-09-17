@@ -117,7 +117,7 @@ export async function checkoutOnboarding(payload: {
   email: string;
   phone?: string;
   address?: string;
-  password: string;
+  password?: string;
   months: number;
   plan: {
     platform_100k: boolean;
@@ -150,7 +150,58 @@ export async function checkoutOnboarding(payload: {
   return json.data;
 }
 
-export async function finalizeOnboarding(orderToken: string): Promise<{
+export async function lookupGus(nip: string): Promise<{
+  nip: string;
+  regon: string;
+  name: string;
+  street?: string;
+  propertyNumber?: string;
+  apartmentNumber?: string;
+  city: string;
+  postalCode: string;
+  voivodeship?: string;
+  formattedAddress: string;
+  statusNip?: string;
+}> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/onboarding/gus-lookup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nip }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || err.message || 'Nie udało się pobrać danych z GUS');
+  }
+
+  const json = await res.json();
+  return json.data;
+}
+
+export async function getOnboardingOrderInfo(orderToken: string): Promise<{
+  order_token: string;
+  nip: string;
+  company_name: string;
+  email: string;
+  status: string;
+  completed: boolean;
+}> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/onboarding/order-info?order_token=${encodeURIComponent(orderToken)}`, {
+    cache: 'no-store',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || err.message || 'Nie znaleziono zamówienia');
+  }
+
+  const json = await res.json();
+  return json.data;
+}
+
+export async function finalizeOnboarding(orderToken: string, password?: string): Promise<{
   completed: boolean;
   company_id: number;
   company_name: string;
@@ -162,7 +213,7 @@ export async function finalizeOnboarding(orderToken: string): Promise<{
   const res = await fetch(`${apiBase}/v1/onboarding/finalize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ order_token: orderToken }),
+    body: JSON.stringify({ order_token: orderToken, password }),
   });
 
   if (!res.ok) {
@@ -173,4 +224,5 @@ export async function finalizeOnboarding(orderToken: string): Promise<{
   const json = await res.json();
   return json.data;
 }
+
 

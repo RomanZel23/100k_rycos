@@ -50,6 +50,13 @@ const envSchema = z.object({
   RYCOS_INTEGRATOR_KEY: z.string().default(process.env.RYCOS_INTEGRATOR_KEY || ''),
   RYCOS_SOLUTION_TOKEN: z.string().default(process.env.RYCOS_SOLUTION_TOKEN || process.env.RYCOS_LICENSE_TOKEN || ''),
   RYCOS_LICENSE_TOKEN: z.string().default(process.env.RYCOS_LICENSE_TOKEN || process.env.RYCOS_SOLUTION_TOKEN || ''),
+  // GUS REGON BIR API (Główny Urząd Statystyczny)
+  GUS_USER_KEY: z.string().default(process.env.GUS_USER_KEY || 'abcde12345abcde12345'),
+  GUS_TEST_MODE: z.coerce.boolean().default(
+    process.env.GUS_TEST_MODE !== undefined
+      ? process.env.GUS_TEST_MODE === 'true'
+      : (process.env.GUS_USER_KEY ? false : true)
+  ),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -6,6 +6,7 @@ import { hashPassword } from '../lib/password.js';
 import { initializePaymentPage, assertPaymentPage, captureTransaction } from '../services/saferpayClient.js';
 import { rycosIntegratorService } from '../services/rycosIntegratorService.js';
 import { rycosLicenseService } from '../services/rycosLicenseService.js';
+import { gusService } from '../services/gusService.js';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 
@@ -86,6 +87,58 @@ function getSolutionsBayCredentials() {
 }
 
 export async function onboardingRoutes(fastify: FastifyInstance) {
+  // POST /v1/onboarding/gus-lookup - Lookup company info from GUS REGON BIR API
+  fastify.post('/v1/onboarding/gus-lookup', async (req, reply) => {
+    const body = (req.body ?? {}) as any;
+    const nip = String(body.nip || '').replace(/^PL/i, '').replace(/[^0-9]/g, '');
+
+    if (!nip || nip.length !== 10) {
+      return validationError(reply, { nip: 'Podaj poprawny 10-cyfrowy NIP firmy' });
+    }
+
+    try {
+      const gusData = await gusService.searchByNip(nip);
+      if (!gusData) {
+        return error(reply, 'Nie znaleziono podmiotu w bazie GUS dla podanego NIP', 404);
+      }
+      return success(reply, gusData, 'Dane firmy pobrane z GUS');
+    } catch (err: any) {
+      console.error('[Onboarding] GUS lookup error:', err.message);
+      return error(reply, `Błąd komunikacji z GUS BIR: ${err.message}`, 502);
+    }
+  });
+
+  // GET /v1/onboarding/order-info - Public check of order details before setting password
+  fastify.get('/v1/onboarding/order-info', async (req, reply) => {
+    await ensureOnboardingTables();
+    const db = getDatabase();
+    const query = (req.query ?? {}) as any;
+    const orderToken = String(query.order_token || query.orderToken || '').trim();
+
+    if (!orderToken) {
+      return validationError(reply, { order_token: 'order_token is required' });
+    }
+
+    const [order] = await db
+      .select()
+      .from(onboardingOrders)
+      .where(eq(onboardingOrders.orderToken, orderToken))
+      .limit(1);
+
+    if (!order) {
+      return error(reply, 'Nie znaleziono zamówienia', 404);
+    }
+
+    return success(reply, {
+      order_token: order.orderToken,
+      nip: order.nip,
+      company_name: order.companyName,
+      email: order.email,
+      status: order.status,
+      completed: order.status === 'completed',
+    }, 'Informacje o zamówieniu');
+  });
+
   // GET /v1/onboarding/pricing - Public pricing catalog for 100k.rycos.eu/go
   fastify.get('/v1/onboarding/pricing', async (_req, reply) => {
     await ensureOnboardingTables();
@@ -129,9 +182,6 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
     if (!email || !email.includes('@')) {
       return validationError(reply, { email: 'Poprawny adres e-mail jest wymagany' });
     }
-    if (!password || password.length < 6) {
-      return validationError(reply, { password: 'Hasło administratora musi mieć minimum 6 znaków' });
-    }
 
     const plan = {
       platform_100k: body.plan?.platform_100k !== false ? 1 : 0,
@@ -160,7 +210,10 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
     const grossAmountGrosze = totalGrossPln * 100;
 
     const orderToken = `ob_${Date.now()}_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-    const adminPasswordHash = await hashPassword(password);
+    // Hash password if provided now, otherwise placeholder hash until step 3
+    const adminPasswordHash = password && password.length >= 6
+      ? await hashPassword(password)
+      : 'pending_set_password';
 
     // Initialize Saferpay payment
     const returnUrl = `${env.PUBLIC_CUSTOMER_URL}/go/success?order_token=${orderToken}`;
@@ -224,6 +277,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
     const db = getDatabase();
     const body = (req.body ?? {}) as any;
     const orderToken = String(body.order_token || body.orderToken || '').trim();
+    const newPassword = String(body.password || '').trim();
 
     if (!orderToken) {
       return validationError(reply, { order_token: 'order_token is required' });
@@ -237,6 +291,18 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
 
     if (!order) {
       return error(reply, 'Nie znaleziono zamówienia onboardingowego', 404);
+    }
+
+    // Determine final password hash: from body if provided, or from order if already set
+    let finalPasswordHash = order.adminPasswordHash;
+    if (newPassword && newPassword.length >= 6) {
+      finalPasswordHash = await hashPassword(newPassword);
+      await db
+        .update(onboardingOrders)
+        .set({ adminPasswordHash: finalPasswordHash })
+        .where(eq(onboardingOrders.id, order.id));
+    } else if (order.adminPasswordHash === 'pending_set_password') {
+      return validationError(reply, { password: 'Hasło administratora musi mieć minimum 6 znaków' });
     }
 
     // If already completed, generate new login token and redirect
@@ -406,7 +472,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         id: userId,
         companyId: newCompany.id,
         email: order.email,
-        passwordHash: order.adminPasswordHash,
+        passwordHash: finalPasswordHash,
         name: order.companyName,
         role: 'admin',
         isActive: true,
