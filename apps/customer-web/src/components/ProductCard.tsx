@@ -16,7 +16,7 @@ export function ProductCard({ product, onSelect }: ProductCardProps) {
       className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-xs sm:shadow-sm border border-slate-100 flex gap-3.5 sm:gap-4 cursor-pointer active:scale-[0.98] transition-transform hover:shadow-md w-full min-w-0"
     >
       {/* Product Image / Placeholder */}
-      <div className="w-22 h-22 sm:w-24 sm:h-24 rounded-2xl bg-slate-100 shrink-0 relative overflow-hidden flex items-center justify-center">
+      <div className="w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-2xl bg-slate-100 shrink-0 relative overflow-hidden flex items-center justify-center">
         {product.imageUrl ? (
           <img
             src={product.imageUrl}
