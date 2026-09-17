@@ -37,10 +37,24 @@ interface KdsOrder {
   isZeroPrep?: boolean;
 }
 
-const getWsBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
-  const apiBase = getApiBaseUrl();
-  return apiBase.replace(/^http/, 'ws') + '/v1/ws';
+const getWsBaseUrl = (companyId?: number, terminalId?: string) => {
+  let base = process.env.NEXT_PUBLIC_WS_URL;
+  if (!base) {
+    const apiBase = getApiBaseUrl();
+    base = apiBase.replace(/^http/, 'ws') + '/v1/ws';
+  }
+  try {
+    const url = new URL(base);
+    if (companyId) url.searchParams.set('companyId', String(companyId));
+    if (terminalId) url.searchParams.set('terminalId', terminalId);
+    return url.toString();
+  } catch {
+    const sep = base.includes('?') ? '&' : '?';
+    const params = [];
+    if (companyId) params.push(`companyId=${companyId}`);
+    if (terminalId) params.push(`terminalId=${encodeURIComponent(terminalId)}`);
+    return params.length > 0 ? `${base}${sep}${params.join('&')}` : base;
+  }
 };
 
 function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }) {
@@ -166,11 +180,12 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
   // Fetch initial orders
   const loadOrders = async () => {
     try {
-      const companyId = terminal?.company_id || 1;
+      const companyId = terminal?.company_id || initialTerminal?.company_id || 1;
+      const termId = terminal?.terminal_id || initialTerminal?.terminal_id;
       const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders?limit=100`, {
         headers: {
           'x-company-id': String(companyId),
-          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...(termId ? { 'x-terminal-id': termId } : {}),
         },
       });
       if (res.ok) {
@@ -180,6 +195,8 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
           ['paid', 'in_progress', 'ready_to_collect', 'preparing', 'ready_for_pickup', 'completed'].includes(o.status)
         );
         setOrders(relevant);
+      } else {
+        console.warn('Failed to load KDS orders, status:', res.status, res.statusText);
       }
     } catch (e) {
       console.warn('Failed to load KDS orders:', e);
@@ -192,20 +209,23 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
     loadOrders();
     const pollInterval = setInterval(loadOrders, 10000); // Poll backup every 10s
     return () => clearInterval(pollInterval);
-  }, [terminal?.company_id]);
+  }, [terminal?.company_id, terminal?.terminal_id, initialTerminal?.company_id, initialTerminal?.terminal_id]);
 
   // Connect WebSocket
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimeout: any;
+    let isMounted = true;
 
     const connect = () => {
       try {
-        ws = new WebSocket(getWsBaseUrl());
+        const companyId = terminal?.company_id || initialTerminal?.company_id || 1;
+        const termId = terminal?.terminal_id || initialTerminal?.terminal_id;
+        ws = new WebSocket(getWsBaseUrl(companyId, termId));
         wsRef.current = ws;
 
         ws.onopen = () => {
-          setIsConnected(true);
+          if (isMounted) setIsConnected(true);
         };
 
         ws.onmessage = (event) => {
@@ -234,25 +254,30 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
         };
 
         ws.onclose = () => {
-          setIsConnected(false);
-          reconnectTimeout = setTimeout(connect, 3000);
+          if (isMounted) {
+            setIsConnected(false);
+            reconnectTimeout = setTimeout(connect, 3000);
+          }
         };
 
         ws.onerror = () => {
           ws.close();
         };
       } catch {
-        reconnectTimeout = setTimeout(connect, 3000);
+        if (isMounted) {
+          reconnectTimeout = setTimeout(connect, 3000);
+        }
       }
     };
 
     connect();
 
     return () => {
+      isMounted = false;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [soundEnabled]);
+  }, [soundEnabled, terminal?.company_id, terminal?.terminal_id, initialTerminal?.company_id, initialTerminal?.terminal_id]);
 
   // Status Change
   const updateStatus = async (orderId: string, nextStatus: string) => {

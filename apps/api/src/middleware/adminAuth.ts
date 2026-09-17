@@ -83,8 +83,69 @@ export function resolveUser(req: FastifyRequest): AuthUser | null {
   return null;
 }
 
+export async function resolveTerminalUser(req: FastifyRequest): Promise<AuthUser | null> {
+  const terminalIdHeader = req.headers['x-terminal-id'];
+  if (!terminalIdHeader || Array.isArray(terminalIdHeader)) return null;
+  const cleanTermId = terminalIdHeader.trim();
+  if (!cleanTermId) return null;
+
+  try {
+    const { getDatabase, terminals, eq, and, sql } = await import('@rycos/database');
+    const db = getDatabase();
+
+    const companyIdHeader = req.headers['x-company-id'];
+    const companyId = companyIdHeader ? parseInt(String(companyIdHeader), 10) : undefined;
+
+    const [term] = await db
+      .select()
+      .from(terminals)
+      .where(
+        companyId && !isNaN(companyId)
+          ? and(sql`lower(${terminals.terminalId}) = lower(${cleanTermId})`, eq(terminals.companyId, companyId))
+          : sql`lower(${terminals.terminalId}) = lower(${cleanTermId})`
+      )
+      .limit(1);
+
+    if (term && term.status !== 'archived' && term.status !== 'inactive') {
+      return {
+        id: `terminal-${term.terminalId}`,
+        name: term.name,
+        company_id: term.companyId,
+        location_id: term.locationId,
+        role: term.role || 'staff',
+        terminal_id: term.terminalId,
+      };
+    }
+
+    // Fallback if terminal is registered for this company
+    if (!term && companyId && !isNaN(companyId)) {
+      const [anyTerm] = await db
+        .select()
+        .from(terminals)
+        .where(and(eq(terminals.companyId, companyId), eq(terminals.status, 'active')))
+        .limit(1);
+
+      if (anyTerm) {
+        return {
+          id: `terminal-${cleanTermId}`,
+          name: anyTerm.name,
+          company_id: companyId,
+          role: anyTerm.role || 'staff',
+          terminal_id: cleanTermId,
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Failed to resolve terminal user:', err);
+  }
+  return null;
+}
+
 export async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
-  const user = resolveUser(req);
+  let user = resolveUser(req);
+  if (!user) {
+    user = await resolveTerminalUser(req);
+  }
   if (!user) {
     return unauthorized(reply, 'Brak autoryzacji do panelu administracyjnego');
   }
