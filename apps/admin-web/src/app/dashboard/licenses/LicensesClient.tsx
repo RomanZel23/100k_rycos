@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
 import {
   generatePairingPinAction,
@@ -109,6 +110,7 @@ const TIER_LABELS: Record<string, { label: string; bg: string; text: string; des
 };
 
 export function LicensesClient({ data }: { data: LicensingData }) {
+  const router = useRouter();
   const [loadingSeatId, setLoadingSeatId] = useState<string | null>(null);
   const [pinModal, setPinModal] = useState<{ pin: string; expiresAt: string; seatId: string; qrUrl?: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -119,8 +121,22 @@ export function LicensesClient({ data }: { data: LicensingData }) {
   const [inputToken, setInputToken] = useState('');
   const [savingToken, setSavingToken] = useState(false);
   const [refreshingLicense, setRefreshingLicense] = useState(false);
+  const [isRefreshingOverview, setIsRefreshingOverview] = useState(false);
 
   const { company, integrator, server_license } = data;
+
+  const handleRefreshOverview = async () => {
+    setIsRefreshingOverview(true);
+    setActionError(null);
+    try {
+      await refreshLicensesAction();
+      router.refresh();
+    } catch (err: any) {
+      setActionError(err.message || 'Nie udało się odświeżyć licencji');
+    } finally {
+      setIsRefreshingOverview(false);
+    }
+  };
 
   const handleSaveToken = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,6 +146,7 @@ export function LicensesClient({ data }: { data: LicensingData }) {
       await updateLicenseTokenAction(inputToken);
       setTokenModalOpen(false);
       setInputToken('');
+      router.refresh();
     } catch (err: any) {
       setActionError(err.message || 'Nie udało się zapisać tokenu');
     } finally {
@@ -142,6 +159,7 @@ export function LicensesClient({ data }: { data: LicensingData }) {
     setActionError(null);
     try {
       await refreshLicenseStatusAction();
+      router.refresh();
     } catch (err: any) {
       setActionError(err.message || 'Nie udało się odświeżyć statusu licencji');
     } finally {
@@ -341,10 +359,11 @@ export function LicensesClient({ data }: { data: LicensingData }) {
             <p className="mt-0.5 text-xs text-amber-700">{actionError || integrator.error}</p>
           </div>
           <button
-            onClick={() => refreshLicensesAction()}
-            className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-200 transition"
+            onClick={handleRefreshOverview}
+            disabled={isRefreshingOverview}
+            className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-200 transition disabled:opacity-50"
           >
-            Odśwież
+            {isRefreshingOverview ? 'Odświeżanie...' : 'Odśwież'}
           </button>
         </div>
       )}
@@ -386,10 +405,12 @@ export function LicensesClient({ data }: { data: LicensingData }) {
             </p>
           </div>
           <button
-            onClick={() => refreshLicensesAction()}
-            className="btn-secondary text-xs py-1.5 px-3"
+            onClick={handleRefreshOverview}
+            disabled={isRefreshingOverview}
+            className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5 disabled:opacity-50"
           >
-            ↻ Odśwież status
+            <span className={isRefreshingOverview ? 'animate-spin inline-block' : ''}>↻</span>
+            <span>{isRefreshingOverview ? 'Odświeżanie...' : 'Odśwież status'}</span>
           </button>
         </div>
 
