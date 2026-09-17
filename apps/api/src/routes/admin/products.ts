@@ -252,7 +252,7 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     const isAvailable = body.isAvailable !== undefined ? Boolean(body.isAvailable) : body.is_available !== undefined ? Boolean(body.is_available) : true;
     const isAgeRestricted = body.isAgeRestricted !== undefined ? Boolean(body.isAgeRestricted) : body.is_age_restricted !== undefined ? Boolean(body.is_age_restricted) : false;
     const rawPrep = body.prepTimeMinutes ?? body.prep_time ?? body.prepTime;
-    const prepTimeMinutes = rawPrep !== undefined && rawPrep !== null && rawPrep !== '' ? parseInt(String(rawPrep), 10) : 10;
+    const prepTimeMinutes = rawPrep !== undefined && rawPrep !== null && rawPrep !== '' ? parseInt(String(rawPrep), 10) : null;
     
     let categoryId: number | null = null;
     const catInput = body.category_names ?? body.category_name ?? body.categoryNames;
@@ -375,8 +375,8 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       updateData.ptuCode = tr === 8 ? 'b' : tr === 5 ? 'c' : tr === 0 ? 'd' : 'a';
     }
     const rawPrep = body.prepTimeMinutes ?? body.prep_time ?? body.prepTime;
-    if (rawPrep !== undefined && rawPrep !== null && rawPrep !== '') {
-      updateData.prepTimeMinutes = parseInt(String(rawPrep), 10);
+    if (rawPrep !== undefined) {
+      updateData.prepTimeMinutes = rawPrep !== null && rawPrep !== '' ? parseInt(String(rawPrep), 10) : null;
     }
     if (body.barcode !== undefined || body.sku !== undefined) {
       updateData.barcode = body.barcode ?? body.sku;

@@ -1,6 +1,6 @@
 import { getDatabase, orders, companyPaymentGateways, eq, and } from '@rycos/database';
 import { InitiatePaymentRequest, InitiatePaymentResponse } from '@rycos/shared';
-import { updateOrderStatus } from './orderEngine.js';
+import { updateOrderStatus, isZeroPrepOrder } from './orderEngine.js';
 import { initializePaymentPage, assertPaymentPage, captureTransaction, SaferpayCredentials } from './saferpayClient.js';
 import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
 import { getRedis } from '../config/redis.js';
@@ -58,11 +58,14 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
 
   // Płatność gotówką / przy kasie
   if (input.method === 'cash') {
+    const isZeroPrep = await isZeroPrepOrder(order.id, db);
+    const targetStatus = isZeroPrep ? 'ready_to_collect' : 'in_progress';
+
     const [updatedOrder] = await db
       .update(orders)
       .set({
         paymentMethod: 'cash',
-        status: 'in_progress', // Przekaż zamówienie do kuchni / realizacji
+        status: targetStatus,
         updatedAt: new Date(),
       })
       .where(eq(orders.id, order.id))
@@ -75,7 +78,7 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
         data: {
           orderId: order.id,
           orderNumber: order.orderNumber,
-          status: 'in_progress',
+          status: targetStatus,
           paymentStatus: 'pending',
           paymentMethod: 'cash',
         },
@@ -85,7 +88,7 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
         type: 'order.status_updated',
         data: {
           orderId: order.id,
-          status: 'in_progress',
+          status: targetStatus,
           paymentStatus: 'pending',
           paymentMethod: 'cash',
         },
@@ -98,7 +101,9 @@ export async function processPayment(input: InitiatePaymentRequest): Promise<Ini
       success: true,
       paymentId: order.id,
       status: 'pending_user_action',
-      message: 'Zamówienie przekazane do realizacji w kuchni. Płatność przy odbiorze.',
+      message: isZeroPrep
+        ? 'Zamówienie natychmiast gotowe do odbioru przy kasie/barze. Płatność przy odbiorze.'
+        : 'Zamówienie przekazane do realizacji w kuchni. Płatność przy odbiorze.',
     };
   }
 

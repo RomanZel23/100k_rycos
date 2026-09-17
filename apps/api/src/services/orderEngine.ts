@@ -105,8 +105,17 @@ export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeade
     );
     const nextOrderNumber = Number(seqResult[0]?.next_order_number || 1);
 
-    const initialStatus: OrderStatus = input.paymentMethod === 'cash' ? 'in_progress' : 'pending_payment';
-    const initialPaymentStatus = input.paymentMethod === 'cash' ? 'pending' : 'pending';
+    const isZeroPrep =
+      verifiedItems.length > 0 &&
+      !dbProducts.some(
+        (p) => p.prepTimeMinutes !== null && p.prepTimeMinutes !== undefined && p.prepTimeMinutes > 0
+      );
+
+    let initialStatus: OrderStatus = input.paymentMethod === 'cash' ? 'in_progress' : 'pending_payment';
+    if (input.paymentMethod === 'cash' && isZeroPrep) {
+      initialStatus = 'ready_to_collect';
+    }
+    const initialPaymentStatus = 'pending';
 
     // Insert Order
     const [newOrder] = await tx
@@ -237,6 +246,31 @@ export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeade
   return { order: orderDetail, isDuplicate: false };
 }
 
+/**
+ * Check whether all items in an order have empty (null/undefined) or zero prep time.
+ * If all items have empty or 0 prep time (e.g. bottled beverages, pre-packaged goods),
+ * the order is deemed zero-prep and can skip kitchen preparation directly to 'ready_to_collect'.
+ */
+export async function isZeroPrepOrder(orderId: string, dbInstance?: any): Promise<boolean> {
+  const db = dbInstance ? (dbInstance as ReturnType<typeof getDatabase>) : getDatabase();
+  const itemsWithProducts = await db
+    .select({
+      productId: orderItems.productId,
+      prepTimeMinutes: products.prepTimeMinutes,
+    })
+    .from(orderItems)
+    .leftJoin(products, eq(orderItems.productId, products.id))
+    .where(eq(orderItems.orderId, orderId));
+
+  if (!itemsWithProducts.length) return false;
+
+  const hasPrepItem = itemsWithProducts.some(
+    (it: { prepTimeMinutes: number | null }) => it.prepTimeMinutes !== null && it.prepTimeMinutes !== undefined && it.prepTimeMinutes > 0
+  );
+
+  return !hasPrepItem;
+}
+
 export async function getOrderById(orderId: string): Promise<OrderDetail | null> {
   const db = getDatabase();
 
@@ -310,12 +344,44 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
 export async function updateOrderStatus(orderId: string, newStatus: OrderStatus, reason?: string): Promise<OrderDetail> {
   const db = getDatabase();
 
+  const [currentOrder] = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      companyId: orders.companyId,
+      brandId: orders.brandId,
+      orderNumber: orders.orderNumber,
+      collectionPin: orders.collectionPin,
+      paymentStatus: orders.paymentStatus,
+      fiscalStatus: orders.fiscalStatus,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!currentOrder) {
+    throw new Error(`Order ${orderId} not found`);
+  }
+
+  let effectiveStatus = newStatus;
+  // If order is transitioning to 'paid' or 'in_progress', and was not yet completed/ready,
+  // check if all items have zero/empty prep time (e.g. bottled beverages, snacks).
+  if (
+    (newStatus === 'paid' || newStatus === 'in_progress') &&
+    (currentOrder.status === 'pending_payment' || currentOrder.status === 'paid')
+  ) {
+    const isZeroPrep = await isZeroPrepOrder(orderId, db);
+    if (isZeroPrep) {
+      effectiveStatus = 'ready_to_collect';
+    }
+  }
+
   const updateFields: Record<string, any> = {
-    status: newStatus,
+    status: effectiveStatus,
     updatedAt: new Date(),
   };
 
-  // If status is updated to 'paid', ensure paymentStatus is also 'paid' (unless already confirmed)
+  // If status is updated to 'paid' (or auto-promoted from 'paid' to 'ready_to_collect'), ensure paymentStatus is also 'paid' (unless already confirmed)
   if (newStatus === 'paid') {
     updateFields.paymentStatus = sql`CASE WHEN ${orders.paymentStatus} = 'confirmed' THEN 'confirmed' ELSE 'paid' END`;
   }
@@ -334,11 +400,12 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus,
   await db.insert(orderEvents).values({
     orderId,
     eventType: 'order.status_updated',
-    payload: { newStatus, reason },
+    payload: { newStatus: effectiveStatus, requestedStatus: newStatus, reason },
   });
 
   // Outbox trigger for fiscalization: strictly ONLY when order is paid and payment is confirmed/paid.
-  // Kitchen readiness (ready_to_collect) MUST NEVER trigger fiscalization!
+  // Kitchen readiness (ready_to_collect) alone MUST NEVER trigger fiscalization,
+  // BUT if this transition was triggered by payment (newStatus === 'paid'), it must trigger fiscalization!
   if (newStatus === 'paid' && (updatedOrder.paymentStatus === 'paid' || updatedOrder.paymentStatus === 'confirmed')) {
     if (updatedOrder.fiscalStatus !== 'issued') {
       await db.insert(outboxEvents).values({
@@ -361,7 +428,7 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus,
     payload: {
       orderId,
       orderNumber: updatedOrder.orderNumber,
-      status: newStatus,
+      status: effectiveStatus,
       collectionPin: updatedOrder.collectionPin,
     },
   });
@@ -375,7 +442,7 @@ export async function updateOrderStatus(orderId: string, newStatus: OrderStatus,
     payload: {
       orderId,
       orderNumber: updatedOrder.orderNumber,
-      status: newStatus,
+      status: effectiveStatus,
       collectionPin: updatedOrder.collectionPin,
     },
   });
@@ -405,11 +472,17 @@ export async function recordOrderPayment(
     throw new Error(`Order ${orderId} not found`);
   }
 
-  // If order was pending_payment, advance to paid.
-  // If order was already in_progress or ready_to_collect, preserve kitchen status.
+  // If order was pending_payment, advance to paid or ready_to_collect if zero-prep.
+  // If order was already in_progress, check if it can be promoted to ready_to_collect if zero-prep.
   let nextStatus = existingOrder.status;
   if (existingOrder.status === 'pending_payment') {
-    nextStatus = 'paid';
+    const isZeroPrep = await isZeroPrepOrder(orderId, db);
+    nextStatus = isZeroPrep ? 'ready_to_collect' : 'paid';
+  } else if (existingOrder.status === 'in_progress') {
+    const isZeroPrep = await isZeroPrepOrder(orderId, db);
+    if (isZeroPrep) {
+      nextStatus = 'ready_to_collect';
+    }
   }
 
   const [updatedOrder] = await db

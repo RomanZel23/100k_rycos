@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, orders, orderItems, brands, eq, and, desc, sql, inArray, gte, lte } from '@rycos/database';
+import { getDatabase, orders, orderItems, products, brands, eq, and, desc, sql, inArray, gte, lte } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { updateOrderStatus, recordOrderPayment } from '../../services/orderEngine.js';
@@ -33,8 +33,18 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
 
     if (orderIds.length > 0) {
       const items = await db
-        .select()
+        .select({
+          id: orderItems.id,
+          orderId: orderItems.orderId,
+          productId: orderItems.productId,
+          name: orderItems.name,
+          quantity: orderItems.quantity,
+          addons: orderItems.addonsJson,
+          specialInstructions: orderItems.specialInstructions,
+          prepTimeMinutes: products.prepTimeMinutes,
+        })
         .from(orderItems)
+        .leftJoin(products, eq(orderItems.productId, products.id))
         .where(inArray(orderItems.orderId, orderIds));
 
       for (const item of items) {
@@ -45,16 +55,27 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
           id: item.id,
           name: item.name,
           quantity: item.quantity,
-          addons: item.addonsJson,
+          addons: item.addons,
           specialInstructions: item.specialInstructions,
+          prepTimeMinutes: item.prepTimeMinutes,
         });
       }
     }
 
-    const rowsWithItems = rows.map((r) => ({
-      ...r,
-      items: itemsByOrderId[r.id] || [],
-    }));
+    const rowsWithItems = rows.map((r) => {
+      const ordItems = itemsByOrderId[r.id] || [];
+      const isZeroPrep =
+        ordItems.length > 0 &&
+        !ordItems.some(
+          (it) => it.prepTimeMinutes !== null && it.prepTimeMinutes !== undefined && it.prepTimeMinutes > 0
+        );
+
+      return {
+        ...r,
+        items: ordItems,
+        isZeroPrep,
+      };
+    });
 
     return success(reply, rowsWithItems, 'Orders retrieved');
   });

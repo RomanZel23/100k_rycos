@@ -34,6 +34,7 @@ interface KdsOrder {
   totalAmount: number | string;
   createdAt: string;
   items: KdsOrderItem[];
+  isZeroPrep?: boolean;
 }
 
 const getWsBaseUrl = () => {
@@ -738,9 +739,17 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
                         <MapPin size={22} className="text-emerald-400 shrink-0" />
                         {order.tableLabel ? `Stolik ${order.tableLabel}` : order.parkingSpot ? `Parking: ${order.parkingSpot}` : 'Na wynos'}
                       </span>
-                      <span className="text-emerald-300 font-black bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 rounded-xl text-xs sm:text-sm">
-                        Czeka na klienta
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {order.isZeroPrep && (
+                          <span className="text-amber-300 font-black bg-amber-500/20 border border-amber-500/40 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1">
+                            <span>⚡</span>
+                            <span>Bez kuchni</span>
+                          </span>
+                        )}
+                        <span className="text-emerald-300 font-black bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 rounded-xl text-xs sm:text-sm">
+                          Czeka na klienta
+                        </span>
+                      </div>
                     </div>
 
                     <div className="space-y-3.5 py-1">

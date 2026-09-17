@@ -33,9 +33,13 @@ function productBody(f: FormData) {
     const v = String(f.get(k) ?? '').trim()
     return v === '' ? undefined : Number(v)
   }
+  const numNullable = (k: string) => {
+    const v = String(f.get(k) ?? '').trim()
+    return v === '' ? null : Number(v)
+  }
   const translations = parseTranslations(f)
   const taxVal = num('tax')
-  const prepVal = num('prep_time')
+  const prepVal = numNullable('prep_time')
   const isAvailable = f.get('is_available') === 'on'
   const isAgeRestricted = f.get('is_age_restricted') === 'on'
 
