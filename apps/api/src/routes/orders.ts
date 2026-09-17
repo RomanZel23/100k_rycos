@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { CreateOrderRequestSchema, UpdateOrderStatusRequestSchema } from '@rycos/shared';
-import { getDatabase, orders, eq, and, desc, sql } from '@rycos/database';
+import { getDatabase, orders, orderItems, eq, and, desc, sql } from '@rycos/database';
 import { createOrder, getOrderById, updateOrderStatus, recordOrderPayment } from '../services/orderEngine.js';
-import { broadcastToStaff } from '../plugins/websocket.js';
+import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
 import { requestTapPayment, cancelTapPayment } from '../services/terminalPaymentService.js';
 import { fiscalizeOrder, printFiscalJob } from '../services/fiscalService.js';
 
@@ -414,6 +414,177 @@ export async function orderRoutes(fastify: FastifyInstance) {
       });
     } catch (err: any) {
       return reply.code(400).send({ error: err.message || 'Nie udało się wydać zamówienia' });
+    }
+  });
+
+  // POST /v1/orders/pickup-challenge - Staff scans QR code -> Backend pushes challenge PIN to customer phone & returns order details to staff
+  fastify.post('/v1/orders/pickup-challenge', async (req, reply) => {
+    const db = getDatabase();
+    let { orderId, orderNumber, qrData, companyId } = (req.body ?? {}) as {
+      orderId?: string;
+      orderNumber?: number | string;
+      qrData?: string;
+      companyId?: number;
+    };
+
+    if (qrData && typeof qrData === 'string') {
+      const raw = qrData.trim();
+      if (raw.startsWith('rycos:pickup:')) {
+        orderId = raw.replace('rycos:pickup:', '').trim();
+      } else if (raw.includes(':')) {
+        const parts = raw.split(':');
+        if (parts[0].length > 10) {
+          orderId = parts[0];
+        } else {
+          orderNumber = parseInt(parts[0], 10);
+        }
+      } else {
+        orderId = raw;
+      }
+    }
+
+    const effectiveCompanyId = companyId || 1;
+
+    let targetOrder = null;
+    if (orderId) {
+      const [o] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.companyId, effectiveCompanyId), eq(orders.id, orderId)))
+        .limit(1);
+      targetOrder = o;
+    } else if (orderNumber && !isNaN(Number(orderNumber))) {
+      const [o] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.companyId, effectiveCompanyId), eq(orders.orderNumber, Number(orderNumber))))
+        .limit(1);
+      targetOrder = o;
+    }
+
+    if (!targetOrder) {
+      return reply.code(404).send({ error: 'Nie znaleziono zamówienia do wydania' });
+    }
+
+    if (targetOrder.status === 'completed') {
+      return reply.code(400).send({
+        error: `⚠️ Zamówienie #${targetOrder.orderNumber} zostało już wcześniej odebrane / wydane!`,
+        alreadyCompleted: true,
+        data: targetOrder,
+      });
+    }
+
+    if (targetOrder.status === 'cancelled') {
+      return reply.code(400).send({
+        error: `⚠️ Zamówienie #${targetOrder.orderNumber} zostało anulowane i nie może zostać wydane!`,
+        cancelled: true,
+      });
+    }
+
+    if (targetOrder.status === 'pending_payment' || targetOrder.paymentStatus === 'pending') {
+      return reply.code(400).send({
+        error: `⚠️ Zamówienie #${targetOrder.orderNumber} nie zostało jeszcze opłacone!`,
+        unpaid: true,
+      });
+    }
+
+    const items = await db
+      .select({
+        id: orderItems.id,
+        name: orderItems.name,
+        quantity: orderItems.quantity,
+        addons: orderItems.addonsJson,
+        specialInstructions: orderItems.specialInstructions,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, targetOrder.id));
+
+    // Push live challenge PIN to customer's order tracker via WebSocket
+    await broadcastToOrder(targetOrder.id, {
+      type: 'pickup.challenge',
+      orderId: targetOrder.id,
+      orderNumber: targetOrder.orderNumber,
+      pin: targetOrder.collectionPin,
+      timestamp: new Date().toISOString(),
+    });
+
+    return reply.send({
+      success: true,
+      challengeActive: true,
+      order: {
+        id: targetOrder.id,
+        orderNumber: targetOrder.orderNumber,
+        orderType: targetOrder.orderType,
+        tableLabel: targetOrder.tableLabel,
+        parkingSpot: targetOrder.parkingSpot,
+        totalAmount: targetOrder.totalAmount,
+        currency: targetOrder.currency,
+        status: targetOrder.status,
+        customerNote: targetOrder.customerNote,
+        items,
+      },
+      message: `Kod QR poprawny! PIN został wygenerowany na telefonie klienta. Zapytaj klienta o PIN.`,
+    });
+  });
+
+  // POST /v1/orders/pickup-confirm - Staff inputs the customer's PIN to finalize handover
+  fastify.post('/v1/orders/pickup-confirm', async (req, reply) => {
+    const db = getDatabase();
+    const { orderId, pin, companyId } = (req.body ?? {}) as {
+      orderId?: string;
+      pin?: string;
+      companyId?: number;
+    };
+
+    if (!orderId || !pin) {
+      return reply.code(400).send({ error: 'orderId oraz pin są wymagane do potwierdzenia odbioru' });
+    }
+
+    const cleanPin = String(pin).trim();
+    const effectiveCompanyId = companyId || 1;
+
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(and(eq(orders.companyId, effectiveCompanyId), eq(orders.id, orderId)))
+      .limit(1);
+
+    if (!order) {
+      return reply.code(404).send({ error: 'Nie znaleziono zamówienia' });
+    }
+
+    if (order.collectionPin !== cleanPin) {
+      return reply.code(400).send({ error: `Nieprawidłowy PIN klienta dla zamówienia #${order.orderNumber}` });
+    }
+
+    if (order.status === 'completed') {
+      return reply.code(400).send({
+        error: `Zamówienie #${order.orderNumber} zostało już wcześniej wydane!`,
+        alreadyCompleted: true,
+      });
+    }
+
+    try {
+      const updated = await updateOrderStatus(order.id, 'completed');
+
+      // Notify customer tracker
+      await broadcastToOrder(order.id, {
+        type: 'order.status_updated',
+        payload: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: 'completed',
+          collectionPin: order.collectionPin,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        message: `Zamówienie #${order.orderNumber} zostało pomyślnie wydane!`,
+        data: updated,
+      });
+    } catch (err: any) {
+      return reply.code(500).send({ error: err.message || 'Błąd finalizacji wydania zamówienia' });
     }
   });
 }

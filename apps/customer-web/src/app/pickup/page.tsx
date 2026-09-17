@@ -39,6 +39,7 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
   const [orderNumberInput, setOrderNumberInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [challengeOrder, setChallengeOrder] = useState<any | null>(null);
   const [successOrder, setSuccessOrder] = useState<any | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [recentPickups, setRecentPickups] = useState<CompletedOrderLog[]>([]);
@@ -162,10 +163,135 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
 
   const handleQrDetected = (qrString: string) => {
     stopCamera();
-    verifyAndComplete({ qrData: qrString });
+    startPickupChallenge(qrString);
   };
 
-  // Verification & order completion call
+  // Step 1: Scan QR -> Request challenge from backend -> reveal PIN on customer's phone
+  const startPickupChallenge = async (qrString: string) => {
+    setLoading(true);
+    setErrorMessage(null);
+    setChallengeOrder(null);
+    setSuccessOrder(null);
+
+    try {
+      const apiBase = getApiBaseUrl();
+      const companyId = terminal?.company_id || initialTerminal?.company_id || 1;
+      const termId = terminal?.terminal_id || initialTerminal?.terminal_id;
+      const payload = { qrData: qrString, companyId };
+
+      let res = await fetch(`${apiBase}/v1/orders/pickup-challenge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-company-id': String(companyId),
+          ...(termId ? { 'x-terminal-id': termId } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        res = await fetch(`${apiBase}/v1/admin/orders/pickup-challenge`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-company-id': String(companyId),
+            ...(termId ? { 'x-terminal-id': termId } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.message || json.error || 'Nie znaleziono zamówienia do wydania');
+      }
+
+      const ord = json.order || json.data?.order || json.data;
+      setChallengeOrder(ord);
+      setPin('');
+      playTone(523.25, 'sine', 0.1);
+      setTimeout(() => playTone(659.25, 'sine', 0.15), 100);
+    } catch (err: any) {
+      playErrorBuzz();
+      setErrorMessage(err.message || 'Błąd odczytu kodu QR');
+      if (activeTab === 'camera') {
+        setTimeout(() => {
+          startCamera();
+        }, 1800);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Staff enters customer's PIN -> Confirm handover
+  const confirmPickupChallenge = async (enteredPin: string) => {
+    if (!challengeOrder) return;
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const apiBase = getApiBaseUrl();
+      const companyId = terminal?.company_id || initialTerminal?.company_id || 1;
+      const termId = terminal?.terminal_id || initialTerminal?.terminal_id;
+      const payload = { orderId: challengeOrder.id, pin: enteredPin, companyId };
+
+      let res = await fetch(`${apiBase}/v1/orders/pickup-confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-company-id': String(companyId),
+          ...(termId ? { 'x-terminal-id': termId } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        res = await fetch(`${apiBase}/v1/admin/orders/pickup-confirm`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-company-id': String(companyId),
+            ...(termId ? { 'x-terminal-id': termId } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.message || json.error || 'Nieprawidłowy kod PIN');
+      }
+
+      playSuccessChime();
+      const completed = json.data || challengeOrder;
+      setSuccessOrder({
+        ...challengeOrder,
+        ...completed,
+      });
+
+      // Add to recent pickups
+      setRecentPickups((prev) => [
+        {
+          orderNumber: challengeOrder.orderNumber,
+          time: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
+          itemsCount: challengeOrder.items?.length || 0,
+        },
+        ...prev.slice(0, 4),
+      ]);
+
+      setChallengeOrder(null);
+      setPin('');
+    } catch (err: any) {
+      playErrorBuzz();
+      setErrorMessage(err.message || 'Nieprawidłowy PIN klienta!');
+      setPin('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Direct PIN verification fallback (manual keypad without camera scan)
   const verifyAndComplete = async (params: { pin?: string; orderNumber?: number; qrData?: string }) => {
     setLoading(true);
     setErrorMessage(null);
@@ -173,7 +299,8 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
 
     try {
       const apiBase = getApiBaseUrl();
-      const companyId = terminal?.company_id || 1;
+      const companyId = terminal?.company_id || initialTerminal?.company_id || 1;
+      const termId = terminal?.terminal_id || initialTerminal?.terminal_id;
       const payload = {
         pin: params.pin,
         orderNumber: params.orderNumber,
@@ -181,13 +308,12 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
         companyId: companyId,
       };
 
-      // Try public verify-pin endpoint first, fallback to admin endpoint
       let res = await fetch(`${apiBase}/v1/orders/verify-pin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
-          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...(termId ? { 'x-terminal-id': termId } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -198,7 +324,7 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
           headers: {
             'Content-Type': 'application/json',
             'x-company-id': String(companyId),
-            ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+            ...(termId ? { 'x-terminal-id': termId } : {}),
           },
           body: JSON.stringify(payload),
         });
@@ -244,10 +370,14 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
       const next = pin + digit;
       setPin(next);
       if (next.length === 4) {
-        verifyAndComplete({
-          pin: next,
-          orderNumber: orderNumberInput ? parseInt(orderNumberInput, 10) : undefined,
-        });
+        if (challengeOrder) {
+          confirmPickupChallenge(next);
+        } else {
+          verifyAndComplete({
+            pin: next,
+            orderNumber: orderNumberInput ? parseInt(orderNumberInput, 10) : undefined,
+          });
+        }
       }
     }
   };
@@ -259,6 +389,7 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
 
   const handleNextScan = () => {
     setSuccessOrder(null);
+    setChallengeOrder(null);
     setErrorMessage(null);
     setPin('');
     setCheckedItems({});
@@ -323,8 +454,128 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
 
       {/* Main Action Area */}
       <main className="flex-1 flex flex-col p-2.5 sm:p-4 max-w-md sm:max-w-lg mx-auto w-full min-h-0 overflow-hidden">
-        {/* Success Confirmation Overlay Card */}
-        {successOrder ? (
+        {/* Step 2: Challenge Order Active -> Input PIN from customer */}
+        {challengeOrder && !successOrder ? (
+          <div className="flex-1 flex flex-col justify-between p-3.5 sm:p-5 bg-neutral-900 border-2 border-amber-500/80 rounded-3xl animate-in zoom-in-95 duration-200 overflow-hidden min-h-0 shadow-2xl">
+            {/* Top Order Header */}
+            <div className="shrink-0 flex flex-col items-center text-center border-b border-neutral-800 pb-2 sm:pb-3">
+              <div className="flex items-center gap-1.5 text-amber-400 font-black text-xs uppercase tracking-widest">
+                <span>📱 Zeskanowano QR klienta</span>
+              </div>
+
+              <div className="text-4xl sm:text-5xl font-black text-white font-mono tracking-tight my-0.5 sm:my-1">
+                #{challengeOrder.orderNumber}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mt-0.5">
+                {challengeOrder.orderType === 'takeaway' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs sm:text-sm font-black uppercase tracking-wide">
+                    <ShoppingBag className="w-3.5 h-3.5" /> NA WYNOS
+                  </span>
+                ) : challengeOrder.orderType === 'dine_in' ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/40 text-xs sm:text-sm font-black uppercase tracking-wide">
+                    <Utensils className="w-3.5 h-3.5" /> NA MIEJSCU
+                  </span>
+                ) : null}
+
+                {challengeOrder.tableLabel && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs sm:text-sm font-black">
+                    <MapPin className="w-3.5 h-3.5" /> Stolik {challengeOrder.tableLabel}
+                  </span>
+                )}
+
+                {challengeOrder.parkingSpot && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-xs sm:text-sm font-black">
+                    <Car className="w-3.5 h-3.5" /> Parking {challengeOrder.parkingSpot}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Instruction Banner */}
+            <div className="my-2 p-2.5 sm:p-3 rounded-2xl bg-amber-950/60 border border-amber-500/50 text-amber-200 text-xs sm:text-sm font-bold flex items-center gap-2">
+              <span className="text-xl">✨</span>
+              <span>PIN pojawił się na telefonie klienta. Wpisz PIN podany przez klienta:</span>
+            </div>
+
+            {/* Error Message if wrong PIN */}
+            {errorMessage && (
+              <div className="mb-2 p-2 sm:p-2.5 rounded-xl bg-red-950/90 border border-red-500 text-red-100 text-xs sm:text-sm font-black flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* 4-Digit Display */}
+            <div className="flex justify-center gap-2 sm:gap-2.5 py-1 shrink-0">
+              {[0, 1, 2, 3].map((idx) => (
+                <div
+                  key={idx}
+                  className={`w-12 h-14 sm:w-14 sm:h-16 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center text-2xl sm:text-3xl font-black font-mono transition-all ${
+                    pin[idx]
+                      ? 'border-emerald-400 bg-emerald-400/20 text-emerald-300 shadow-sm'
+                      : 'border-neutral-700 bg-neutral-850 text-neutral-500'
+                  }`}
+                >
+                  {pin[idx] || '—'}
+                </div>
+              ))}
+            </div>
+
+            {/* Items to prepare / inspect */}
+            <div className="my-1.5 max-h-24 sm:max-h-28 overflow-y-auto bg-neutral-950/60 rounded-xl p-2.5 border border-neutral-800 text-xs space-y-1">
+              <div className="text-[10px] uppercase font-black text-neutral-400 pb-0.5 border-b border-neutral-850">
+                📦 Pozycje zamówienia ({challengeOrder.items?.length || 0}):
+              </div>
+              {challengeOrder.items?.map((it: any, i: number) => (
+                <div key={i} className="flex items-center justify-between text-neutral-200 py-0.5">
+                  <span className="font-bold text-xs sm:text-sm">{it.quantity}x {it.name}</span>
+                  {it.addons && it.addons.length > 0 && (
+                    <span className="text-amber-300/90 text-[11px] truncate max-w-[150px]">
+                      +{it.addons.map((a: any) => typeof a === 'string' ? a : a.name).join(', ')}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Numeric Keypad */}
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-1 shrink-0">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                <button
+                  key={digit}
+                  onClick={() => handleKeypadPress(digit)}
+                  className="py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-neutral-800 hover:bg-neutral-750 active:scale-95 border border-neutral-700 text-lg sm:text-xl font-bold font-mono text-white transition-all cursor-pointer"
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  setChallengeOrder(null);
+                  setPin('');
+                  setErrorMessage(null);
+                  if (activeTab === 'camera') startCamera();
+                }}
+                className="py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-neutral-800 hover:bg-neutral-750 active:scale-95 border border-neutral-700 text-neutral-400 hover:text-white font-bold text-xs transition-all cursor-pointer"
+              >
+                Anuluj
+              </button>
+              <button
+                onClick={() => handleKeypadPress('0')}
+                className="py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-neutral-800 hover:bg-neutral-750 active:scale-95 border border-neutral-700 text-lg sm:text-xl font-bold font-mono text-white transition-all cursor-pointer"
+              >
+                0
+              </button>
+              <button
+                onClick={handleBackspace}
+                className="py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-neutral-800 hover:bg-neutral-750 active:scale-95 border border-neutral-700 text-neutral-400 hover:text-white font-bold text-lg flex items-center justify-center transition-all cursor-pointer"
+              >
+                ⌫
+              </button>
+            </div>
+          </div>
+        ) : successOrder ? (
           <div className="flex-1 flex flex-col justify-between p-3.5 sm:p-5 bg-emerald-950/30 border-2 border-emerald-500/80 rounded-3xl animate-in zoom-in-95 duration-200 overflow-hidden min-h-0 shadow-2xl">
             {/* Top Order Header */}
             <div className="shrink-0 flex flex-col items-center text-center border-b border-emerald-500/25 pb-2 sm:pb-3">

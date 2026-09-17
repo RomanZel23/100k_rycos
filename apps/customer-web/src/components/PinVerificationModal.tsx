@@ -191,10 +191,57 @@ export function PinVerificationModal({
     animationFrameRef.current = requestAnimationFrame(scanQrLoop);
   };
 
+  // State for 2-step challenge when QR is scanned in modal
+  const [challengeOrder, setChallengeOrder] = useState<any | null>(null);
+
+  // Helper to get auth headers
+  const getAuthHeaders = () => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-company-id': '1',
+    };
+    try {
+      const stored = localStorage.getItem('rycos_terminal');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.companyId) headers['x-company-id'] = String(parsed.companyId);
+        if (parsed.terminalId) headers['x-terminal-id'] = String(parsed.terminalId);
+      }
+    } catch {}
+    return headers;
+  };
+
   // Verify PIN / QR with Backend
   const handleVerify = async (enteredPin?: string, scannedQr?: string) => {
+    // If QR code scanned and we don't have challengeOrder yet:
+    if (scannedQr) {
+      setLoading(true);
+      setErrorMessage(null);
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders/pickup-challenge`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ qrData: scannedQr }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.message || json.error || 'Nieprawidłowy kod QR');
+        }
+        playSuccessChime();
+        setChallengeOrder(json.data);
+        setActiveTab('pin');
+        setPin('');
+      } catch (err: any) {
+        playErrorBuzz();
+        setErrorMessage(err.message || 'Błąd odczytu kodu QR');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     const pinToSubmit = (enteredPin ?? pin).trim();
-    if (!pinToSubmit && !scannedQr) {
+    if (!pinToSubmit) {
       setErrorMessage('Wprowadź 4-cyfrowy PIN');
       return;
     }
@@ -203,19 +250,24 @@ export function PinVerificationModal({
     setErrorMessage(null);
 
     try {
-      const payload: any = {
-        pin: pinToSubmit,
-        orderId: targetOrder?.id,
-        orderNumber: targetOrder ? targetOrder.orderNumber : orderNumberInput ? Number(orderNumberInput) : undefined,
-        qrData: scannedQr,
-      };
+      const endpoint = challengeOrder
+        ? `${getApiBaseUrl()}/v1/admin/orders/pickup-confirm`
+        : `${getApiBaseUrl()}/v1/admin/orders/verify-pin`;
 
-      const res = await fetch(`${getApiBaseUrl()}/v1/admin/orders/verify-pin`, {
+      const payload: any = challengeOrder
+        ? {
+            orderId: challengeOrder.id,
+            pin: pinToSubmit,
+          }
+        : {
+            pin: pinToSubmit,
+            orderId: targetOrder?.id,
+            orderNumber: targetOrder ? targetOrder.orderNumber : orderNumberInput ? Number(orderNumberInput) : undefined,
+          };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-company-id': '1',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payload),
       });
 

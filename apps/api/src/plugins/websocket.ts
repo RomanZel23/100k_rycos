@@ -126,7 +126,7 @@ export async function broadcastToStaff(companyId: number, event: WSEvent) {
   }
 }
 
-export async function broadcastToOrder(orderId: string, event: WSEvent) {
+export async function broadcastToOrder(orderId: string, event: WSEvent | any) {
   deliverToOrderLocally(orderId, event);
   if (redisPublisher && redisPublisher.status === 'ready') {
     await redisPublisher.publish(WS_CHANNEL_ORDER, JSON.stringify({ orderId, event }));

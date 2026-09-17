@@ -4,6 +4,7 @@ import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { updateOrderStatus, recordOrderPayment } from '../../services/orderEngine.js';
 import { fiscalizeOrder } from '../../services/fiscalService.js';
+import { broadcastToOrder, broadcastToStaff } from '../../plugins/websocket.js';
 
 export async function adminOrdersRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -241,6 +242,160 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
       return success(reply, updated, `Zamówienie #${targetOrder.orderNumber} zostało pomyślnie wydane!`);
     } catch (err: any) {
       return error(reply, err.message || 'Nie udało się wydać zamówienia');
+    }
+  });
+
+  // POST /v1/admin/orders/pickup-challenge - Staff scans QR code -> Backend pushes challenge PIN to customer phone & returns order items
+  fastify.post('/v1/admin/orders/pickup-challenge', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    let { orderId, orderNumber, qrData } = (req.body ?? {}) as {
+      orderId?: string;
+      orderNumber?: number | string;
+      qrData?: string;
+    };
+
+    if (qrData && typeof qrData === 'string') {
+      const raw = qrData.trim();
+      if (raw.startsWith('rycos:pickup:')) {
+        orderId = raw.replace('rycos:pickup:', '').trim();
+      } else if (raw.includes(':')) {
+        const parts = raw.split(':');
+        if (parts[0].length > 10) {
+          orderId = parts[0];
+        } else {
+          orderNumber = parseInt(parts[0], 10);
+        }
+      } else {
+        orderId = raw;
+      }
+    }
+
+    let targetOrder = null;
+    if (orderId) {
+      const [o] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.companyId, companyId), eq(orders.id, orderId)))
+        .limit(1);
+      targetOrder = o;
+    } else if (orderNumber && !isNaN(Number(orderNumber))) {
+      const [o] = await db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.companyId, companyId), eq(orders.orderNumber, Number(orderNumber))))
+        .limit(1);
+      targetOrder = o;
+    }
+
+    if (!targetOrder) {
+      return error(reply, 'Nie znaleziono zamówienia do wydania', 404);
+    }
+
+    if (targetOrder.status === 'completed') {
+      return error(
+        reply,
+        `⚠️ Zamówienie #${targetOrder.orderNumber} zostało już wcześniej odebrane / wydane!`,
+        400,
+        { alreadyCompleted: true, data: targetOrder }
+      );
+    }
+
+    if (targetOrder.status === 'cancelled') {
+      return error(reply, `⚠️ Zamówienie #${targetOrder.orderNumber} zostało anulowane i nie może zostać wydane!`, 400);
+    }
+
+    if (targetOrder.status === 'pending_payment' || targetOrder.paymentStatus === 'pending') {
+      return error(reply, `⚠️ Zamówienie #${targetOrder.orderNumber} nie zostało jeszcze opłacone!`, 400);
+    }
+
+    const items = await db
+      .select({
+        id: orderItems.id,
+        name: orderItems.name,
+        quantity: orderItems.quantity,
+        addons: orderItems.addonsJson,
+        specialInstructions: orderItems.specialInstructions,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, targetOrder.id));
+
+    // Push live challenge PIN to customer's order tracker via WebSocket
+    await broadcastToOrder(targetOrder.id, {
+      type: 'pickup.challenge',
+      orderId: targetOrder.id,
+      orderNumber: targetOrder.orderNumber,
+      pin: targetOrder.collectionPin,
+      timestamp: new Date().toISOString(),
+    });
+
+    return success(reply, {
+      challengeActive: true,
+      order: {
+        id: targetOrder.id,
+        orderNumber: targetOrder.orderNumber,
+        orderType: targetOrder.orderType,
+        tableLabel: targetOrder.tableLabel,
+        parkingSpot: targetOrder.parkingSpot,
+        totalAmount: targetOrder.totalAmount,
+        currency: targetOrder.currency,
+        status: targetOrder.status,
+        customerNote: targetOrder.customerNote,
+        items,
+      },
+    }, `Kod QR poprawny! PIN został wygenerowany na telefonie klienta.`);
+  });
+
+  // POST /v1/admin/orders/pickup-confirm - Staff inputs the customer's PIN to finalize handover
+  fastify.post('/v1/admin/orders/pickup-confirm', async (req, reply) => {
+    const db = getDatabase();
+    const companyId = getCompanyId(req);
+    const { orderId, pin } = (req.body ?? {}) as {
+      orderId?: string;
+      pin?: string;
+    };
+
+    if (!orderId || !pin) {
+      return validationError(reply, { pin: 'orderId oraz pin są wymagane do potwierdzenia odbioru' });
+    }
+
+    const cleanPin = String(pin).trim();
+
+    const [order] = await db
+      .select()
+      .from(orders)
+      .where(and(eq(orders.companyId, companyId), eq(orders.id, orderId)))
+      .limit(1);
+
+    if (!order) {
+      return error(reply, 'Nie znaleziono zamówienia', 404);
+    }
+
+    if (order.collectionPin !== cleanPin) {
+      return error(reply, `Nieprawidłowy PIN klienta dla zamówienia #${order.orderNumber}`, 400);
+    }
+
+    if (order.status === 'completed') {
+      return error(reply, `Zamówienie #${order.orderNumber} zostało już wcześniej wydane!`, 400);
+    }
+
+    try {
+      const updated = await updateOrderStatus(order.id, 'completed');
+
+      // Notify customer tracker
+      await broadcastToOrder(order.id, {
+        type: 'order.status_updated',
+        payload: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: 'completed',
+          collectionPin: order.collectionPin,
+        },
+      });
+
+      return success(reply, updated, `Zamówienie #${order.orderNumber} zostało pomyślnie wydane!`);
+    } catch (err: any) {
+      return error(reply, err.message || 'Błąd finalizacji wydania zamówienia');
     }
   });
 

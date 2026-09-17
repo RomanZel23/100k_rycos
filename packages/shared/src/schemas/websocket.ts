@@ -6,6 +6,7 @@ export const WSEventTypeSchema = z.enum([
   'order.status_updated',
   'order.fiscalized',
   'order.pin_verified',
+  'pickup.challenge',
   'catalog.updated',
   'device.status',
 ]);

@@ -39,10 +39,26 @@ function OrderTrackingContent() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [receiptQrDataUrl, setReceiptQrDataUrl] = useState<string | null>(null);
 
-  // Generate collection QR code
+  // 2-Factor Live Handover: PIN is hidden until staff scans the QR code at pickup
+  const [revealedPin, setRevealedPin] = useState<string | null>(null);
+  const [isChallengeActive, setIsChallengeActive] = useState<boolean>(false);
+  const [liveSeconds, setLiveSeconds] = useState<string>('');
+
+  // Live ticking clock for anti-screenshot dynamic verification
   useEffect(() => {
-    if (order?.orderNumber && order?.collectionPin) {
-      const qrPayload = `${order.orderNumber}:${order.collectionPin}`;
+    const updateSec = () => {
+      const now = new Date();
+      setLiveSeconds(now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    };
+    updateSec();
+    const iv = setInterval(updateSec, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // Generate collection QR code (encodes order ID token, NOT the PIN)
+  useEffect(() => {
+    if (order?.id) {
+      const qrPayload = `rycos:pickup:${order.id}`;
       QRCode.toDataURL(qrPayload, {
         width: 260,
         margin: 1,
@@ -54,7 +70,7 @@ function OrderTrackingContent() {
         .then(setQrDataUrl)
         .catch(console.error);
     }
-  }, [order?.orderNumber, order?.collectionPin]);
+  }, [order?.id]);
 
   // Generate e-receipt QR code (controlled by show_receipt_qr feature)
   useEffect(() => {
@@ -113,10 +129,24 @@ function OrderTrackingContent() {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === 'order.status_updated') {
+          if (message.type === 'pickup.challenge') {
+            setIsChallengeActive(true);
+            const pinToReveal = message.pin || message.payload?.pin;
+            if (pinToReveal) {
+              setRevealedPin(pinToReveal);
+            }
+            try {
+              if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                navigator.vibrate([150, 100, 150]);
+              }
+            } catch {}
+          } else if (message.type === 'order.status_updated') {
             const nextStatus = message.payload.status;
             setOrder((prev) => (prev ? { ...prev, status: nextStatus } : null));
             updateStoredOrderStatus(orderId, nextStatus);
+            if (nextStatus === 'completed') {
+              setIsChallengeActive(false);
+            }
           } else if (message.type === 'order.fiscalized') {
             setOrder((prev) =>
               prev
@@ -258,19 +288,33 @@ function OrderTrackingContent() {
         </span>
         <h1 className="text-3xl sm:text-4xl font-black mt-1.5">{t.orderWord} #{order.orderNumber}</h1>
 
-        {/* Collection QR Code & PIN Card */}
-        <div className="mt-5 p-5 rounded-3xl bg-white text-slate-900 shadow-xl max-w-xs mx-auto border border-slate-100">
-          <div className="flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black uppercase tracking-wider text-amber-600 mb-2.5">
-            <QrCode size={18} />
-            <span>{t.pickupPinLabel}</span>
+        {/* Collection QR Code & Dynamic 2FA PIN Card */}
+        <div 
+          onContextMenu={(e) => e.preventDefault()}
+          className="mt-5 p-5 rounded-3xl bg-white text-slate-900 shadow-xl max-w-xs mx-auto border border-slate-100 select-none relative overflow-hidden"
+        >
+          {/* Dynamic Anti-Screenshot Live Header */}
+          <div className="flex items-center justify-between gap-1.5 text-xs font-black uppercase tracking-wider mb-2.5">
+            <div className="flex items-center gap-1.5 text-amber-600">
+              <QrCode size={18} />
+              <span>{t.pickupPinLabel}</span>
+            </div>
+            {liveSeconds && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                <span>LIVE {liveSeconds}</span>
+              </div>
+            )}
           </div>
 
+          {/* QR Code Container */}
           {qrDataUrl ? (
-            <div className="bg-white p-2.5 rounded-2xl border border-slate-200 inline-block shadow-sm">
+            <div className="bg-white p-2.5 rounded-2xl border-2 border-slate-200 inline-block shadow-sm relative pointer-events-none">
               <img
                 src={qrDataUrl}
                 alt="QR Kod Odbioru"
-                className="w-52 h-52 mx-auto rounded-xl object-contain"
+                draggable={false}
+                className="w-52 h-52 mx-auto rounded-xl object-contain select-none"
               />
             </div>
           ) : (
@@ -279,17 +323,35 @@ function OrderTrackingContent() {
             </div>
           )}
 
+          {/* PIN Section - Hidden initially, revealed when staff scans QR code */}
           <div className="mt-3.5 pt-3 border-t border-slate-100">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
-              {t.pin}:
-            </span>
-            <span className="text-5xl sm:text-6xl font-mono font-black text-slate-950 tracking-widest block mt-0.5">
-              {order.collectionPin}
-            </span>
+            {revealedPin ? (
+              <div className="p-3 bg-emerald-50 border-2 border-emerald-500 rounded-2xl animate-in zoom-in-95 duration-200 space-y-1">
+                <span className="text-xs font-black text-emerald-800 uppercase tracking-wider block">
+                  🔢 Twój PIN do odbioru:
+                </span>
+                <span className="text-5xl sm:text-6xl font-mono font-black text-emerald-950 tracking-widest block mt-0.5">
+                  {revealedPin}
+                </span>
+                <p className="text-xs text-emerald-800 font-black mt-1">
+                  👉 Podaj ten kod obsłudze przy ladzie!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5 py-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-black">
+                  <span>🔒</span>
+                  <span>PIN zabezpieczony</span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed px-1">
+                  Pokaż ten kod QR obsłudze przy wydawce. Twój jednorazowy PIN pojawi się tutaj automatycznie po zeskanowaniu.
+                </p>
+                <div className="text-xl font-mono font-bold text-slate-300 tracking-widest pt-0.5">
+                  • • • •
+                </div>
+              </div>
+            )}
           </div>
-          <p className="text-xs text-slate-500 mt-2 font-medium">
-            {t.pickupPinSub}
-          </p>
         </div>
 
         {isReady ? (
