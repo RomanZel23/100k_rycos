@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS "locations" (
 	"company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
 	"name" varchar(255) NOT NULL,
 	"address" text,
+	"tables" jsonb DEFAULT '["1","2","3","4","5","6","7","8","9","10","Bar","Ogródek 1","Ogródek 2"]'::jsonb NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS "brands" (
 	"banner_url" text,
 	"footer_url" text,
 	"allow_pay_at_counter" boolean DEFAULT false NOT NULL,
+	"tables" jsonb,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "brands_slug_unique" UNIQUE("slug")
@@ -342,6 +344,9 @@ ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "config_json" jsonb DEFAULT '{}
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_job_id" varchar(64);
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_qr_code" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
+ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "tables" jsonb DEFAULT '["1","2","3","4","5","6","7","8","9","10","Bar","Ogródek 1","Ogródek 2"]'::jsonb NOT NULL;
+ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "tables" jsonb;
+ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "location_id" integer;
 
 CREATE TABLE IF NOT EXISTS "platform_pricing" (
 	"id" bigserial PRIMARY KEY NOT NULL,
@@ -501,6 +506,9 @@ export async function ensureDatabaseSchema() {
           ALTER TABLE "companies" ADD COLUMN IF NOT EXISTS "license_last_check_at" timestamp;
 
           ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "allow_pay_at_counter" boolean DEFAULT false NOT NULL;
+          ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "tables" jsonb DEFAULT '["1","2","3","4","5","6","7","8","9","10","Bar","Ogródek 1","Ogródek 2"]'::jsonb NOT NULL;
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "tables" jsonb;
+          ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "location_id" integer;
 
           ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_job_id" varchar(128);
           ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_qr_code" text;

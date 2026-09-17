@@ -50,6 +50,8 @@ function parseBrandColors(style: string | null | undefined): { buttonColor: stri
   return { buttonColor: active, buttonTextColor: text, backgroundColor: bg };
 }
 
+const DEFAULT_TABLES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'];
+
 export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
   const db = getDatabase();
   let rows = await db
@@ -67,6 +69,8 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
       locationName: locations.name,
       currency: brands.currency,
       style: brands.style,
+      brandTables: brands.tables,
+      locationTables: locations.tables,
     })
     .from(brands)
     .leftJoin(locations, eq(brands.locationId, locations.id))
@@ -90,6 +94,8 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
         locationName: locations.name,
         currency: brands.currency,
         style: brands.style,
+        brandTables: brands.tables,
+        locationTables: locations.tables,
       })
       .from(brands)
       .leftJoin(locations, eq(brands.locationId, locations.id))
@@ -137,6 +143,12 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
     settingsMap[s.featureKey] = s.isEnabled;
   }
 
+  const resolvedTables = (row.brandTables && Array.isArray(row.brandTables) && row.brandTables.length > 0)
+    ? row.brandTables
+    : (row.locationTables && Array.isArray(row.locationTables) && row.locationTables.length > 0)
+      ? row.locationTables
+      : DEFAULT_TABLES;
+
   return {
     id: row.id,
     companyId: row.companyId,
@@ -150,6 +162,7 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
     isAcceptingOrders: comp ? comp.isAcceptingOrders : true,
     locationId: row.locationId,
     locationName: row.locationName,
+    tables: resolvedTables,
     style: row.style,
     buttonColor: brandColors.buttonColor,
     buttonTextColor: brandColors.buttonTextColor,
@@ -354,6 +367,22 @@ function getTranslated(
 
   const brandColors = parseBrandColors(b.style);
 
+  let locationRow: any = null;
+  if (b.locationId) {
+    try {
+      const locs = await db.select().from(locations).where(eq(locations.id, b.locationId)).limit(1);
+      locationRow = locs[0] || null;
+    } catch (e) {
+      console.warn('[Catalog] Error querying location in getMenuByBrandId:', e);
+    }
+  }
+
+  const resolvedTables = (b.tables && Array.isArray(b.tables) && b.tables.length > 0)
+    ? b.tables
+    : (locationRow?.tables && Array.isArray(locationRow.tables) && locationRow.tables.length > 0)
+      ? locationRow.tables
+      : DEFAULT_TABLES;
+
   const brandInfo: BrandInfo = {
     id: b.id,
     companyId: b.companyId,
@@ -366,7 +395,8 @@ function getTranslated(
     currency: (b as any).currency || 'PLN',
     isAcceptingOrders: comp ? comp.isAcceptingOrders : b.isActive,
     locationId: b.locationId,
-    locationName: null,
+    locationName: locationRow?.name || null,
+    tables: resolvedTables,
     style: b.style ?? null,
     buttonColor: brandColors.buttonColor,
     buttonTextColor: brandColors.buttonTextColor,

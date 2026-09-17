@@ -19,6 +19,9 @@ interface Brand {
   style: string | null
   is_active: boolean
   allow_pay_at_counter?: boolean
+  location_id?: number | null
+  locationId?: number | null
+  tables?: string[] | null
   product_ids: number[]; images: { header: string | null; logo: string | null; footer: string | null }
 }
 
@@ -74,10 +77,11 @@ export default async function EditBrandPage({
   const locale = await getAdminLocale()
   const { id } = await params
   const { error, notice } = await searchParams
-  const [brand, products, company] = await Promise.all([
+  const [brand, products, company, locations] = await Promise.all([
     adminApiData<Brand>(`/brands/${id}`),
     adminApiData<PickerProduct[]>('/products'),
     adminApiData<{ business_type: string }>('/companies'),
+    adminApiData<Array<{ id: number; name: string; tables?: string[] }>>('/locations'),
   ])
   if (!brand) notFound()
   const colors = parseColors(brand.style)
@@ -166,6 +170,49 @@ export default async function EditBrandPage({
                   : 'When enabled, customers can choose to pay at the counter / bar. When disabled, immediate online payment is required.'}
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Location & Tables */}
+        <div className="pt-3 border-t border-neutral-100 space-y-3">
+          <div>
+            <label className="label text-sm font-semibold" htmlFor="location_id">
+              {getTranslation(locale, 'brands.location_label', 'Przypisana lokalizacja (oddział / sala)')}
+            </label>
+            <select
+              id="location_id"
+              name="location_id"
+              defaultValue={String(brand.location_id ?? brand.locationId ?? '')}
+              className="input"
+            >
+              <option value="">{getTranslation(locale, 'brands.location_none', '-- Cała firma / brak przypisania --')}</option>
+              {(locations ?? []).map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-neutral-500">
+              {locale === 'pl'
+                ? 'Stanowisko POS oraz zamówienia tej marki będą powiązane z wybraną lokalizacją i jej zdefiniowanymi stolikami.'
+                : 'POS workstations and orders for this brand will be tied to the selected location and its tables.'}
+            </p>
+          </div>
+
+          <div>
+            <label className="label text-sm font-semibold" htmlFor="tables">
+              {getTranslation(locale, 'brands.tables_override_label', 'Stoliki dla marki (opcjonalne własne)')}
+            </label>
+            <input
+              id="tables"
+              name="tables"
+              defaultValue={Array.isArray(brand.tables) ? brand.tables.join(', ') : ''}
+              placeholder="Pozostaw puste, aby dziedziczyć z lokalizacji (np. 1, 2, 3, Bar, Ogródek 1)"
+              className="input text-sm font-mono"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              {getTranslation(locale, 'brands.tables_override_help', 'Pozostaw puste, aby marka korzystała ze stolików przypisanej lokalizacji.')}
+            </p>
           </div>
         </div>
 

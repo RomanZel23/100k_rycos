@@ -28,6 +28,7 @@ export const locations = pgTable('locations', {
   companyId: integer('company_id').references(() => companies.id, { onDelete: 'cascade' }).notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   address: text('address'),
+  tables: jsonb('tables').$type<string[]>().default(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2']).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -46,6 +47,7 @@ export const brands = pgTable('brands', {
   bannerUrl: text('banner_url'),
   footerUrl: text('footer_url'),
   allowPayAtCounter: boolean('allow_pay_at_counter').default(false).notNull(),
+  tables: jsonb('tables').$type<string[]>(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

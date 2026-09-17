@@ -496,6 +496,19 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
     return success(reply, rows, 'Locations retrieved');
   });
 
+  function parseTablesInput(raw: any): string[] {
+    if (Array.isArray(raw)) {
+      return raw.map((s: any) => String(s).trim()).filter(Boolean);
+    }
+    if (typeof raw === 'string') {
+      return raw
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    return ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'];
+  }
+
   // POST /v1/admin/locations - Create location
   fastify.post('/v1/admin/locations', async (req, reply) => {
     const db = getDatabase();
@@ -507,12 +520,14 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      const tables = body.tables !== undefined ? parseTablesInput(body.tables) : undefined;
       const [inserted] = await db
         .insert(locations)
         .values({
           companyId,
           name: String(body.name).trim(),
           address: body.address ? String(body.address).trim() : null,
+          tables: tables && tables.length > 0 ? tables : ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'],
           isActive: body.isActive !== false,
         })
         .returning();
@@ -534,6 +549,7 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
     const updateData: Record<string, any> = {};
     if (body.name !== undefined) updateData.name = String(body.name).trim();
     if (body.address !== undefined) updateData.address = body.address ? String(body.address).trim() : null;
+    if (body.tables !== undefined) updateData.tables = parseTablesInput(body.tables);
 
     const [updated] = await db
       .update(locations)

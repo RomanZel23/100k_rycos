@@ -122,6 +122,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
             isAcceptingOrders: true,
             locationId: 1,
             locationName: 'Lokal Główny',
+            tables: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'],
           },
           categories: [
             { id: 1, companyId: 1, name: lang === 'de' ? 'Craft Burger' : lang === 'en' ? 'Craft Burgers' : 'Burgery', position: 0, translations: {} },

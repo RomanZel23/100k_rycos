@@ -41,13 +41,31 @@ interface PosCartItem {
   specialInstructions?: string;
 }
 
-const QUICK_TABLES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'];
+const DEFAULT_TABLES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'];
+
+function formatTableButtonLabel(table: string): string {
+  const lower = table.toLowerCase().trim();
+  if (
+    lower.startsWith('stół') ||
+    lower.startsWith('stolik') ||
+    lower.startsWith('stol') ||
+    lower.startsWith('ogr') ||
+    lower.startsWith('bar') ||
+    lower.startsWith('sala') ||
+    lower.startsWith('taras') ||
+    isNaN(Number(table))
+  ) {
+    return table;
+  }
+  return `Stół ${table}`;
+}
 
 interface PosTicketContentProps {
   orderType: 'dine_in' | 'takeaway';
   setOrderType: (t: 'dine_in' | 'takeaway') => void;
   selectedTable: string;
   setSelectedTable: (t: string) => void;
+  tables?: string[];
   cart: PosCartItem[];
   updateQuantity: (id: string, delta: number) => void;
   removeItem: (id: string) => void;
@@ -72,6 +90,7 @@ function PosTicketContent({
   setOrderType,
   selectedTable,
   setSelectedTable,
+  tables,
   cart,
   updateQuantity,
   removeItem,
@@ -90,6 +109,8 @@ function PosTicketContent({
   isMobileDrawer = false,
   onCloseMobileDrawer,
 }: PosTicketContentProps) {
+  const quickTables = tables && tables.length > 0 ? tables : DEFAULT_TABLES;
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Table / Order Type Header */}
@@ -120,11 +141,11 @@ function PosTicketContent({
             <div className="text-xs font-bold text-slate-300 flex items-center justify-between">
               <span>Wybierz stolik:</span>
               <span className="text-amber-400 font-black bg-amber-500/15 px-2.5 py-0.5 rounded-lg border border-amber-500/30">
-                Wybrano: {selectedTable}
+                Wybrano: {formatTableButtonLabel(selectedTable)}
               </span>
             </div>
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              {QUICK_TABLES.map((t) => (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 items-center">
+              {quickTables.map((t) => (
                 <button
                   key={t}
                   onClick={() => setSelectedTable(t)}
@@ -134,9 +155,20 @@ function PosTicketContent({
                       : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  {t.startsWith('Ogr') ? t : `Stół ${t}`}
+                  {formatTableButtonLabel(t)}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const custom = window.prompt('Wpisz numer lub nazwę stolika:', selectedTable);
+                  if (custom && custom.trim()) setSelectedTable(custom.trim());
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-400 bg-slate-800/80 hover:bg-slate-700 hover:text-amber-300 transition-all whitespace-nowrap border border-slate-700/60"
+                title="Wpisz własny numer stolika"
+              >
+                + Inny
+              </button>
             </div>
           </div>
         )}
@@ -348,6 +380,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
   const [showNip, setShowNip] = useState(false);
   const [customerNote, setCustomerNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const configuredTables = menu?.brand?.tables && menu.brand.tables.length > 0 ? menu.brand.tables : DEFAULT_TABLES;
 
   // Addon Modal for POS
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
@@ -722,6 +755,9 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
           categories: filteredCategories.length > 0 ? filteredCategories : data.categories,
         };
         setMenu(cleanData);
+        if (cleanData.brand?.tables && cleanData.brand.tables.length > 0) {
+          setSelectedTable((prev) => (cleanData.brand.tables!.includes(prev) ? prev : cleanData.brand.tables![0]));
+        }
         if (cleanData.categories.length > 0) {
           setActiveCategory(cleanData.categories[0].id);
         }
@@ -743,6 +779,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             isAcceptingOrders: true,
             locationId: 1,
             locationName: 'Sala Główna',
+            tables: DEFAULT_TABLES,
           },
           categories: [
             { id: 1, companyId: 1, name: 'Burgery', position: 0, translations: {} },
@@ -1347,6 +1384,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             setOrderType={setOrderType}
             selectedTable={selectedTable}
             setSelectedTable={setSelectedTable}
+            tables={configuredTables}
             cart={cart}
             updateQuantity={updateQuantity}
             removeItem={removeItem}
@@ -1379,7 +1417,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
           <div className="flex flex-col">
             <div className="text-xs font-black text-slate-200 flex items-center gap-2">
               <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md font-black">
-                {orderType === 'dine_in' ? `Stół ${selectedTable}` : 'Na wynos'}
+                {orderType === 'dine_in' ? formatTableButtonLabel(selectedTable) : 'Na wynos'}
               </span>
               <span className="text-slate-400 font-bold">· {totalItemsCount} poz.</span>
             </div>
@@ -1416,7 +1454,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                 <div>
                   <h3 className="font-extrabold text-sm text-white">Rachunek kelnerski</h3>
                   <span className="text-[11px] text-slate-400">
-                    {orderType === 'dine_in' ? `Stolik: ${selectedTable}` : 'Zamówienie na wynos'} · {totalItemsCount} poz.
+                    {orderType === 'dine_in' ? `Stolik: ${formatTableButtonLabel(selectedTable)}` : 'Zamówienie na wynos'} · {totalItemsCount} poz.
                   </span>
                 </div>
               </div>
@@ -1447,6 +1485,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
               setOrderType={setOrderType}
               selectedTable={selectedTable}
               setSelectedTable={setSelectedTable}
+              tables={configuredTables}
               cart={cart}
               updateQuantity={updateQuantity}
               removeItem={removeItem}

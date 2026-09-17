@@ -511,6 +511,19 @@ function generateShortSlug(length = 5): string {
     if (body.allow_pay_at_counter !== undefined || body.allowPayAtCounter !== undefined) {
       updateData.allowPayAtCounter = Boolean(body.allow_pay_at_counter ?? body.allowPayAtCounter);
     }
+    if (body.location_id !== undefined || body.locationId !== undefined) {
+      const rawLoc = body.location_id ?? body.locationId;
+      updateData.locationId = rawLoc ? parseInt(String(rawLoc), 10) : null;
+    }
+    if (body.tables !== undefined) {
+      if (Array.isArray(body.tables)) {
+        updateData.tables = body.tables.map((s: any) => String(s).trim()).filter(Boolean);
+      } else if (typeof body.tables === 'string') {
+        updateData.tables = body.tables.split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean);
+      } else if (body.tables === null) {
+        updateData.tables = null;
+      }
+    }
 
     const [updated] = await db
       .update(brands)
@@ -632,7 +645,8 @@ function generateShortSlug(length = 5): string {
           logoUrl: body.logoUrl || null,
           bannerUrl: body.bannerUrl || null,
           footerUrl: body.footerUrl || null,
-          locationId: body.locationId ? parseInt(String(body.locationId), 10) : null,
+          locationId: (body.location_id ?? body.locationId) ? parseInt(String(body.location_id ?? body.locationId), 10) : null,
+          tables: body.tables ? (Array.isArray(body.tables) ? body.tables.map((s: any) => String(s).trim()).filter(Boolean) : String(body.tables).split(/[,\n]/).map((s: string) => s.trim()).filter(Boolean)) : null,
           isActive: body.isActive !== false,
         })
         .returning();

@@ -205,6 +205,13 @@ export const translations: Record<AdminLocale, Record<string, string>> = {
     'locations.single_btn': 'Prowadzę jeden lokal →',
     'locations.empty': 'Brak zdefiniowanych lokalizacji.',
     'locations.new_placeholder': 'Nowa lokalizacja (np. Ogródek, Piętro 1, Foodtruck #2)',
+    'locations.tables_label': 'Stoliki / strefy / punkty wydań',
+    'locations.tables_help': 'Numery stolików lub nazwy stref rozdzielone przecinkami (np. 1, 2, 3, Bar, Ogródek 1). Będą wyświetlane na stanowiskach POS i przypisanych markach.',
+    'locations.tables_placeholder': 'np. 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, Bar, Ogródek 1, Ogródek 2',
+    'brands.location_label': 'Przypisana lokalizacja (oddział / sala)',
+    'brands.location_none': '-- Cała firma / brak przypisania --',
+    'brands.tables_override_label': 'Stoliki dla marki (opcjonalne własne)',
+    'brands.tables_override_help': 'Pozostaw puste, aby marka korzystała ze stolików przypisanej lokalizacji.',
 
     // Terminals
     'terminals.title': 'Stanowiska pracy & Terminale POS',
@@ -589,6 +596,13 @@ export const translations: Record<AdminLocale, Record<string, string>> = {
     'locations.single_btn': 'I run a single location →',
     'locations.empty': 'No locations yet.',
     'locations.new_placeholder': 'New location (e.g. Ground floor, Patio, Foodtruck #2)',
+    'locations.tables_label': 'Tables / zones / pickup spots',
+    'locations.tables_help': 'Table numbers or area names separated by commas (e.g. 1, 2, 3, Bar, Patio 1). Displayed in POS terminals and orders for this location.',
+    'locations.tables_placeholder': 'e.g. 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, Bar, Patio 1, Patio 2',
+    'brands.location_label': 'Assigned location (branch / hall)',
+    'brands.location_none': '-- Whole company / unassigned --',
+    'brands.tables_override_label': 'Custom tables for brand (optional override)',
+    'brands.tables_override_help': 'Leave empty to inherit tables from the assigned location.',
 
     // Terminals
     'terminals.title': 'Workstations & POS Terminals',
@@ -973,6 +987,13 @@ export const translations: Record<AdminLocale, Record<string, string>> = {
     'locations.single_btn': 'Ich betreibe einen Einzelstandort →',
     'locations.empty': 'Keine Standorte vorhanden.',
     'locations.new_placeholder': 'Neuer Standort (z. B. Terrasse, 1. OG, Foodtruck #2)',
+    'locations.tables_label': 'Tische / Bereiche / Abholstationen',
+    'locations.tables_help': 'Tischnummern oder Bereichsnamen durch Kommas getrennt (z. B. 1, 2, 3, Bar, Garten 1). Werden auf POS-Terminals für diesen Standort angezeigt.',
+    'locations.tables_placeholder': 'z. B. 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, Bar, Garten 1, Garten 2',
+    'brands.location_label': 'Zugewiesener Standort',
+    'brands.location_none': '-- Gesamtes Unternehmen / Keine --',
+    'brands.tables_override_label': 'Eigene Tische für Marke (optional)',
+    'brands.tables_override_help': 'Leer lassen, um Tische vom zugewiesenen Standort zu übernehmen.',
 
     // Terminals
     'terminals.title': 'Arbeitsplätze & POS-Terminals',

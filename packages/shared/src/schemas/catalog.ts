@@ -68,6 +68,7 @@ export const BrandInfoSchema = z.object({
   isAcceptingOrders: z.boolean().default(true),
   locationId: z.number().nullable().default(null),
   locationName: z.string().nullable().default(null),
+  tables: z.array(z.string()).optional(),
   style: z.string().nullable().optional(),
   buttonColor: z.string().nullable().optional(),
   buttonTextColor: z.string().nullable().optional(),

@@ -36,6 +36,14 @@ export async function updateBrand(formData: FormData): Promise<void> {
     body.is_active = formData.get('is_active') === 'on' || formData.get('is_active') === 'true'
   }
   body.allow_pay_at_counter = formData.get('allow_pay_at_counter') === 'on' || formData.get('allow_pay_at_counter') === 'true'
+  if (formData.has('location_id')) {
+    const loc = String(formData.get('location_id') || '').trim()
+    body.location_id = loc ? parseInt(loc, 10) : null
+  }
+  if (formData.has('tables')) {
+    const rawTables = String(formData.get('tables') || '').trim()
+    body.tables = rawTables ? rawTables.split(/[,\n]/).map((s) => s.trim()).filter(Boolean) : null
+  }
   const res = await adminApi(`/brands/${id}`, { method: 'PUT', body: JSON.stringify(body) })
   if (!res.ok) await failTo(`/dashboard/brands/${id}`, res, 'Failed to save brand details')
   revalidatePath('/dashboard/brands')
