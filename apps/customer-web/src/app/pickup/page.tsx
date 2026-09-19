@@ -23,7 +23,7 @@ import {
   Check
 } from 'lucide-react';
 import jsQR from 'jsqr';
-import { getApiBaseUrl } from '../../lib/api';
+import { getApiBaseUrl, terminalAuthHeaders, isRouteMissing } from '../../lib/api';
 import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
 
 interface CompletedOrderLog {
@@ -185,17 +185,19 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
           ...(termId ? { 'x-terminal-id': termId } : {}),
+          ...terminalAuthHeaders(),
         },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
+      if (await isRouteMissing(res)) {
         res = await fetch(`${apiBase}/v1/admin/orders/pickup-challenge`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-company-id': String(companyId),
             ...(termId ? { 'x-terminal-id': termId } : {}),
+            ...terminalAuthHeaders(),
           },
           body: JSON.stringify(payload),
         });
@@ -242,17 +244,19 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
           ...(termId ? { 'x-terminal-id': termId } : {}),
+          ...terminalAuthHeaders(),
         },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
+      if (await isRouteMissing(res)) {
         res = await fetch(`${apiBase}/v1/admin/orders/pickup-confirm`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-company-id': String(companyId),
             ...(termId ? { 'x-terminal-id': termId } : {}),
+            ...terminalAuthHeaders(),
           },
           body: JSON.stringify(payload),
         });
@@ -314,17 +318,19 @@ function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTermina
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
           ...(termId ? { 'x-terminal-id': termId } : {}),
+          ...terminalAuthHeaders(),
         },
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
+      if (await isRouteMissing(res)) {
         res = await fetch(`${apiBase}/v1/admin/orders/verify-pin`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-company-id': String(companyId),
             ...(termId ? { 'x-terminal-id': termId } : {}),
+            ...terminalAuthHeaders(),
           },
           body: JSON.stringify(payload),
         });

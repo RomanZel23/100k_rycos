@@ -34,12 +34,19 @@ export async function catalogRoutes(fastify: FastifyInstance) {
     return reply.send({ data: menu });
   });
 
-  // POST /v1/terminals/claim - Device pairs using setup code
+  // POST /v1/terminals/claim - Device pairs using setup code.
+  // Pairing issues a signed device token and invalidates tokens of any previously paired device.
   fastify.post('/v1/terminals/claim', async (req, reply) => {
-    const { getDatabase, terminals, eq } = await import('@rycos/database');
+    const { getDatabase, terminals, eq, sql } = await import('@rycos/database');
+    const { issueTerminalToken, invalidateTerminalCache } = await import('../middleware/adminAuth.js');
+    const { rateLimit } = await import('../lib/rateLimit.js');
     const db = getDatabase();
     const body = (req.body ?? {}) as any;
     const code = String(body.code || body.terminalId || body.terminal_id || '').trim().toUpperCase();
+
+    if (!(await rateLimit(`claim:${req.ip}`, 10, 60))) {
+      return reply.code(429).send({ error: 'Zbyt wiele prób parowania. Spróbuj ponownie za minutę.' });
+    }
 
     if (!code) {
       return reply.code(400).send({ error: 'Setup code is required' });
@@ -64,9 +71,13 @@ export async function catalogRoutes(fastify: FastifyInstance) {
       .set({
         status: 'active',
         lastActiveAt: new Date(),
+        sessionVersion: sql`${terminals.sessionVersion} + 1`,
       })
       .where(eq(terminals.id, term.id))
       .returning();
+
+    invalidateTerminalCache();
+    const terminalToken = issueTerminalToken(updated);
 
     return reply.send({
       data: {
@@ -76,6 +87,7 @@ export async function catalogRoutes(fastify: FastifyInstance) {
         tap_device_id: updated.tapDeviceId,
         printer_device_id: updated.printerDeviceId,
         fiscal_device_id: updated.fiscalDeviceId,
+        terminal_token: terminalToken,
       },
       message: 'Terminal paired successfully',
     });

@@ -3,6 +3,7 @@ import fastifyWebSocket, { WebSocket } from '@fastify/websocket';
 import { Redis } from 'ioredis';
 import { env } from '../config/env.js';
 import { WSEvent } from '@rycos/shared';
+import { resolveUserFromToken, resolveTerminalFromToken, isPlatformAdmin } from '../middleware/adminAuth.js';
 
 // In-memory registry of active WebSocket sockets for this Node process
 const companySockets = new Map<number, Set<WebSocket>>();
@@ -52,10 +53,27 @@ export async function setupWebSocket(fastify: FastifyInstance) {
     console.warn('[WS] Running in standalone local WebSocket mode (Redis pub/sub unavailable):', (err as Error).message);
   }
 
-  // Route 1: Staff / Kitchen KDS / POS WebSocket
-  const handleStaffWs = (socket: WebSocket, req: any) => {
-    const query = (req.query ?? {}) as { companyId?: string; terminalId?: string };
-    const companyId = parseInt(query.companyId || '1', 10);
+  // Route 1: Staff / Kitchen KDS / POS WebSocket — requires ?token=<admin JWT | terminal token>.
+  // The company is derived from the verified token (platform admins may pick ?companyId=).
+  const handleStaffWs = async (socket: WebSocket, req: any) => {
+    const query = (req.query ?? {}) as { companyId?: string; token?: string };
+    const token = query.token ? String(query.token) : null;
+
+    let principal = resolveUserFromToken(token) || (await resolveTerminalFromToken(token));
+    if (!principal && env.NODE_ENV !== 'production') {
+      principal = { company_id: parseInt(query.companyId || '1', 10) || 1, role: 'platform_admin' };
+    }
+    if (!principal) {
+      socket.send(JSON.stringify({ type: 'error', code: 'unauthorized', message: 'Brak autoryzacji stanowiska' }));
+      socket.close(4401, 'unauthorized');
+      return;
+    }
+
+    let companyId = principal.company_id;
+    if (isPlatformAdmin(principal) && query.companyId) {
+      const requested = parseInt(query.companyId, 10);
+      if (Number.isFinite(requested) && requested > 0) companyId = requested;
+    }
 
     if (!companySockets.has(companyId)) {
       companySockets.set(companyId, new Set());
@@ -80,6 +98,10 @@ export async function setupWebSocket(fastify: FastifyInstance) {
   fastify.get('/v1/ws/orders/:orderId', { websocket: true }, (socket, req) => {
     const params = req.params as { orderId: string };
     const orderId = params.orderId;
+    if (!/^[0-9a-f-]{36}$/i.test(orderId)) {
+      socket.close(4400, 'invalid order id');
+      return;
+    }
 
     if (!orderSockets.has(orderId)) {
       orderSockets.set(orderId, new Set());

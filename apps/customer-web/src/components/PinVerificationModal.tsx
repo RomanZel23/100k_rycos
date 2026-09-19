@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, KeyRound, CheckCircle2, AlertCircle, Loader2, Sparkles, RefreshCw } from 'lucide-react';
 import jsQR from 'jsqr';
-import { getApiBaseUrl } from '../lib/api';
+import { getApiBaseUrl, terminalAuthHeaders } from '../lib/api';
 
 interface PinVerificationModalProps {
   isOpen: boolean;
@@ -198,14 +198,16 @@ export function PinVerificationModal({
   const getAuthHeaders = () => {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'x-company-id': '1',
+      ...terminalAuthHeaders(),
     };
     try {
       const stored = localStorage.getItem('rycos_terminal');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.companyId) headers['x-company-id'] = String(parsed.companyId);
-        if (parsed.terminalId) headers['x-terminal-id'] = String(parsed.terminalId);
+        const companyId = parsed.company_id ?? parsed.companyId;
+        const terminalId = parsed.terminal_id ?? parsed.terminalId;
+        if (companyId) headers['x-company-id'] = String(companyId);
+        if (terminalId) headers['x-terminal-id'] = String(terminalId);
       }
     } catch {}
     return headers;

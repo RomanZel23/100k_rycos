@@ -24,13 +24,3 @@ export const fiscalQueue = new Queue('fiscalization', {
     removeOnFail: { count: 5000 },
   },
 });
-
-export const notificationQueue = new Queue('notifications', {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: 'fixed', delay: 2000 },
-    removeOnComplete: { count: 500 },
-    removeOnFail: { count: 1000 },
-  },
-});

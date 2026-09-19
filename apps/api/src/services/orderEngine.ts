@@ -1,240 +1,338 @@
-import { getDatabase, orders, orderItems, orderEvents, outboxEvents, idempotencyKeys, products, brands, companySettings, eq, and, inArray, sql } from '@rycos/database';
-import { CreateOrderRequest, OrderDetail, OrderStatus } from '@rycos/shared';
+import { randomInt } from 'crypto';
+import {
+  getDatabase,
+  orders,
+  orderItems,
+  orderEvents,
+  outboxEvents,
+  idempotencyKeys,
+  products,
+  brands,
+  companies,
+  brandProducts,
+  addonOptions,
+  addonGroups,
+  productAddonGroups,
+  inventoryHistory,
+  companySettings,
+  eq,
+  and,
+  inArray,
+  sql,
+} from '@rycos/database';
+import { CreateOrderRequest, OrderDetail, OrderStatus, canTransitionOrder } from '@rycos/shared';
 import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
+import { HttpError } from '../lib/response.js';
+import { isUuid, toGrosze, fromGrosze } from '../lib/ids.js';
+import { invalidateBrandMenuCache } from './catalogService.js';
 
-export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeader?: string): Promise<{ order: OrderDetail; isDuplicate: boolean }> {
+/** Set inside transactions when a product's availability flips; menu cache is invalidated after commit. */
+let menuAvailabilityDirty = false;
+function flushMenuCache() {
+  if (!menuAvailabilityDirty) return;
+  menuAvailabilityDirty = false;
+  invalidateBrandMenuCache().catch(() => {});
+}
+
+type Db = ReturnType<typeof getDatabase>;
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+type OrderRow = typeof orders.$inferSelect;
+
+export interface OrderPrincipal {
+  company_id: number;
+  role?: string;
+  terminal_id?: string;
+  [key: string]: unknown;
+}
+
+const ACTIVE_PIN_STATUSES = ['pending_payment', 'paid', 'in_progress', 'ready_to_collect'];
+const PAID_STATUSES = ['paid', 'confirmed'];
+
+function isPaid(paymentStatus: string | null | undefined): boolean {
+  return PAID_STATUSES.includes(String(paymentStatus));
+}
+
+// ---------------------------------------------------------------------------
+// Create order
+// ---------------------------------------------------------------------------
+
+interface VerifiedAddon {
+  optionId: number;
+  name: string;
+  priceDelta: number;
+  groupId: number;
+}
+
+interface VerifiedItem {
+  productId: number;
+  name: string;
+  quantity: number;
+  unitGrosze: number;
+  lineGrosze: number;
+  taxRate: number;
+  ptuCode: string;
+  addons: VerifiedAddon[];
+  specialInstructions?: string;
+}
+
+export async function createOrder(
+  input: CreateOrderRequest,
+  idempotencyKeyHeader?: string,
+  principal?: OrderPrincipal | null
+): Promise<{ order: OrderDetail; isDuplicate: boolean }> {
   const db = getDatabase();
-  const idempKey = idempotencyKeyHeader || input.idempotencyKey;
-
-  // 1. Idempotency Check
-  if (idempKey) {
-    const existingKey = await db
-      .select()
-      .from(idempotencyKeys)
-      .where(eq(idempotencyKeys.key, idempKey))
-      .limit(1);
-
-    if (existingKey.length > 0) {
-      return { order: existingKey[0].responseBody as OrderDetail, isDuplicate: true };
-    }
+  const rawIdempKey = (idempotencyKeyHeader || input.idempotencyKey || '').trim();
+  if (rawIdempKey && rawIdempKey.length > 100) {
+    throw new HttpError(400, 'Idempotency-Key is too long');
   }
 
-  // 2. Fetch Brand & Company
-  const brandRows = await db
-    .select()
+  // 1. Brand + company (must be active and accepting orders)
+  const [brandRow] = await db
+    .select({ brand: brands, company: companies })
     .from(brands)
+    .innerJoin(companies, eq(brands.companyId, companies.id))
     .where(eq(brands.id, input.brandId))
     .limit(1);
 
-  if (brandRows.length === 0) {
-    throw new Error(`Brand with ID ${input.brandId} not found`);
-  }
-  const brand = brandRows[0];
+  if (!brandRow) throw new HttpError(404, `Brand with ID ${input.brandId} not found`);
+  const { brand, company } = brandRow;
   const companyId = brand.companyId;
 
-  // 3. Verify Prices & Calculate Totals securely on backend
-  // Map any legacy/demo fallback IDs (101->1, 102->2, 103->3, 104->4) to real product IDs
-  const normalizedItems = input.items.map((i) => ({
-    ...i,
-    productId: i.productId >= 101 && i.productId <= 104 ? i.productId - 100 : i.productId,
-  }));
-  const productIds = normalizedItems.map((i) => i.productId);
+  if (!brand.isActive) throw new HttpError(409, 'Ta marka nie przyjmuje obecnie zamówień');
+  if (!company.isAcceptingOrders) throw new HttpError(409, 'Lokal nie przyjmuje obecnie zamówień');
+
+  const isStaff = !!principal && principal.company_id === companyId;
+  if (principal && principal.company_id !== companyId && principal.role !== 'platform_admin') {
+    throw new HttpError(403, 'Stanowisko nie należy do firmy tej marki');
+  }
+
+  // Payment method policy
+  if (input.paymentMethod === 'terminal_tap' && !isStaff) {
+    throw new HttpError(403, 'Płatność terminalem dostępna tylko na stanowisku POS');
+  }
+  if (input.paymentMethod === 'cash' && !isStaff && !brand.allowPayAtCounter) {
+    throw new HttpError(400, 'Płatność przy kasie nie jest dostępna dla tej marki');
+  }
+
+  const idempKey = rawIdempKey ? `order:${brand.id}:${rawIdempKey}` : '';
+
+  // Fast path: already processed idempotent request
+  if (idempKey) {
+    const [existing] = await db.select().from(idempotencyKeys).where(eq(idempotencyKeys.key, idempKey)).limit(1);
+    if (existing && existing.expiresAt > new Date() && (existing.responseBody as any)?.id) {
+      return { order: existing.responseBody as OrderDetail, isDuplicate: true };
+    }
+  }
+
+  // 2. Products — must belong to the company AND be assigned to this brand
+  const productIds = Array.from(new Set(input.items.map((i) => i.productId)));
   const dbProducts = await db
-    .select()
+    .select({ product: products })
     .from(products)
+    .innerJoin(brandProducts, and(eq(brandProducts.productId, products.id), eq(brandProducts.brandId, brand.id)))
     .where(and(eq(products.companyId, companyId), inArray(products.id, productIds)));
+  const productMap = new Map(dbProducts.map((r) => [r.product.id, r.product]));
 
-  const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+  // 3. Addons — resolved from DB (client names/prices are ignored)
+  const optionIds = Array.from(new Set(input.items.flatMap((i) => i.addons.map((a) => a.optionId))));
+  const optionRows = optionIds.length
+    ? await db
+        .select({ option: addonOptions, group: addonGroups })
+        .from(addonOptions)
+        .innerJoin(addonGroups, eq(addonOptions.groupId, addonGroups.id))
+        .where(and(inArray(addonOptions.id, optionIds), eq(addonGroups.companyId, companyId)))
+    : [];
+  const optionMap = new Map(optionRows.map((r) => [r.option.id, r]));
 
-  let calculatedSubtotal = 0;
-  const verifiedItems: {
-    productId: number;
-    name: string;
-    quantity: number;
-    unitPrice: number;
-    taxRate: number;
-    ptuCode: string;
-    lineTotal: number;
-    addons: any[];
-    specialInstructions?: string;
-  }[] = [];
+  const productGroupRows = await db
+    .select({ productId: productAddonGroups.productId, group: addonGroups })
+    .from(productAddonGroups)
+    .innerJoin(addonGroups, eq(productAddonGroups.groupId, addonGroups.id))
+    .where(inArray(productAddonGroups.productId, productIds));
+  const groupsByProduct = new Map<number, (typeof addonGroups.$inferSelect)[]>();
+  for (const r of productGroupRows) {
+    if (!groupsByProduct.has(r.productId)) groupsByProduct.set(r.productId, []);
+    groupsByProduct.get(r.productId)!.push(r.group);
+  }
 
-  for (const item of normalizedItems) {
+  const verifiedItems: VerifiedItem[] = [];
+  let subtotalGrosze = 0;
+
+  for (const item of input.items) {
     const p = productMap.get(item.productId);
-    if (!p) {
-      throw new Error(`Product ${item.productId} does not belong to company or does not exist`);
-    }
-    if (!p.isAvailable) {
-      throw new Error(`Product "${p.name}" is currently sold out`);
-    }
+    if (!p) throw new HttpError(400, `Produkt ${item.productId} nie jest dostępny w menu tej marki`);
+    if (!p.isAvailable) throw new HttpError(409, `Produkt "${p.name}" jest chwilowo niedostępny`);
     if (p.isAgeRestricted && !input.ageConsentAccepted) {
-      throw new Error(`Age verification (18+) is required for "${p.name}"`);
+      throw new HttpError(400, `Wymagane potwierdzenie pełnoletności (18+) dla "${p.name}"`);
     }
 
-    const basePrice = parseFloat(p.price);
-    const addonsDelta = item.addons.reduce((sum, a) => sum + (a.priceDelta || 0), 0);
-    const effectiveUnitPrice = basePrice + addonsDelta;
-    const lineTotal = effectiveUnitPrice * item.quantity;
+    const productGroups = groupsByProduct.get(p.id) || [];
+    const allowedGroupIds = new Set(productGroups.map((g) => g.id));
+    const seen = new Set<number>();
+    const addons: VerifiedAddon[] = [];
 
-    calculatedSubtotal += lineTotal;
+    for (const a of item.addons) {
+      if (seen.has(a.optionId)) throw new HttpError(400, `Zduplikowany dodatek w pozycji "${p.name}"`);
+      seen.add(a.optionId);
+      const row = optionMap.get(a.optionId);
+      if (!row || !allowedGroupIds.has(row.group.id)) {
+        throw new HttpError(400, `Dodatek ${a.optionId} nie jest dostępny dla "${p.name}"`);
+      }
+      if (!row.option.isAvailable) throw new HttpError(409, `Dodatek "${row.option.name}" jest niedostępny`);
+      addons.push({ optionId: row.option.id, name: row.option.name, priceDelta: parseFloat(row.option.priceDelta), groupId: row.group.id });
+    }
+
+    // Group selection rules
+    for (const g of productGroups) {
+      const count = addons.filter((x) => x.groupId === g.id).length;
+      const min = Math.max(g.required ? 1 : 0, g.minSelect || 0);
+      const max = g.selectionMode === 'single' ? 1 : Math.max(g.maxSelect || 0, min, 1);
+      if (count < min) throw new HttpError(400, `Wybierz wymagany dodatek "${g.name}" dla "${p.name}"`);
+      if (count > max) throw new HttpError(400, `Za dużo opcji w grupie "${g.name}" dla "${p.name}" (max ${max})`);
+    }
+
+    const unitGrosze = toGrosze(p.price) + addons.reduce((s, x) => s + toGrosze(x.priceDelta), 0);
+    if (unitGrosze < 0) throw new HttpError(400, `Nieprawidłowa cena pozycji "${p.name}"`);
+    const lineGrosze = unitGrosze * item.quantity;
+    subtotalGrosze += lineGrosze;
 
     verifiedItems.push({
       productId: p.id,
       name: p.name,
       quantity: item.quantity,
-      unitPrice: effectiveUnitPrice,
+      unitGrosze,
+      lineGrosze,
       taxRate: p.taxRate,
       ptuCode: p.ptuCode,
-      lineTotal,
-      addons: item.addons,
+      addons,
       specialInstructions: item.specialInstructions,
     });
   }
 
-  const tip = input.tipAmount || 0;
-  const grandTotal = calculatedSubtotal + tip;
+  const tipGrosze = toGrosze(input.tipAmount || 0);
+  const totalGrosze = subtotalGrosze + tipGrosze;
+  if (totalGrosze <= 0) throw new HttpError(400, 'Kwota zamówienia musi być większa od zera');
 
-  // 4. Generate Random 4-digit Collection PIN (e.g. "4819")
-  const collectionPin = String(Math.floor(1000 + Math.random() * 9000));
+  // Quantity per product (stock)
+  const qtyByProduct = new Map<number, number>();
+  for (const it of verifiedItems) qtyByProduct.set(it.productId, (qtyByProduct.get(it.productId) || 0) + it.quantity);
 
-  // 5. Execute Atomic ACID Transaction
-  const createdOrder = await db.transaction(async (tx) => {
-    // Generate sequential order number per company (locks max sequence row safely)
-    const seqResult = await tx.execute(
-      sql`SELECT COALESCE(MAX(order_number), 0) + 1 AS next_order_number FROM orders WHERE company_id = ${companyId}`
-    );
-    const nextOrderNumber = Number(seqResult[0]?.next_order_number || 1);
+  const isZeroPrep =
+    verifiedItems.length > 0 &&
+    !verifiedItems.some((it) => {
+      const pt = productMap.get(it.productId)?.prepTimeMinutes;
+      return pt !== null && pt !== undefined && pt > 0;
+    });
 
-    const isZeroPrep =
-      verifiedItems.length > 0 &&
-      !dbProducts.some(
-        (p) => p.prepTimeMinutes !== null && p.prepTimeMinutes !== undefined && p.prepTimeMinutes > 0
+  let initialStatus: OrderStatus = input.paymentMethod === 'cash' ? 'in_progress' : 'pending_payment';
+  if (input.paymentMethod === 'cash' && isZeroPrep) initialStatus = 'ready_to_collect';
+
+  const collectionPin = await generateCollectionPin(db, companyId);
+
+  class DuplicateRequest extends Error {}
+
+  let orderDetail: OrderDetail;
+  try {
+    orderDetail = await db.transaction(async (tx) => {
+      // Idempotency reservation — concurrent duplicates block here until the first commits
+      if (idempKey) {
+        await tx.delete(idempotencyKeys).where(and(eq(idempotencyKeys.key, idempKey), sql`${idempotencyKeys.expiresAt} < now()`));
+        const reserved = await tx
+          .insert(idempotencyKeys)
+          .values({ key: idempKey, statusCode: 202, responseBody: {}, expiresAt: new Date(Date.now() + 24 * 3600 * 1000) })
+          .onConflictDoNothing()
+          .returning({ key: idempotencyKeys.key });
+        if (reserved.length === 0) throw new DuplicateRequest();
+      }
+
+      // Atomic per-company order number
+      const seq: any = await tx.execute(sql`
+        INSERT INTO order_counters (company_id, last_number)
+        SELECT ${companyId}, COALESCE(MAX(order_number), 0) + 1 FROM orders WHERE company_id = ${companyId} AND order_type <> 'test'
+        ON CONFLICT (company_id) DO UPDATE SET last_number = order_counters.last_number + 1, updated_at = now()
+        RETURNING last_number
+      `);
+      const orderNumber = Number(seq[0]?.last_number);
+
+      const [newOrder] = await tx
+        .insert(orders)
+        .values({
+          companyId,
+          brandId: brand.id,
+          orderNumber,
+          collectionPin,
+          status: initialStatus,
+          orderType: input.orderType,
+          tableLabel: input.tableLabel || null,
+          parkingSpot: input.parkingSpot || null,
+          customerNip: input.customerNip || null,
+          customerNote: input.customerNote || null,
+          subtotalAmount: fromGrosze(subtotalGrosze),
+          tipAmount: fromGrosze(tipGrosze),
+          totalAmount: fromGrosze(totalGrosze),
+          currency: (input.currency || brand.currency || 'PLN').toUpperCase().slice(0, 4),
+          paymentMethod: input.paymentMethod,
+          paymentStatus: 'pending',
+          fiscalStatus: 'none',
+          terminalId: principal?.terminal_id || null,
+        })
+        .returning();
+
+      await tx.insert(orderItems).values(
+        verifiedItems.map((item) => ({
+          orderId: newOrder.id,
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: fromGrosze(item.unitGrosze),
+          taxRate: item.taxRate,
+          ptuCode: item.ptuCode,
+          lineTotal: fromGrosze(item.lineGrosze),
+          addonsJson: item.addons.map((a) => ({ optionId: a.optionId, name: a.name, priceDelta: a.priceDelta })),
+          specialInstructions: item.specialInstructions || null,
+        }))
       );
 
-    let initialStatus: OrderStatus = input.paymentMethod === 'cash' ? 'in_progress' : 'pending_payment';
-    if (input.paymentMethod === 'cash' && isZeroPrep) {
-      initialStatus = 'ready_to_collect';
-    }
-    const initialPaymentStatus = 'pending';
+      // Stock reservation (atomic, never below zero)
+      await reserveStock(tx, companyId, newOrder.id, qtyByProduct, productMap);
 
-    // Insert Order
-    const [newOrder] = await tx
-      .insert(orders)
-      .values({
-        companyId,
-        brandId: brand.id,
-        orderNumber: nextOrderNumber,
-        collectionPin,
-        status: initialStatus,
-        orderType: input.orderType,
-        tableLabel: input.tableLabel || null,
-        parkingSpot: input.parkingSpot || null,
-        customerNip: input.customerNip || null,
-        customerNote: input.customerNote || null,
-        subtotalAmount: calculatedSubtotal.toFixed(2),
-        tipAmount: tip.toFixed(2),
-        totalAmount: grandTotal.toFixed(2),
-        currency: input.currency || 'PLN',
-        paymentMethod: input.paymentMethod,
-        paymentStatus: initialPaymentStatus,
-        fiscalStatus: 'none',
-      })
-      .returning();
-
-    // Insert Order Items
-    for (const item of verifiedItems) {
-      await tx.insert(orderItems).values({
+      await tx.insert(orderEvents).values({
         orderId: newOrder.id,
-        productId: item.productId,
-        name: item.name,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice.toFixed(2),
-        taxRate: item.taxRate,
-        ptuCode: item.ptuCode,
-        lineTotal: item.lineTotal.toFixed(2),
-        addonsJson: item.addons,
-        specialInstructions: item.specialInstructions || null,
+        eventType: 'order.created',
+        payload: { status: initialStatus, paymentMethod: input.paymentMethod, terminalId: principal?.terminal_id || null },
       });
+
+      const detail = buildOrderDetail(newOrder, brand.name, verifiedItems.map((it) => ({
+        productId: it.productId,
+        name: it.name,
+        quantity: it.quantity,
+        unitPrice: it.unitGrosze / 100,
+        taxRate: it.taxRate,
+        ptuCode: it.ptuCode,
+        addons: it.addons.map((a) => ({ optionId: a.optionId, name: a.name, priceDelta: a.priceDelta })),
+        specialInstructions: it.specialInstructions,
+        lineTotal: it.lineGrosze / 100,
+      })), true);
+
+      if (idempKey) {
+        await tx.update(idempotencyKeys).set({ statusCode: 201, responseBody: detail }).where(eq(idempotencyKeys.key, idempKey));
+      }
+
+      return detail;
+    });
+  } catch (err) {
+    if (err instanceof DuplicateRequest) {
+      const [existing] = await db.select().from(idempotencyKeys).where(eq(idempotencyKeys.key, idempKey)).limit(1);
+      if (existing && (existing.responseBody as any)?.id) {
+        return { order: existing.responseBody as OrderDetail, isDuplicate: true };
+      }
+      throw new HttpError(409, 'Zamówienie z tym kluczem jest właśnie przetwarzane');
     }
-
-    // Insert Initial Order Event
-    await tx.insert(orderEvents).values({
-      orderId: newOrder.id,
-      eventType: 'order.created',
-      payload: { status: initialStatus, paymentMethod: input.paymentMethod },
-    });
-
-    // Insert Outbox Event for background processing (guaranteed delivery)
-    await tx.insert(outboxEvents).values({
-      aggregateType: 'order',
-      aggregateId: newOrder.id,
-      eventType: 'order.created',
-      payload: {
-        orderId: newOrder.id,
-        companyId,
-        brandId: brand.id,
-        orderNumber: nextOrderNumber,
-        totalAmount: grandTotal,
-      },
-      status: 'pending',
-    });
-
-    return {
-      ...newOrder,
-      brandName: brand.name,
-    };
-  });
-
-  const orderDetail: OrderDetail = {
-    id: createdOrder.id,
-    companyId: createdOrder.companyId,
-    brandId: createdOrder.brandId,
-    brandName: createdOrder.brandName,
-    orderNumber: createdOrder.orderNumber,
-    collectionPin: createdOrder.collectionPin,
-    status: createdOrder.status as OrderStatus,
-    orderType: createdOrder.orderType as any,
-    tableLabel: createdOrder.tableLabel,
-    parkingSpot: createdOrder.parkingSpot,
-    customerNip: createdOrder.customerNip,
-    items: verifiedItems.map((it) => ({
-      productId: it.productId,
-      name: it.name,
-      quantity: it.quantity,
-      unitPrice: it.unitPrice,
-      taxRate: it.taxRate,
-      ptuCode: it.ptuCode,
-      addons: it.addons,
-      specialInstructions: it.specialInstructions,
-      lineTotal: it.lineTotal,
-    })),
-    subtotalAmount: parseFloat(createdOrder.subtotalAmount),
-    tipAmount: parseFloat(createdOrder.tipAmount),
-    totalAmount: parseFloat(createdOrder.totalAmount),
-    currency: createdOrder.currency,
-    paymentMethod: createdOrder.paymentMethod,
-    paymentStatus: createdOrder.paymentStatus as any,
-    fiscalStatus: createdOrder.fiscalStatus as any,
-    showReceiptQr: true,
-    createdAt: createdOrder.createdAt.toISOString(),
-    updatedAt: createdOrder.updatedAt.toISOString(),
-  };
-
-  // 6. Save Idempotency Key (expires in 24 hours)
-  if (idempKey) {
-    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000);
-    await db
-      .insert(idempotencyKeys)
-      .values({
-        key: idempKey,
-        statusCode: 201,
-        responseBody: orderDetail,
-        expiresAt,
-      })
-      .onConflictDoNothing();
+    throw err;
   }
 
-  // 7. Realtime Notification via WebSockets
+  flushMenuCache();
+
   broadcastToStaff(companyId, {
     type: 'order.created',
     timestamp: new Date().toISOString(),
@@ -246,39 +344,182 @@ export async function createOrder(input: CreateOrderRequest, idempotencyKeyHeade
   return { order: orderDetail, isDuplicate: false };
 }
 
+async function generateCollectionPin(db: Db, companyId: number): Promise<string> {
+  // Avoid collisions with currently active orders of the company (best effort, 8 tries)
+  let pin = String(randomInt(1000, 10000));
+  for (let i = 0; i < 8; i++) {
+    const [clash] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.companyId, companyId),
+          eq(orders.collectionPin, pin),
+          inArray(orders.status, ACTIVE_PIN_STATUSES),
+          sql`${orders.createdAt} > now() - interval '24 hours'`
+        )
+      )
+      .limit(1);
+    if (!clash) return pin;
+    pin = String(randomInt(1000, 10000));
+  }
+  return pin;
+}
+
+async function reserveStock(
+  tx: Tx,
+  companyId: number,
+  orderId: string,
+  qtyByProduct: Map<number, number>,
+  productMap: Map<number, typeof products.$inferSelect>
+) {
+  for (const [productId, qty] of qtyByProduct) {
+    const p = productMap.get(productId);
+    if (!p || p.stockQuantity === null || p.stockQuantity === undefined) continue; // untracked stock
+
+    const updated = await tx
+      .update(products)
+      .set({
+        stockQuantity: sql`${products.stockQuantity} - ${qty}`,
+        isAvailable: sql`CASE WHEN ${products.stockQuantity} - ${qty} <= 0 THEN false ELSE ${products.isAvailable} END`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(products.id, productId), sql`${products.stockQuantity} IS NOT NULL`, sql`${products.stockQuantity} >= ${qty}`))
+      .returning({ stockQuantity: products.stockQuantity, isAvailable: products.isAvailable });
+
+    if (updated.length === 0) {
+      // Stock may have become untracked concurrently — re-check
+      const [cur] = await tx.select({ stockQuantity: products.stockQuantity }).from(products).where(eq(products.id, productId)).limit(1);
+      if (cur && cur.stockQuantity === null) continue;
+      throw new HttpError(409, `Brak wystarczającej ilości "${p.name}" (dostępne: ${Math.max(0, cur?.stockQuantity ?? 0)})`);
+    }
+
+    const after = updated[0];
+    await tx.insert(inventoryHistory).values({
+      companyId,
+      productId,
+      quantityChange: -qty,
+      quantityAfter: after.stockQuantity,
+      isAvailableAfter: after.isAvailable,
+      source: 'order',
+      reference: orderId,
+    });
+    if (!after.isAvailable && (after.stockQuantity ?? 0) <= 0) {
+      menuAvailabilityDirty = true;
+      await tx.insert(inventoryHistory).values({
+        companyId,
+        productId,
+        quantityChange: 0,
+        quantityAfter: after.stockQuantity,
+        isAvailableAfter: false,
+        source: 'auto_disable',
+        reference: orderId,
+        note: 'Produkt wyłączony automatycznie — stan 0',
+      });
+    }
+  }
+}
+
+/** Return reserved stock of an order (cancel / payment timeout). Idempotent via orders.stock_released. */
+async function releaseStock(tx: Tx, order: OrderRow, reason: string) {
+  if (order.stockReleased) return;
+  const released = await tx
+    .select({ productId: inventoryHistory.productId, qty: sql<number>`-SUM(${inventoryHistory.quantityChange})::int` })
+    .from(inventoryHistory)
+    .where(and(eq(inventoryHistory.reference, order.id), eq(inventoryHistory.source, 'order')))
+    .groupBy(inventoryHistory.productId);
+
+  for (const r of released) {
+    if (!r.qty || r.qty <= 0) continue;
+    const [after] = await tx
+      .update(products)
+      .set({ stockQuantity: sql`COALESCE(${products.stockQuantity}, 0) + ${r.qty}`, updatedAt: new Date() })
+      .where(and(eq(products.id, r.productId), sql`${products.stockQuantity} IS NOT NULL`))
+      .returning({ stockQuantity: products.stockQuantity, isAvailable: products.isAvailable });
+    if (after) {
+      // Re-enable a product that was switched off automatically when it hit zero
+      if (!after.isAvailable && (after.stockQuantity ?? 0) > 0) {
+        const [last] = await tx
+          .select({ source: inventoryHistory.source })
+          .from(inventoryHistory)
+          .where(and(eq(inventoryHistory.productId, r.productId), sql`${inventoryHistory.source} IN ('auto_disable', 'manual')`))
+          .orderBy(sql`${inventoryHistory.id} DESC`)
+          .limit(1);
+        if (last?.source === 'auto_disable') {
+          await tx.update(products).set({ isAvailable: true }).where(eq(products.id, r.productId));
+          after.isAvailable = true;
+          menuAvailabilityDirty = true;
+        }
+      }
+      await tx.insert(inventoryHistory).values({
+        companyId: order.companyId,
+        productId: r.productId,
+        quantityChange: r.qty,
+        quantityAfter: after.stockQuantity,
+        isAvailableAfter: after.isAvailable,
+        source: 'order_release',
+        reference: order.id,
+        note: reason,
+      });
+    }
+  }
+  await tx.update(orders).set({ stockReleased: true }).where(eq(orders.id, order.id));
+}
+
+// ---------------------------------------------------------------------------
+// Read
+// ---------------------------------------------------------------------------
+
+function buildOrderDetail(o: OrderRow, brandName: string, items: OrderDetail['items'], showReceiptQr: boolean): OrderDetail {
+  return {
+    id: o.id,
+    companyId: o.companyId,
+    brandId: o.brandId,
+    brandName,
+    orderNumber: o.orderNumber,
+    collectionPin: o.collectionPin,
+    status: o.status as OrderStatus,
+    orderType: o.orderType as any,
+    tableLabel: o.tableLabel,
+    parkingSpot: o.parkingSpot,
+    customerNip: o.customerNip,
+    items,
+    subtotalAmount: parseFloat(o.subtotalAmount),
+    tipAmount: parseFloat(o.tipAmount),
+    totalAmount: parseFloat(o.totalAmount),
+    currency: o.currency,
+    paymentMethod: o.paymentMethod,
+    paymentStatus: o.paymentStatus as any,
+    fiscalStatus: o.fiscalStatus as any,
+    fiscalReceiptNumber: o.fiscalReceiptNumber,
+    fiscalPdfUrl: o.fiscalPdfUrl,
+    showReceiptQr,
+    createdAt: o.createdAt.toISOString(),
+    updatedAt: o.updatedAt.toISOString(),
+  };
+}
+
 /**
  * Check whether all items in an order have empty (null/undefined) or zero prep time.
- * If all items have empty or 0 prep time (e.g. bottled beverages, pre-packaged goods),
- * the order is deemed zero-prep and can skip kitchen preparation directly to 'ready_to_collect'.
  */
 export async function isZeroPrepOrder(orderId: string, dbInstance?: any): Promise<boolean> {
-  const db = dbInstance ? (dbInstance as ReturnType<typeof getDatabase>) : getDatabase();
+  const db = dbInstance ? (dbInstance as Db) : getDatabase();
   const itemsWithProducts = await db
-    .select({
-      productId: orderItems.productId,
-      prepTimeMinutes: products.prepTimeMinutes,
-    })
+    .select({ prepTimeMinutes: products.prepTimeMinutes })
     .from(orderItems)
     .leftJoin(products, eq(orderItems.productId, products.id))
     .where(eq(orderItems.orderId, orderId));
 
   if (!itemsWithProducts.length) return false;
-
-  const hasPrepItem = itemsWithProducts.some(
-    (it: { prepTimeMinutes: number | null }) => it.prepTimeMinutes !== null && it.prepTimeMinutes !== undefined && it.prepTimeMinutes > 0
-  );
-
-  return !hasPrepItem;
+  return !itemsWithProducts.some((it) => it.prepTimeMinutes !== null && it.prepTimeMinutes !== undefined && it.prepTimeMinutes > 0);
 }
 
 export async function getOrderById(orderId: string): Promise<OrderDetail | null> {
+  if (!isUuid(orderId)) return null;
   const db = getDatabase();
 
   const [orderRow] = await db
-    .select({
-      order: orders,
-      brandName: brands.name,
-    })
+    .select({ order: orders, brandName: brands.name })
     .from(orders)
     .leftJoin(brands, eq(orders.brandId, brands.id))
     .where(eq(orders.id, orderId))
@@ -286,10 +527,7 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
 
   if (!orderRow) return null;
 
-  const items = await db
-    .select()
-    .from(orderItems)
-    .where(eq(orderItems.orderId, orderId));
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
 
   let showReceiptQr = true;
   try {
@@ -298,24 +536,13 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
       .from(companySettings)
       .where(and(eq(companySettings.companyId, orderRow.order.companyId), eq(companySettings.featureKey, 'show_receipt_qr')))
       .limit(1);
-    if (st) {
-      showReceiptQr = st.isEnabled;
-    }
+    if (st) showReceiptQr = st.isEnabled;
   } catch {}
 
-  return {
-    id: orderRow.order.id,
-    companyId: orderRow.order.companyId,
-    brandId: orderRow.order.brandId,
-    brandName: orderRow.brandName || '',
-    orderNumber: orderRow.order.orderNumber,
-    collectionPin: orderRow.order.collectionPin,
-    status: orderRow.order.status as OrderStatus,
-    orderType: orderRow.order.orderType as any,
-    tableLabel: orderRow.order.tableLabel,
-    parkingSpot: orderRow.order.parkingSpot,
-    customerNip: orderRow.order.customerNip,
-    items: items.map((it) => ({
+  return buildOrderDetail(
+    orderRow.order,
+    orderRow.brandName || '',
+    items.map((it) => ({
       productId: it.productId || 0,
       name: it.name,
       quantity: it.quantity,
@@ -326,227 +553,285 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
       specialInstructions: it.specialInstructions || undefined,
       lineTotal: parseFloat(it.lineTotal),
     })),
-    subtotalAmount: parseFloat(orderRow.order.subtotalAmount),
-    tipAmount: parseFloat(orderRow.order.tipAmount),
-    totalAmount: parseFloat(orderRow.order.totalAmount),
-    currency: orderRow.order.currency,
-    paymentMethod: orderRow.order.paymentMethod,
-    paymentStatus: orderRow.order.paymentStatus as any,
-    fiscalStatus: orderRow.order.fiscalStatus as any,
-    fiscalReceiptNumber: orderRow.order.fiscalReceiptNumber,
-    fiscalPdfUrl: orderRow.order.fiscalPdfUrl,
-    showReceiptQr,
-    createdAt: orderRow.order.createdAt.toISOString(),
-    updatedAt: orderRow.order.updatedAt.toISOString(),
-  };
+    showReceiptQr
+  );
 }
 
-export async function updateOrderStatus(orderId: string, newStatus: OrderStatus, reason?: string): Promise<OrderDetail> {
-  const db = getDatabase();
+// ---------------------------------------------------------------------------
+// State machine
+// ---------------------------------------------------------------------------
 
-  const [currentOrder] = await db
-    .select({
-      id: orders.id,
-      status: orders.status,
-      companyId: orders.companyId,
-      brandId: orders.brandId,
-      orderNumber: orders.orderNumber,
-      collectionPin: orders.collectionPin,
-      paymentStatus: orders.paymentStatus,
-      fiscalStatus: orders.fiscalStatus,
-    })
+export interface TransitionOptions {
+  reason?: string;
+  /** When set, the order must belong to this company (tenant isolation). */
+  companyId?: number;
+  actor?: string;
+}
+
+async function lockOrder(tx: Tx, orderId: string, companyId?: number): Promise<OrderRow> {
+  if (!isUuid(orderId)) throw new HttpError(404, 'Nie znaleziono zamówienia');
+  const [row] = await tx
+    .select()
     .from(orders)
-    .where(eq(orders.id, orderId))
+    .where(companyId ? and(eq(orders.id, orderId), eq(orders.companyId, companyId)) : eq(orders.id, orderId))
+    .for('update')
     .limit(1);
+  if (!row) throw new HttpError(404, 'Nie znaleziono zamówienia');
+  return row;
+}
 
-  if (!currentOrder) {
-    throw new Error(`Order ${orderId} not found`);
-  }
-
-  let effectiveStatus = newStatus;
-  // If order is transitioning to 'paid' or 'in_progress', and was not yet completed/ready,
-  // check if all items have zero/empty prep time (e.g. bottled beverages, snacks).
-  if (
-    (newStatus === 'paid' || newStatus === 'in_progress') &&
-    (currentOrder.status === 'pending_payment' || currentOrder.status === 'paid')
-  ) {
-    const isZeroPrep = await isZeroPrepOrder(orderId, db);
-    if (isZeroPrep) {
-      effectiveStatus = 'ready_to_collect';
-    }
-  }
-
-  const updateFields: Record<string, any> = {
-    status: effectiveStatus,
-    updatedAt: new Date(),
+function broadcastStatus(o: OrderRow) {
+  const event = {
+    type: 'order.status_updated' as const,
+    timestamp: new Date().toISOString(),
+    companyId: o.companyId,
+    brandId: o.brandId,
+    payload: {
+      orderId: o.id,
+      orderNumber: o.orderNumber,
+      status: o.status,
+      paymentStatus: o.paymentStatus,
+      collectionPin: o.collectionPin,
+    },
   };
-
-  // If status is updated to 'paid' (or auto-promoted from 'paid' to 'ready_to_collect'), ensure paymentStatus is also 'paid' (unless already confirmed)
-  if (newStatus === 'paid') {
-    updateFields.paymentStatus = sql`CASE WHEN ${orders.paymentStatus} = 'confirmed' THEN 'confirmed' ELSE 'paid' END`;
-  }
-
-  const [updatedOrder] = await db
-    .update(orders)
-    .set(updateFields)
-    .where(eq(orders.id, orderId))
-    .returning();
-
-  if (!updatedOrder) {
-    throw new Error(`Order ${orderId} not found`);
-  }
-
-  // Insert event log
-  await db.insert(orderEvents).values({
-    orderId,
-    eventType: 'order.status_updated',
-    payload: { newStatus: effectiveStatus, requestedStatus: newStatus, reason },
-  });
-
-  // Outbox trigger for fiscalization: strictly ONLY when order is paid and payment is confirmed/paid.
-  // Kitchen readiness (ready_to_collect) alone MUST NEVER trigger fiscalization,
-  // BUT if this transition was triggered by payment (newStatus === 'paid'), it must trigger fiscalization!
-  if (newStatus === 'paid' && (updatedOrder.paymentStatus === 'paid' || updatedOrder.paymentStatus === 'confirmed')) {
-    if (updatedOrder.fiscalStatus !== 'issued') {
-      await db.insert(outboxEvents).values({
-        aggregateType: 'order',
-        aggregateId: orderId,
-        eventType: 'order.fiscalize',
-        payload: { orderId, companyId: updatedOrder.companyId },
-      });
-    }
-  }
-
-  const orderDetail = (await getOrderById(orderId))!;
-
-  // Broadcast to Staff
-  broadcastToStaff(updatedOrder.companyId, {
-    type: 'order.status_updated',
-    timestamp: new Date().toISOString(),
-    companyId: updatedOrder.companyId,
-    brandId: updatedOrder.brandId,
-    payload: {
-      orderId,
-      orderNumber: updatedOrder.orderNumber,
-      status: effectiveStatus,
-      collectionPin: updatedOrder.collectionPin,
-    },
-  });
-
-  // Broadcast to Customer Tracker
-  broadcastToOrder(orderId, {
-    type: 'order.status_updated',
-    timestamp: new Date().toISOString(),
-    companyId: updatedOrder.companyId,
-    brandId: updatedOrder.brandId,
-    payload: {
-      orderId,
-      orderNumber: updatedOrder.orderNumber,
-      status: effectiveStatus,
-      collectionPin: updatedOrder.collectionPin,
-    },
-  });
-
-  return orderDetail;
+  broadcastToStaff(o.companyId, event as any);
+  broadcastToOrder(o.id, event as any);
 }
 
 /**
- * Record payment for an order (POS / Staff settlement / cash desk).
- * Ensures paymentStatus is 'paid', assigns payment method, triggers fiscalization,
- * and preserves kitchen fulfillment status if already in progress or ready.
+ * Validated lifecycle transition (kitchen / pickup / cancel).
+ * - 'paid' can NOT be set here unless payment is already recorded (use markOrderPaid).
+ * - 'completed' requires a recorded payment.
+ * - 'cancelled' releases reserved stock; cancelling a paid order flags a refund.
+ */
+export async function updateOrderStatus(orderId: string, newStatus: OrderStatus, reasonOrOpts?: string | TransitionOptions): Promise<OrderDetail> {
+  const opts: TransitionOptions = typeof reasonOrOpts === 'string' ? { reason: reasonOrOpts } : reasonOrOpts || {};
+  const db = getDatabase();
+
+  const updated = await db.transaction(async (tx) => {
+    const current = await lockOrder(tx, orderId, opts.companyId);
+    const from = current.status as OrderStatus;
+
+    if (!canTransitionOrder(from, newStatus)) {
+      throw new HttpError(409, `Niedozwolona zmiana statusu: ${from} → ${newStatus}`);
+    }
+    if (from === newStatus) return current;
+
+    if (newStatus === 'paid' && !isPaid(current.paymentStatus)) {
+      throw new HttpError(409, 'Zamówienie nie jest opłacone — zarejestruj płatność (POS / bramka), zamiast zmieniać status');
+    }
+    if (newStatus === 'completed' && !isPaid(current.paymentStatus)) {
+      throw new HttpError(409, `Zamówienie #${current.orderNumber} nie zostało jeszcze opłacone`);
+    }
+
+    let effective: OrderStatus = newStatus;
+    if ((newStatus === 'paid' || newStatus === 'in_progress') && (from === 'pending_payment' || from === 'paid')) {
+      if (await isZeroPrepOrder(orderId, tx)) effective = 'ready_to_collect';
+    }
+
+    const set: Partial<typeof orders.$inferInsert> = { status: effective, updatedAt: new Date() };
+    if (newStatus === 'payment_failed') set.paymentStatus = 'failed';
+    if (newStatus === 'cancelled') set.cancellationReason = opts.reason || null;
+
+    const [row] = await tx.update(orders).set(set).where(eq(orders.id, orderId)).returning();
+
+    // payment_failed keeps the reservation (customer may retry); the payment timeout cancels it later.
+    if (newStatus === 'cancelled') {
+      await releaseStock(tx, row, opts.reason || newStatus);
+    }
+
+    await tx.insert(orderEvents).values({
+      orderId,
+      eventType: 'order.status_updated',
+      payload: { from, newStatus: effective, requestedStatus: newStatus, reason: opts.reason, actor: opts.actor },
+    });
+
+    if (newStatus === 'cancelled' && isPaid(current.paymentStatus)) {
+      const refundPayload = {
+        orderId,
+        companyId: row.companyId,
+        amount: row.totalAmount,
+        paymentMethod: row.paymentMethod,
+        paymentReference: row.paymentReference,
+        fiscalStatus: row.fiscalStatus,
+        fiscalReceiptNumber: row.fiscalReceiptNumber,
+        note: row.fiscalStatus === 'issued'
+          ? 'Wymagany zwrot środków oraz korekta/zwrot na paragonie fiskalnym'
+          : 'Wymagany zwrot środków',
+      };
+      await tx.insert(orderEvents).values({ orderId, eventType: 'order.refund_required', payload: refundPayload });
+      await tx.insert(outboxEvents).values({ aggregateType: 'order', aggregateId: orderId, eventType: 'order.refund_required', payload: refundPayload });
+    }
+
+    return row;
+  });
+
+  flushMenuCache();
+  broadcastStatus(updated);
+  return (await getOrderById(orderId))!;
+}
+
+export interface PaymentRecord {
+  method: string;
+  terminalId?: string | null;
+  /** Amount actually charged (grosze). When provided it must equal the order total. */
+  amountGrosze?: number;
+  reference?: string | null;
+  /** 'confirmed' for gateway-verified online payments, 'paid' for POS / cash. */
+  paymentStatus?: 'paid' | 'confirmed';
+  companyId?: number;
+  actor?: string;
+}
+
+export class PaymentAmountMismatchError extends HttpError {
+  constructor(expected: number, got: number) {
+    super(409, `Kwota płatności (${fromGrosze(got)}) nie zgadza się z kwotą zamówienia (${fromGrosze(expected)})`);
+  }
+}
+
+/**
+ * Record a payment. Idempotent: a second call for an already paid order is a no-op
+ * (no second fiscalization event). Exactly one 'order.fiscalize' outbox event per order.
+ */
+export async function markOrderPaid(orderId: string, p: PaymentRecord): Promise<{ order: OrderDetail; alreadyPaid: boolean }> {
+  const db = getDatabase();
+  let alreadyPaid = false;
+
+  const updated = await db.transaction(async (tx) => {
+    const current = await lockOrder(tx, orderId, p.companyId);
+
+    if (isPaid(current.paymentStatus)) {
+      alreadyPaid = true;
+      return current;
+    }
+
+    const totalGrosze = toGrosze(current.totalAmount);
+    if (p.amountGrosze !== undefined && p.amountGrosze !== totalGrosze) {
+      await tx.insert(orderEvents).values({
+        orderId,
+        eventType: 'order.payment_amount_mismatch',
+        payload: { expected: totalGrosze, got: p.amountGrosze, reference: p.reference, method: p.method },
+      });
+      throw new PaymentAmountMismatchError(totalGrosze, p.amountGrosze);
+    }
+
+    let from = current.status as OrderStatus;
+    if (from === 'completed') throw new HttpError(409, 'Zamówienie jest już zakończone');
+    if (from === 'cancelled') {
+      // Late gateway payment for an order cancelled by the payment timeout: revive it (money was taken).
+      if (current.cancellationReason === 'payment_timeout') {
+        from = 'pending_payment';
+        await tx.update(orders).set({ stockReleased: false }).where(eq(orders.id, orderId));
+        const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+        for (const it of items) {
+          if (!it.productId) continue;
+          const [after] = await tx
+            .update(products)
+            .set({ stockQuantity: sql`${products.stockQuantity} - ${it.quantity}`, updatedAt: new Date() })
+            .where(and(eq(products.id, it.productId), sql`${products.stockQuantity} IS NOT NULL`))
+            .returning({ stockQuantity: products.stockQuantity, isAvailable: products.isAvailable });
+          if (after) {
+            await tx.insert(inventoryHistory).values({
+              companyId: current.companyId, productId: it.productId, quantityChange: -it.quantity,
+              quantityAfter: after.stockQuantity, isAvailableAfter: after.isAvailable, source: 'order', reference: orderId,
+              note: 'Ponowna rezerwacja — spóźniona płatność',
+            });
+          }
+        }
+      } else {
+        await tx.insert(orderEvents).values({
+          orderId,
+          eventType: 'order.refund_required',
+          payload: { reason: 'payment_after_cancel', method: p.method, reference: p.reference, amountGrosze: p.amountGrosze ?? totalGrosze },
+        });
+        throw new HttpError(409, 'Zamówienie zostało anulowane — płatność wymaga zwrotu');
+      }
+    }
+
+    let nextStatus: OrderStatus = from;
+    if (from === 'pending_payment' || from === 'payment_failed') {
+      nextStatus = (await isZeroPrepOrder(orderId, tx)) ? 'ready_to_collect' : 'paid';
+    } else if (from === 'in_progress' && (await isZeroPrepOrder(orderId, tx))) {
+      nextStatus = 'ready_to_collect';
+    }
+
+    const [row] = await tx
+      .update(orders)
+      .set({
+        paymentStatus: p.paymentStatus || 'paid',
+        paymentMethod: p.method || current.paymentMethod || 'cash',
+        paymentReference: p.reference || current.paymentReference,
+        paidAmountGrosze: p.amountGrosze ?? totalGrosze,
+        paidAt: new Date(),
+        terminalId: p.terminalId || current.terminalId || null,
+        status: nextStatus,
+        cancellationReason: current.status === 'cancelled' ? null : current.cancellationReason,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+
+    await tx.insert(orderEvents).values({
+      orderId,
+      eventType: 'order.payment_recorded',
+      payload: { method: p.method, amount: row.totalAmount, terminalId: p.terminalId, reference: p.reference, actor: p.actor },
+    });
+
+    if (row.fiscalStatus !== 'issued') {
+      await tx.insert(outboxEvents).values({
+        aggregateType: 'order',
+        aggregateId: orderId,
+        eventType: 'order.fiscalize',
+        payload: { orderId, companyId: row.companyId },
+      });
+    }
+
+    return row;
+  });
+
+  if (!alreadyPaid) broadcastStatus(updated);
+  return { order: (await getOrderById(orderId))!, alreadyPaid };
+}
+
+/**
+ * Record payment for an order (POS / Staff settlement / cash desk). Kept for backwards compatibility.
  */
 export async function recordOrderPayment(
   orderId: string,
   paymentMethod: string,
-  terminalId?: string
+  terminalId?: string,
+  opts: Omit<PaymentRecord, 'method' | 'terminalId'> = {}
 ): Promise<OrderDetail> {
+  const res = await markOrderPaid(orderId, { method: paymentMethod || 'cash', terminalId, ...opts });
+  return res.order;
+}
+
+/** Cancel unpaid online orders older than ttlMinutes (releases stock). Returns number of cancelled orders. */
+export async function expireUnpaidOrders(
+  ttlMinutes: number,
+  limit = 200,
+  beforeCancel?: (orderId: string, hasPaymentToken: boolean) => Promise<boolean>
+): Promise<string[]> {
   const db = getDatabase();
-
-  const [existingOrder] = await db
-    .select()
+  const stale = await db
+    .select({ id: orders.id, paymentToken: orders.paymentToken })
     .from(orders)
-    .where(eq(orders.id, orderId))
-    .limit(1);
+    .where(and(inArray(orders.status, ['pending_payment', 'payment_failed']), sql`${orders.createdAt} < now() - make_interval(mins => ${ttlMinutes})`))
+    .limit(limit);
 
-  if (!existingOrder) {
-    throw new Error(`Order ${orderId} not found`);
-  }
-
-  // If order was pending_payment, advance to paid or ready_to_collect if zero-prep.
-  // If order was already in_progress, check if it can be promoted to ready_to_collect if zero-prep.
-  let nextStatus = existingOrder.status;
-  if (existingOrder.status === 'pending_payment') {
-    const isZeroPrep = await isZeroPrepOrder(orderId, db);
-    nextStatus = isZeroPrep ? 'ready_to_collect' : 'paid';
-  } else if (existingOrder.status === 'in_progress') {
-    const isZeroPrep = await isZeroPrepOrder(orderId, db);
-    if (isZeroPrep) {
-      nextStatus = 'ready_to_collect';
+  const cancelled: string[] = [];
+  for (const s of stale) {
+    // Give the payment gateway a last chance (a paid order must never be cancelled by the timeout)
+    if (beforeCancel) {
+      const keep = await beforeCancel(s.id, !!s.paymentToken).catch(() => true);
+      if (keep) continue;
+    }
+    try {
+      await updateOrderStatus(s.id, 'cancelled', { reason: 'payment_timeout', actor: 'system' });
+      cancelled.push(s.id);
+    } catch (err: any) {
+      console.warn(`[OrderExpiry] Could not cancel ${s.id}:`, err.message);
     }
   }
-
-  const [updatedOrder] = await db
-    .update(orders)
-    .set({
-      paymentStatus: 'paid',
-      paymentMethod: paymentMethod || existingOrder.paymentMethod || 'cash',
-      terminalId: terminalId || existingOrder.terminalId || null,
-      status: nextStatus,
-      updatedAt: new Date(),
-    })
-    .where(eq(orders.id, orderId))
-    .returning();
-
-  // Log payment event
-  await db.insert(orderEvents).values({
-    orderId,
-    eventType: 'order.payment_recorded',
-    payload: {
-      paymentMethod,
-      amount: updatedOrder.totalAmount,
-      terminalId,
-    },
-  });
-
-  // Trigger fiscalization outbox event if not already issued
-  if (updatedOrder.fiscalStatus !== 'issued') {
-    await db.insert(outboxEvents).values({
-      aggregateType: 'order',
-      aggregateId: orderId,
-      eventType: 'order.fiscalize',
-      payload: { orderId, companyId: updatedOrder.companyId },
-    });
-  }
-
-  const orderDetail = (await getOrderById(orderId))!;
-
-  // Broadcast to Staff
-  broadcastToStaff(updatedOrder.companyId, {
-    type: 'order.status_updated',
-    timestamp: new Date().toISOString(),
-    companyId: updatedOrder.companyId,
-    brandId: updatedOrder.brandId,
-    payload: {
-      orderId,
-      orderNumber: updatedOrder.orderNumber,
-      status: nextStatus,
-      collectionPin: updatedOrder.collectionPin,
-    },
-  });
-
-  // Broadcast to Customer Tracker
-  broadcastToOrder(orderId, {
-    type: 'order.status_updated',
-    timestamp: new Date().toISOString(),
-    companyId: updatedOrder.companyId,
-    brandId: updatedOrder.brandId,
-    payload: {
-      orderId,
-      orderNumber: updatedOrder.orderNumber,
-      status: nextStatus,
-      collectionPin: updatedOrder.collectionPin,
-    },
-  });
-
-  return orderDetail;
+  return cancelled;
 }

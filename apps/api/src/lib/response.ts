@@ -62,3 +62,19 @@ export class HttpError extends Error {
     this.errors = errors;
   }
 }
+
+/**
+ * Uniform error reply for route catch-blocks. Keeps both `error` and `message`
+ * keys because existing clients read either of them.
+ */
+export function sendHttpError(reply: FastifyReply, err: any, fallback = 'Wystąpił błąd', fallbackStatus = 400) {
+  const statusCode = typeof err?.statusCode === 'number' ? err.statusCode : fallbackStatus;
+  const message = err?.message || fallback;
+  return reply.code(statusCode).send({
+    success: false,
+    error: message,
+    message,
+    ...(err?.errors || {}),
+    timestamp: now(),
+  });
+}

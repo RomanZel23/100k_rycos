@@ -1,314 +1,132 @@
 import { Worker, Job } from 'bullmq';
-import mqtt from 'mqtt';
-import { getDatabase, orders, orderItems, fiscalReceipts, fiscalDevices, eq, and } from '@rycos/database';
-import { redisConnection } from '../queues/index.js';
+import {
+  getDatabase,
+  orders,
+  eq,
+  sql,
+  and,
+  inArray,
+  claimOrderFiscalization,
+  completeOrderFiscalization,
+  failOrderFiscalization,
+  markFiscalIssuedByDuplicate,
+  resolveFiscalDisplayId,
+} from '@rycos/database';
+import { buildFiscalPayload, parseFiscalResult, fiscalExternalRef, isDuplicateFiscalRefError } from '@rycos/shared';
+import { redisConnection, fiscalQueue } from '../queues/index.js';
 import { env } from '../config/env.js';
-import { randomUUID } from 'crypto';
+import { MqttRpc } from '../lib/mqttRpc.js';
 
 interface FiscalJobData {
   orderId: string;
   companyId: number;
 }
 
-const PAYMENT_METHOD_MAP: Record<string, string> = {
-  cash: 'Cash',
-  card: 'Card',
-  google_pay: 'Mobile',
-  apple_pay: 'Mobile',
-  blik: 'Transfer',
-};
-
-function mapPaymentMethod(method?: string | null): string {
-  if (!method) return 'Transfer';
-  return PAYMENT_METHOD_MAP[method.toLowerCase()] || 'Transfer';
-}
+const rpc = new MqttRpc({
+  host: env.RYCOS_MQTT_HOST,
+  port: env.RYCOS_MQTT_PORT,
+  username: env.RYCOS_MQTT_USERNAME,
+  password: env.RYCOS_MQTT_PASSWORD,
+  clientPrefix: 'worker',
+});
 
 /**
- * Execute command on physical or virtual RYCOS device via MQTT with correlation.
+ * Fiscal worker. Uses the SAME atomic claim, payload builder and device resolution as the API,
+ * so a receipt is issued at most once per order even when the POS fiscalizes synchronously.
  */
-function sendRycosCommand(
-  displayId: string,
-  action: string,
-  method: string,
-  payload: any,
-  timeoutMs = 15000
-): Promise<any> {
-  const commandTopic = `rycos/${displayId}/command`;
-  const responseTopic = `rycos/${displayId}/response`;
-  const commandId = randomUUID();
-
-  return new Promise((resolve, reject) => {
-    const client = mqtt.connect({
-      host: env.RYCOS_MQTT_HOST,
-      port: env.RYCOS_MQTT_PORT,
-      protocol: 'mqtts',
-      username: env.RYCOS_MQTT_USERNAME,
-      password: env.RYCOS_MQTT_PASSWORD,
-      clientId: `worker-fiscal-${randomUUID().slice(0, 8)}`,
-      clean: true,
-      connectTimeout: 10000,
-      reconnectPeriod: 0,
-    });
-
-    let settled = false;
-    let timer: NodeJS.Timeout | null = null;
-
-    function cleanup(err?: Error | null, result?: any) {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      client.end(true);
-      if (err) reject(err);
-      else resolve(result);
-    }
-
-    timer = setTimeout(() => {
-      cleanup(new Error(`RYCOS device ${displayId} timed out after ${timeoutMs}ms for ${action}`));
-    }, timeoutMs);
-
-    client.on('error', (err) => {
-      cleanup(new Error(`MQTT connection error: ${err.message}`));
-    });
-
-    client.on('connect', () => {
-      client.subscribe(responseTopic, { qos: 1 }, (subErr) => {
-        if (subErr) {
-          return cleanup(new Error(`MQTT subscribe to ${responseTopic} failed: ${subErr.message}`));
-        }
-
-        const command = JSON.stringify({
-          id: commandId,
-          t_sent: Date.now(),
-          action,
-          method,
-          payload,
-        });
-
-        client.publish(commandTopic, command, { qos: 1 }, (pubErr) => {
-          if (pubErr) {
-            return cleanup(new Error(`MQTT publish to ${commandTopic} failed: ${pubErr.message}`));
-          }
-          console.log(`[Fiscal Worker] → Sent ${method} ${action} (id: ${commandId}) to ${displayId}`);
-        });
-      });
-    });
-
-    client.on('message', (topic, message) => {
-      if (topic !== responseTopic) return;
-      try {
-        const data = JSON.parse(message.toString());
-        if (data.id !== commandId) return; // ignore other messages
-
-        console.log(`[Fiscal Worker] ← Received response (id: ${commandId}, status: ${data.status})`);
-        if (data.status >= 200 && data.status < 300) {
-          cleanup(null, data.result);
-        } else {
-          cleanup(new Error(`RYCOS error (status ${data.status}): ${JSON.stringify(data.result)}`));
-        }
-      } catch (e: any) {
-        cleanup(new Error(`Invalid JSON in response from ${displayId}: ${e.message}`));
-      }
-    });
-  });
-}
-
 export function startFiscalWorker() {
   const worker = new Worker<FiscalJobData>(
     'fiscalization',
     async (job: Job<FiscalJobData>) => {
-      const { orderId, companyId } = job.data;
-      console.log(`[Fiscal Worker] Processing order ${orderId} for company ${companyId}`);
-
+      const { orderId } = job.data;
       const db = getDatabase();
 
-      // 1. Fetch Order & Items
-      const [order] = await db
-        .select()
-        .from(orders)
-        .where(eq(orders.id, orderId))
-        .limit(1);
-
+      const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
       if (!order) {
-        throw new Error(`Order ${orderId} not found`);
-      }
-
-      if (order.fiscalStatus === 'issued') {
-        console.log(`[Fiscal Worker] Order ${orderId} already fiscalized. Skipping.`);
+        console.warn(`[Fiscal Worker] Order ${orderId} not found — dropping job`);
         return;
       }
-
-      // Critical Fiscal Compliance Rule: Cannot fiscalize unpaid order!
+      if (order.fiscalStatus === 'issued') return;
       if (order.paymentStatus !== 'paid' && order.paymentStatus !== 'confirmed') {
-        console.warn(
-          `[Fiscal Worker] BLOCKED: Cannot fiscalize unpaid order ${orderId} (paymentStatus: "${order.paymentStatus}"). Skipping.`
-        );
+        console.warn(`[Fiscal Worker] BLOCKED: order ${orderId} is not paid (${order.paymentStatus}). Skipping.`);
         return;
       }
+      if (order.status === 'cancelled') return;
 
-      const items = await db
-        .select()
-        .from(orderItems)
-        .where(eq(orderItems.orderId, orderId));
-
-      // 2. Resolve Fiscal Device ID
-      const [primaryDevice] = await db
-        .select()
-        .from(fiscalDevices)
-        .where(and(eq(fiscalDevices.companyId, companyId), eq(fiscalDevices.isPrimary, true)))
-        .limit(1);
-
-      const displayId = primaryDevice?.deviceId || env.RYCOS_DEFAULT_DISPLAY_ID;
-      const requestId = `REQ-${order.orderNumber}-${Date.now()}`;
-
-      // 3. Build Fiscal Items & Calculate Totals
-      // Every item price must be in grosze/cents and match the payment sum exactly
-      const fiscalItems: any[] = [];
-
-      for (const item of items) {
-        const addons = (item.addonsJson as any[]) || [];
-        const addonsTotalGrosze = addons.reduce(
-          (sum, a) => sum + Math.round((Number(a?.priceDelta) || 0) * 100),
-          0
-        );
-        const itemUnitGrosze = Math.round(parseFloat(item.unitPrice) * 100);
-        const baseUnitGrosze = itemUnitGrosze - addonsTotalGrosze;
-
-        fiscalItems.push({
-          nameItem: item.name.substring(0, 40),
-          ptuCode: item.ptuCode || 'b',
-          priceItem: baseUnitGrosze,
-          qty: item.quantity,
-          typeItem: 'GENERAL',
-          units: 'szt',
-        });
-
-        // Split addons as separate lines on fiscal receipt
-        for (const addon of addons) {
-          const deltaGrosze = Math.round((Number(addon?.priceDelta) || 0) * 100);
-          if (deltaGrosze <= 0) continue;
-
-          fiscalItems.push({
-            nameItem: `+ ${addon.name || 'Dodatek'}`.substring(0, 40),
-            ptuCode: item.ptuCode || 'b',
-            priceItem: deltaGrosze,
-            qty: item.quantity,
-            typeItem: 'GENERAL',
-            units: 'szt',
-          });
-        }
+      const claim = await claimOrderFiscalization(orderId);
+      if (!claim) {
+        const [fresh] = await db.select({ fiscalStatus: orders.fiscalStatus }).from(orders).where(eq(orders.id, orderId)).limit(1);
+        if (fresh?.fiscalStatus === 'issued') return;
+        // Someone else (API) is fiscalizing right now — retry later to verify the outcome
+        throw new Error(`Fiscalization of ${orderId} is in progress elsewhere — will re-check`);
       }
 
-      const itemsTotalGrosze = fiscalItems.reduce(
-        (sum, i) => sum + i.priceItem * i.qty,
-        0
+      const claimed = claim.order;
+      const displayId = await resolveFiscalDisplayId(claimed.companyId, claimed.terminalId, env.RYCOS_DEFAULT_DISPLAY_ID);
+      const { payload, totalGrosze } = buildFiscalPayload(
+        { id: claimed.id, currency: claimed.currency, customerNip: claimed.customerNip, paymentMethod: claimed.paymentMethod },
+        claim.items.map((it) => ({
+          name: it.name,
+          unitPrice: it.unitPrice,
+          quantity: it.quantity,
+          ptuCode: it.ptuCode,
+          taxRate: it.taxRate,
+          addons: it.addonsJson as any,
+        })),
+        { autoPrint: false }
       );
-      const paymentAmountGrosze = itemsTotalGrosze;
 
-      const payload = {
-        header: {
-          externalrefFR: String(requestId).replace(/_/g, '-').substring(0, 40),
-          currency: (order.currency || 'PLN').toUpperCase(),
-          customerNIP: order.customerNip || undefined,
-        },
-        items: fiscalItems,
-        payment: [
-          {
-            paymentMethod: mapPaymentMethod(order.paymentMethod),
-            amount: paymentAmountGrosze,
-            currency: (order.currency || 'PLN').toUpperCase(),
-          },
-        ],
-        output: {
-          autoPrint: false, // E-receipt default (QR / PDF on customer phone)
-          showQrScreen: false,
-          returnQrCodeBase64: true,
-        },
-      };
+      console.log(`[Fiscal Worker] Issuing receipt for Order #${claimed.orderNumber} on ${displayId} (attempt ${claimed.fiscalAttempts})`);
 
-      console.log(`[Fiscal Worker] Issuing fiscal receipt via RYCOS for Order #${order.orderNumber} to device ${displayId}...`);
-
-      // 4. Issue Fiscal Command over MQTT to RYCOS
       let result: any;
       try {
-        result = await sendRycosCommand(displayId, '/fiscal/issue', 'POST', payload, 15000);
+        result = await rpc.call(displayId, '/fiscal/issue', 'POST', payload, 20000);
       } catch (err: any) {
-        console.error(`[Fiscal Worker] Failed communicating with RYCOS device ${displayId}:`, err.message);
+        if (claimed.fiscalAttempts > 1 && isDuplicateFiscalRefError(err.message)) {
+          console.warn(`[Fiscal Worker] Order #${claimed.orderNumber}: duplicate reference — receipt was issued by an earlier attempt`);
+          await markFiscalIssuedByDuplicate(orderId, err.message, displayId);
+          return;
+        }
+        await failOrderFiscalization(orderId, err.message);
         throw err;
       }
 
-      const receiptNumber = String(result?.receiptNumber || result?.number || `PAR_${order.orderNumber}`);
-      const jpkId = String(result?.jpkId || '');
-      const pdfUrl = result?.pdfReceiptUrl || result?.pdfUrl || null;
-      const qrCodeBase64 = result?.qrCodeBase64 || result?.qrCode || result?.qrBase64 || null;
-      const jobId = result?.jobId || result?.printJob?.jobId || null;
+      const parsed = parseFiscalResult(result, claimed.orderNumber);
+      await completeOrderFiscalization({
+        orderId,
+        companyId: claimed.companyId,
+        displayId,
+        requestId: fiscalExternalRef(orderId),
+        receiptNumber: parsed.receiptNumber,
+        jpkId: parsed.jpkId,
+        jobId: parsed.jobId,
+        pdfUrl: parsed.pdfUrl,
+        qrCodeBase64: parsed.qrCodeBase64,
+        grossAmountGrosze: totalGrosze,
+        currency: claimed.currency,
+        customerNip: claimed.customerNip,
+        rawResult: result,
+      });
 
-      console.log(`[Fiscal Worker] ✓ RYCOS Success! Receipt #${receiptNumber}, JPK: ${jpkId}, PDF: ${pdfUrl}, Job: ${jobId}`);
-
-      // 5. Store Fiscal Receipt Record in PostgreSQL
-      await db
-        .insert(fiscalReceipts)
-        .values({
+      const event = {
+        type: 'order.fiscalized',
+        timestamp: new Date().toISOString(),
+        companyId: claimed.companyId,
+        brandId: claimed.brandId,
+        payload: {
           orderId,
-          companyId,
-          displayId,
-          requestId,
-          receiptNumber,
-          jpkId,
-          jobId,
-          grossAmountGrosze: paymentAmountGrosze,
-          currency: order.currency,
-          customerNip: order.customerNip,
-          pdfReceiptUrl: pdfUrl,
-          rawResult: result,
-        })
-        .onConflictDoUpdate({
-          target: fiscalReceipts.orderId,
-          set: {
-            receiptNumber,
-            jpkId,
-            jobId,
-            pdfReceiptUrl: pdfUrl,
-            rawResult: result,
-          },
-        });
+          orderNumber: claimed.orderNumber,
+          receiptNumber: parsed.receiptNumber,
+          pdfUrl: parsed.pdfUrl,
+          qrCode: parsed.qrCodeBase64,
+          jobId: parsed.jobId,
+        },
+      };
+      // Customer tracker + staff screens (API instances relay these channels to WebSockets)
+      await redisConnection.publish('rycos:ws:order', JSON.stringify({ orderId, event }));
+      await redisConnection.publish('rycos:ws:broadcast', JSON.stringify({ companyId: claimed.companyId, event }));
 
-      // 6. Update Order Fiscal Status
-      await db
-        .update(orders)
-        .set({
-          fiscalStatus: 'issued',
-          fiscalDeviceId: displayId,
-          fiscalReceiptNumber: receiptNumber,
-          fiscalPdfUrl: pdfUrl,
-          fiscalJobId: jobId,
-          fiscalQrCode: qrCodeBase64,
-          updatedAt: new Date(),
-        })
-        .where(eq(orders.id, orderId));
-
-      // 7. Publish WebSocket Live Event
-      await redisConnection.publish(
-        'rycos:ws:order',
-        JSON.stringify({
-          orderId,
-          event: {
-            type: 'order.fiscalized',
-            timestamp: new Date().toISOString(),
-            companyId,
-            brandId: order.brandId,
-            payload: {
-              orderId,
-              orderNumber: order.orderNumber,
-              receiptNumber,
-              pdfUrl,
-              qrCode: qrCodeBase64,
-              jobId,
-            },
-          },
-        })
-      );
-
-      console.log(`[Fiscal Worker] ✓ Order ${orderId} successfully fiscalized & broadcasted`);
+      console.log(`[Fiscal Worker] ✓ Order ${orderId} fiscalized (receipt ${parsed.receiptNumber})`);
     },
     {
       connection: redisConnection,
@@ -316,7 +134,60 @@ export function startFiscalWorker() {
     }
   );
 
-  worker.on('failed', (job, err) => {
-    console.error(`[Fiscal Worker] ✗ Job ${job?.id} failed:`, err.message);
+  worker.on('failed', async (job, err) => {
+    console.error(`[Fiscal Worker] ✗ Job ${job?.id} failed (attempt ${job?.attemptsMade}/${job?.opts.attempts}):`, err.message);
+    if (job && job.attemptsMade >= (job.opts.attempts || 1)) {
+      // Final failure: make it visible (fiscal_status stays 'failed' with the error) and alert staff
+      const db = getDatabase();
+      const [o] = await db.select().from(orders).where(eq(orders.id, job.data.orderId)).limit(1).catch(() => [] as any[]);
+      if (o && o.fiscalStatus !== 'issued') {
+        await db
+          .update(orders)
+          .set({ fiscalStatus: 'failed', fiscalError: `Final: ${err.message}`.slice(0, 2000), updatedAt: new Date() })
+          .where(eq(orders.id, o.id))
+          .catch(() => {});
+        await redisConnection
+          .publish('rycos:ws:broadcast', JSON.stringify({
+            companyId: o.companyId,
+            event: {
+              type: 'order.fiscal_failed',
+              timestamp: new Date().toISOString(),
+              companyId: o.companyId,
+              brandId: o.brandId,
+              payload: { orderId: o.id, orderNumber: o.orderNumber, error: err.message },
+            },
+          }))
+          .catch(() => {});
+      }
+    }
   });
+
+  return worker;
+}
+
+/** Re-enqueue paid orders whose fiscalization failed or got stuck (every 5 minutes). */
+export function startFiscalSweeper() {
+  const sweep = async () => {
+    try {
+      const db = getDatabase();
+      const stuck = await db
+        .select({ id: orders.id, companyId: orders.companyId })
+        .from(orders)
+        .where(and(
+          inArray(orders.paymentStatus, ['paid', 'confirmed']),
+          sql`${orders.status} <> 'cancelled'`,
+          sql`((${orders.fiscalStatus} = 'none' AND ${orders.paidAt} < now() - interval '5 minutes')
+              OR (${orders.fiscalStatus} = 'pending' AND ${orders.fiscalClaimedAt} < now() - interval '5 minutes')
+              OR (${orders.fiscalStatus} = 'failed' AND ${orders.fiscalAttempts} < 20 AND ${orders.updatedAt} < now() - interval '15 minutes'))`
+        ))
+        .limit(100);
+      for (const o of stuck) {
+        await fiscalQueue.add('fiscalize', { orderId: o.id, companyId: o.companyId }, { jobId: `sweep-${o.id}-${Math.floor(Date.now() / 900000)}` });
+      }
+      if (stuck.length) console.log(`[Fiscal Sweeper] Re-enqueued ${stuck.length} orders`);
+    } catch (err: any) {
+      console.error('[Fiscal Sweeper] error:', err.message);
+    }
+  };
+  setInterval(sweep, 5 * 60 * 1000);
 }

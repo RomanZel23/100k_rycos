@@ -1,4 +1,4 @@
-import { pgTable, uuid, serial, integer, varchar, text, numeric, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, serial, integer, varchar, text, numeric, timestamp, jsonb, index, uniqueIndex, boolean } from 'drizzle-orm/pg-core';
 import { companies, brands } from './companies';
 import { products } from './catalog';
 
@@ -27,6 +27,17 @@ export const orders = pgTable('orders', {
   fiscalJobId: varchar('fiscal_job_id', { length: 64 }),
   fiscalQrCode: text('fiscal_qr_code'),
   terminalId: varchar('terminal_id', { length: 64 }),
+  // Payment gateway tracking (persisted, not only in Redis)
+  paymentToken: varchar('payment_token', { length: 128 }),
+  paymentReference: varchar('payment_reference', { length: 128 }),
+  paidAmountGrosze: integer('paid_amount_grosze'),
+  paidAt: timestamp('paid_at'),
+  // Fiscalization claim / retry bookkeeping
+  fiscalAttempts: integer('fiscal_attempts').default(0).notNull(),
+  fiscalError: text('fiscal_error'),
+  fiscalClaimedAt: timestamp('fiscal_claimed_at'),
+  stockReleased: boolean('stock_released').default(false).notNull(),
+  cancellationReason: text('cancellation_reason'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (t) => [
@@ -59,4 +70,28 @@ export const orderEvents = pgTable('order_events', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => [
   index('idx_order_events_order').on(t.orderId),
+]);
+
+// Atomic per-company order number counter (replaces MAX(order_number)+1)
+export const orderCounters = pgTable('order_counters', {
+  companyId: integer('company_id').references(() => companies.id, { onDelete: 'cascade' }).primaryKey(),
+  lastNumber: integer('last_number').default(0).notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Stock movement ledger (orders, manual edits, auto-disable)
+export const inventoryHistory = pgTable('inventory_history', {
+  id: serial('id').primaryKey(),
+  companyId: integer('company_id').references(() => companies.id, { onDelete: 'cascade' }).notNull(),
+  productId: integer('product_id').references(() => products.id, { onDelete: 'cascade' }).notNull(),
+  quantityChange: integer('quantity_change').notNull(),
+  quantityAfter: integer('quantity_after'),
+  isAvailableAfter: boolean('is_available_after'),
+  source: varchar('source', { length: 16 }).notNull(), // 'manual' | 'order' | 'order_release' | 'auto_disable'
+  reference: varchar('reference', { length: 128 }),
+  note: text('note'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => [
+  index('idx_inventory_history_company_created').on(t.companyId, t.createdAt),
+  index('idx_inventory_history_product').on(t.productId),
 ]);

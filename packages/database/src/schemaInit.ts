@@ -397,6 +397,75 @@ CREATE UNIQUE INDEX IF NOT EXISTS "uq_order_fiscal_receipt" ON "fiscal_receipts"
 CREATE INDEX IF NOT EXISTS "idx_outbox_status_created" ON "outbox_events" ("status", "created_at");
 `;
 
+
+/**
+ * Flow hardening migration (idempotent). Runs on every boot, for both fresh and existing databases.
+ * - persisted payment tracking, fiscal claim bookkeeping, stock release flag on orders
+ * - atomic order counters (+ unique order numbers per company)
+ * - inventory ledger
+ * - outbox retry scheduling
+ * - terminal session versioning (token revocation)
+ */
+export const FLOW_HARDENING_DDL = `
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "payment_token" varchar(128);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "payment_reference" varchar(128);
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "paid_amount_grosze" integer;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "paid_at" timestamp;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_attempts" integer DEFAULT 0 NOT NULL;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_error" text;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_claimed_at" timestamp;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "stock_released" boolean DEFAULT false NOT NULL;
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "cancellation_reason" text;
+CREATE INDEX IF NOT EXISTS "idx_orders_pending_payment" ON "orders" ("status", "created_at") WHERE "status" = 'pending_payment';
+CREATE INDEX IF NOT EXISTS "idx_orders_company_pin" ON "orders" ("company_id", "collection_pin");
+
+CREATE TABLE IF NOT EXISTS "order_counters" (
+  "company_id" integer PRIMARY KEY NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+  "last_number" integer DEFAULT 0 NOT NULL,
+  "updated_at" timestamp DEFAULT now() NOT NULL
+);
+INSERT INTO "order_counters" ("company_id", "last_number")
+SELECT o.company_id, MAX(o.order_number) FROM "orders" o WHERE o.order_type <> 'test' GROUP BY o.company_id
+ON CONFLICT ("company_id") DO UPDATE SET "last_number" = GREATEST("order_counters"."last_number", EXCLUDED."last_number");
+
+DO $uq$
+BEGIN
+  CREATE UNIQUE INDEX IF NOT EXISTS "uq_orders_company_number" ON "orders" ("company_id", "order_number") WHERE "order_type" <> 'test';
+EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE 'uq_orders_company_number not created: historical duplicate order numbers exist';
+END $uq$;
+
+CREATE TABLE IF NOT EXISTS "inventory_history" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "company_id" integer NOT NULL REFERENCES "companies"("id") ON DELETE cascade,
+  "product_id" integer NOT NULL REFERENCES "products"("id") ON DELETE cascade,
+  "quantity_change" integer NOT NULL,
+  "quantity_after" integer,
+  "is_available_after" boolean,
+  "source" varchar(16) NOT NULL,
+  "reference" varchar(128),
+  "note" text,
+  "created_at" timestamp DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "idx_inventory_history_company_created" ON "inventory_history" ("company_id", "created_at");
+CREATE INDEX IF NOT EXISTS "idx_inventory_history_product" ON "inventory_history" ("product_id");
+
+ALTER TABLE "outbox_events" ADD COLUMN IF NOT EXISTS "next_attempt_at" timestamp DEFAULT now() NOT NULL;
+ALTER TABLE "outbox_events" ADD COLUMN IF NOT EXISTS "locked_at" timestamp;
+CREATE INDEX IF NOT EXISTS "idx_outbox_pending_next" ON "outbox_events" ("status", "next_attempt_at");
+
+ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "session_version" integer DEFAULT 0 NOT NULL;
+
+DO $ob$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'onboarding_orders') THEN
+    ALTER TABLE "onboarding_orders" ADD COLUMN IF NOT EXISTS "provisioning_state" jsonb DEFAULT '{}'::jsonb NOT NULL;
+  END IF;
+END $ob$;
+
+DELETE FROM "idempotency_keys" WHERE "expires_at" < now();
+`;
+
 export async function ensureDatabaseSchema() {
   const raw = getRawClient();
   if (!raw) return;
@@ -583,6 +652,9 @@ export async function ensureDatabaseSchema() {
         `);
       }
 
+      // Always apply idempotent flow-hardening migration
+      await raw.unsafe(FLOW_HARDENING_DDL);
+
       // Check if brands table exists before querying count
       const brandsTableCheck: any = await raw.unsafe(`
         SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'brands' LIMIT 1;
@@ -752,7 +824,7 @@ export async function ensureDatabaseSchema() {
               NOW()
             )
             ON CONFLICT (email) DO UPDATE SET
-              encrypted_password = crypt('Abc@123456', gen_salt('bf')),
+              -- never reset an existing password on boot
               raw_user_meta_data = '{"company_id":1,"role":"platform_admin","name":"Roman Żeleźnik"}'::jsonb,
               updated_at = NOW();
 

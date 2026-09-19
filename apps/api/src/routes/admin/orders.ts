@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { getDatabase, orders, orderItems, products, brands, eq, and, desc, sql, inArray, gte, lte } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
-import { success, notFound, error, validationError } from '../../lib/response.js';
-import { updateOrderStatus, recordOrderPayment } from '../../services/orderEngine.js';
+import { success, notFound, error, validationError, sendHttpError } from '../../lib/response.js';
+import { updateOrderStatus, markOrderPaid } from '../../services/orderEngine.js';
 import { fiscalizeOrder } from '../../services/fiscalService.js';
-import { broadcastToOrder, broadcastToStaff } from '../../plugins/websocket.js';
+import { verifyPinAndComplete, pickupChallenge, pickupConfirm } from '../../services/pickupService.js';
 
 export async function adminOrdersRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -81,15 +81,17 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
     return success(reply, rowsWithItems, 'Orders retrieved');
   });
 
-  // PUT /v1/admin/orders/:id/status - Update order lifecycle status (e.g. kitchen starts prep, marks ready)
+  const actorKey = (req: any) => String(req.user?.terminal_id || req.user?.id || req.ip);
+
+  // PUT /v1/admin/orders/:id/status - Update order lifecycle status (validated state machine, own company only)
   fastify.put('/v1/admin/orders/:id/status', async (req, reply) => {
     const { id } = req.params as { id: string };
-    let { status } = req.body as { status?: string };
+    let { status, reason, cancellationReason } = (req.body ?? {}) as { status?: string; reason?: string; cancellationReason?: string };
 
     if (status === 'preparing') status = 'in_progress';
     if (status === 'ready_for_pickup') status = 'ready_to_collect';
 
-    const validStatuses = ['pending_payment', 'paid', 'in_progress', 'ready_to_collect', 'completed', 'cancelled'];
+    const validStatuses = ['paid', 'in_progress', 'ready_to_collect', 'completed', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {
       return validationError(reply, {
         status: `Status must be one of: ${validStatuses.join(', ')}`,
@@ -97,305 +99,77 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const updated = await updateOrderStatus(id, status as any);
+      const updated = await updateOrderStatus(id, status as any, {
+        companyId: getCompanyId(req),
+        reason: cancellationReason || reason,
+        actor: actorKey(req),
+      });
       return success(reply, updated, `Order status updated to ${status}`);
     } catch (err: any) {
-      return error(reply, err.message || 'Failed to update order status');
+      return sendHttpError(reply, err, 'Failed to update order status');
     }
   });
 
-  // POST /v1/admin/orders/:id/pay - Settle order payment and trigger fiscalization (POS / Staff / Tables)
+  // POST /v1/admin/orders/:id/pay - Record counter payment and fiscalize (POS / Staff / Tables)
   fastify.post('/v1/admin/orders/:id/pay', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { paymentMethod, terminalId, autoPrint } = (req.body || {}) as {
-      paymentMethod?: string;
-      terminalId?: string;
-      autoPrint?: boolean;
-    };
+    const { paymentMethod, autoPrint } = (req.body || {}) as { paymentMethod?: string; autoPrint?: boolean };
+    const companyId = getCompanyId(req);
+    const terminalId = (req.user as any)?.terminal_id || null;
 
     const method = paymentMethod || 'cash';
+    if (!['cash', 'card', 'blik', 'voucher', 'other'].includes(method)) {
+      return validationError(reply, { paymentMethod: `Nieobsługiwana metoda płatności przy kasie: ${method}` });
+    }
+
     try {
-      const updated = await recordOrderPayment(id, method, terminalId);
+      const { order: updated, alreadyPaid } = await markOrderPaid(id, { method, terminalId, companyId, actor: actorKey(req) });
       let fiscalData = null;
       try {
-        fiscalData = await fiscalizeOrder({
-          orderId: id,
-          autoPrint: autoPrint ?? false,
-          terminalId,
-        });
+        fiscalData = await fiscalizeOrder({ orderId: id, autoPrint: autoPrint ?? false, terminalId: terminalId || undefined, companyId });
       } catch (fErr: any) {
-        console.warn('[Admin Pay] Fiscalization warning:', fErr.message);
+        console.warn('[Admin Pay] Fiscalization deferred to worker:', fErr.message);
       }
 
       return success(
         reply,
-        { ...updated, fiscal: fiscalData },
-        `Płatność dla zamówienia #${updated.orderNumber} została zarejestrowana i przekazana do fiskalizacji`
+        { ...updated, fiscal: fiscalData, alreadyPaid },
+        alreadyPaid
+          ? `Zamówienie #${updated.orderNumber} było już opłacone`
+          : `Płatność dla zamówienia #${updated.orderNumber} została zarejestrowana i przekazana do fiskalizacji`
       );
     } catch (err: any) {
-      return error(reply, err.message || 'Nie udało się zarejestrować płatności');
+      return sendHttpError(reply, err, 'Nie udało się zarejestrować płatności');
     }
   });
 
   // POST /v1/admin/orders/verify-pin - Verify pickup PIN or QR code and complete order
   fastify.post('/v1/admin/orders/verify-pin', async (req, reply) => {
-    const db = getDatabase();
-    const companyId = getCompanyId(req);
-    let { orderId, orderNumber, pin, qrData } = (req.body ?? {}) as {
-      orderId?: string;
-      orderNumber?: number | string;
-      pin?: string;
-      qrData?: string;
-    };
-
-    // If QR code scanned: e.g. "4:5412" or "UUID:5412"
-    if (qrData && typeof qrData === 'string') {
-      const parts = qrData.trim().split(':');
-      if (parts.length === 2) {
-        if (parts[0].length > 10) {
-          orderId = parts[0];
-        } else {
-          orderNumber = parseInt(parts[0], 10);
-        }
-        pin = parts[1];
-      } else if (parts.length === 1) {
-        pin = parts[0];
-      }
-    }
-
-    if (!pin) {
-      return validationError(reply, { pin: 'Wprowadź 4-cyfrowy PIN lub zeskanuj kod QR' });
-    }
-
-    const cleanPin = String(pin).trim();
-
-    // Find order
-    let targetOrder = null;
-    if (orderId) {
-      const [o] = await db
-        .select()
-        .from(orders)
-        .where(and(eq(orders.companyId, companyId), eq(orders.id, orderId)))
-        .limit(1);
-      targetOrder = o;
-    } else if (orderNumber && !isNaN(Number(orderNumber))) {
-      const [o] = await db
-        .select()
-        .from(orders)
-        .where(and(eq(orders.companyId, companyId), eq(orders.orderNumber, Number(orderNumber))))
-        .limit(1);
-      targetOrder = o;
-    } else {
-      // Find candidate by PIN among active orders
-      const candidates = await db
-        .select()
-        .from(orders)
-        .where(
-          and(
-            eq(orders.companyId, companyId),
-            sql`${orders.status} IN ('ready_to_collect', 'in_progress', 'paid')`,
-            eq(orders.collectionPin, cleanPin)
-          )
-        )
-        .orderBy(desc(orders.createdAt))
-        .limit(1);
-      targetOrder = candidates[0];
-    }
-
-    if (!targetOrder) {
-      return error(reply, 'Nie znaleziono zamówienia pasującego do podanego PIN-u', 404);
-    }
-
-    if (targetOrder.collectionPin !== cleanPin) {
-      return error(reply, `Błędny PIN dla zamówienia #${targetOrder.orderNumber}`, 400);
-    }
-
-    if (targetOrder.status === 'completed') {
-      const completionTime = targetOrder.updatedAt
-        ? new Date(targetOrder.updatedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
-        : '';
-      return error(
-        reply,
-        `⚠️ Zamówienie #${targetOrder.orderNumber} zostało już wcześniej odebrane / wydane${completionTime ? ` o godz. ${completionTime}` : ''}!`,
-        400
-      );
-    }
-
-    if (targetOrder.status === 'cancelled') {
-      return error(
-        reply,
-        `⚠️ Zamówienie #${targetOrder.orderNumber} zostało anulowane i nie może zostać wydane!`,
-        400
-      );
-    }
-
-    if (targetOrder.status === 'pending_payment' || targetOrder.paymentStatus === 'pending') {
-      return error(
-        reply,
-        `⚠️ Zamówienie #${targetOrder.orderNumber} nie zostało jeszcze opłacone!`,
-        400
-      );
-    }
-
     try {
-      const updated = await updateOrderStatus(targetOrder.id, 'completed');
-      return success(reply, updated, `Zamówienie #${targetOrder.orderNumber} zostało pomyślnie wydane!`);
+      const res = await verifyPinAndComplete({ ...((req.body ?? {}) as any), companyId: getCompanyId(req), actorKey: actorKey(req) });
+      return success(reply, res.order, res.message);
     } catch (err: any) {
-      return error(reply, err.message || 'Nie udało się wydać zamówienia');
+      return sendHttpError(reply, err, 'Nie udało się wydać zamówienia');
     }
   });
 
-  // POST /v1/admin/orders/pickup-challenge - Staff scans QR code -> Backend pushes challenge PIN to customer phone & returns order items
+  // POST /v1/admin/orders/pickup-challenge - Staff scans QR -> PIN shown on customer phone, items returned to staff
   fastify.post('/v1/admin/orders/pickup-challenge', async (req, reply) => {
-    const db = getDatabase();
-    const companyId = getCompanyId(req);
-    let { orderId, orderNumber, qrData } = (req.body ?? {}) as {
-      orderId?: string;
-      orderNumber?: number | string;
-      qrData?: string;
-    };
-
-    if (qrData && typeof qrData === 'string') {
-      const raw = qrData.trim();
-      if (raw.startsWith('rycos:pickup:')) {
-        orderId = raw.replace('rycos:pickup:', '').trim();
-      } else if (raw.includes(':')) {
-        const parts = raw.split(':');
-        if (parts[0].length > 10) {
-          orderId = parts[0];
-        } else {
-          orderNumber = parseInt(parts[0], 10);
-        }
-      } else {
-        orderId = raw;
-      }
+    try {
+      const res = await pickupChallenge({ ...((req.body ?? {}) as any), companyId: getCompanyId(req), actorKey: actorKey(req) });
+      return success(reply, res, 'Kod QR poprawny! PIN został wyświetlony na telefonie klienta.');
+    } catch (err: any) {
+      return sendHttpError(reply, err, 'Nie znaleziono zamówienia do wydania');
     }
-
-    let targetOrder = null;
-    if (orderId) {
-      const [o] = await db
-        .select()
-        .from(orders)
-        .where(and(eq(orders.companyId, companyId), eq(orders.id, orderId)))
-        .limit(1);
-      targetOrder = o;
-    } else if (orderNumber && !isNaN(Number(orderNumber))) {
-      const [o] = await db
-        .select()
-        .from(orders)
-        .where(and(eq(orders.companyId, companyId), eq(orders.orderNumber, Number(orderNumber))))
-        .limit(1);
-      targetOrder = o;
-    }
-
-    if (!targetOrder) {
-      return error(reply, 'Nie znaleziono zamówienia do wydania', 404);
-    }
-
-    if (targetOrder.status === 'completed') {
-      return error(
-        reply,
-        `⚠️ Zamówienie #${targetOrder.orderNumber} zostało już wcześniej odebrane / wydane!`,
-        400,
-        { alreadyCompleted: true, data: targetOrder }
-      );
-    }
-
-    if (targetOrder.status === 'cancelled') {
-      return error(reply, `⚠️ Zamówienie #${targetOrder.orderNumber} zostało anulowane i nie może zostać wydane!`, 400);
-    }
-
-    if (targetOrder.status === 'pending_payment' || targetOrder.paymentStatus === 'pending') {
-      return error(reply, `⚠️ Zamówienie #${targetOrder.orderNumber} nie zostało jeszcze opłacone!`, 400);
-    }
-
-    const items = await db
-      .select({
-        id: orderItems.id,
-        name: orderItems.name,
-        quantity: orderItems.quantity,
-        addons: orderItems.addonsJson,
-        specialInstructions: orderItems.specialInstructions,
-      })
-      .from(orderItems)
-      .where(eq(orderItems.orderId, targetOrder.id));
-
-    // Push live challenge PIN to customer's order tracker via WebSocket
-    await broadcastToOrder(targetOrder.id, {
-      type: 'pickup.challenge',
-      orderId: targetOrder.id,
-      orderNumber: targetOrder.orderNumber,
-      pin: targetOrder.collectionPin,
-      timestamp: new Date().toISOString(),
-    });
-
-    return success(reply, {
-      challengeActive: true,
-      order: {
-        id: targetOrder.id,
-        orderNumber: targetOrder.orderNumber,
-        orderType: targetOrder.orderType,
-        tableLabel: targetOrder.tableLabel,
-        parkingSpot: targetOrder.parkingSpot,
-        totalAmount: targetOrder.totalAmount,
-        currency: targetOrder.currency,
-        status: targetOrder.status,
-        customerNote: targetOrder.customerNote,
-        items,
-      },
-    }, `Kod QR poprawny! PIN został wygenerowany na telefonie klienta.`);
   });
 
   // POST /v1/admin/orders/pickup-confirm - Staff inputs the customer's PIN to finalize handover
   fastify.post('/v1/admin/orders/pickup-confirm', async (req, reply) => {
-    const db = getDatabase();
-    const companyId = getCompanyId(req);
-    const { orderId, pin } = (req.body ?? {}) as {
-      orderId?: string;
-      pin?: string;
-    };
-
-    if (!orderId || !pin) {
-      return validationError(reply, { pin: 'orderId oraz pin są wymagane do potwierdzenia odbioru' });
-    }
-
-    const cleanPin = String(pin).trim();
-
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.companyId, companyId), eq(orders.id, orderId)))
-      .limit(1);
-
-    if (!order) {
-      return error(reply, 'Nie znaleziono zamówienia', 404);
-    }
-
-    if (order.collectionPin !== cleanPin) {
-      return error(reply, `Nieprawidłowy PIN klienta dla zamówienia #${order.orderNumber}`, 400);
-    }
-
-    if (order.status === 'completed') {
-      return error(reply, `Zamówienie #${order.orderNumber} zostało już wcześniej wydane!`, 400);
-    }
-
     try {
-      const updated = await updateOrderStatus(order.id, 'completed');
-
-      // Notify customer tracker
-      await broadcastToOrder(order.id, {
-        type: 'order.status_updated',
-        payload: {
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          status: 'completed',
-          collectionPin: order.collectionPin,
-        },
-      });
-
-      return success(reply, updated, `Zamówienie #${order.orderNumber} zostało pomyślnie wydane!`);
+      const res = await pickupConfirm({ ...((req.body ?? {}) as any), companyId: getCompanyId(req), actorKey: actorKey(req) });
+      return success(reply, res.order, res.message);
     } catch (err: any) {
-      return error(reply, err.message || 'Błąd finalizacji wydania zamówienia');
+      return sendHttpError(reply, err, 'Błąd finalizacji wydania zamówienia');
     }
   });
 

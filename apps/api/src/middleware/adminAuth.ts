@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
-import { env } from '../config/env.js';
+import { env, getJwtSecret, getTerminalTokenSecret } from '../config/env.js';
 import { unauthorized, forbidden } from '../lib/response.js';
 
 export interface AuthUser {
@@ -10,6 +10,7 @@ export interface AuthUser {
   company_id: number;
   role?: string;
   location_id?: number | null;
+  terminal_id?: string;
   [key: string]: unknown;
 }
 
@@ -19,7 +20,9 @@ declare module 'fastify' {
   }
 }
 
-function extractToken(req: FastifyRequest): string | null {
+const PLATFORM_ADMIN_EMAILS = new Set(['roman.zeleznik@solutionsbay.pl', 'admin@100k-rycos.eu', 'admin@rycos.eu']);
+
+function extractBearer(req: FastifyRequest): string | null {
   const header = req.headers['authorization'];
   if (!header || Array.isArray(header)) return null;
   const parts = header.split(' ');
@@ -27,48 +30,51 @@ function extractToken(req: FastifyRequest): string | null {
   return parts[1];
 }
 
-export function resolveUser(req: FastifyRequest): AuthUser | null {
-  const token = extractToken(req);
+/**
+ * Resolve an admin / staff user from a VERIFIED JWT.
+ * Tokens are never accepted unverified. A token without a company is rejected
+ * (except for platform admins).
+ */
+export function resolveUserFromToken(token: string | null | undefined): AuthUser | null {
+  if (!token) return null;
+  let claims: any;
+  try {
+    claims = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
+  } catch {
+    return null;
+  }
+  if (!claims || claims.typ === 'terminal') return null;
 
-  // If token is provided, verify and resolve the authenticated user
-  if (token) {
-    try {
-      let claims: any;
-      if (env.SUPABASE_JWT_SECRET) {
-        claims = jwt.verify(token, env.SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
-      } else {
-        claims = jwt.decode(token);
-        if (!claims) return null;
-        if (typeof claims.exp === 'number' && claims.exp < Math.floor(Date.now() / 1000)) {
-          return null;
-        }
-      }
+  const meta = claims.user_metadata || {};
+  const email = String(meta.email || claims.email || '').toLowerCase().trim();
+  let role = String(meta.role || claims.app_role || '').toLowerCase().trim();
+  const rawCompany = meta.company_id ?? claims.company_id;
+  let companyId = rawCompany !== undefined && rawCompany !== null ? parseInt(String(rawCompany), 10) : NaN;
 
-      const meta = claims.user_metadata || {};
-      const companyId = parseInt(String(meta.company_id || claims.company_id || 1), 10);
-      const email = String(meta.email || claims.email || '').toLowerCase().trim();
-      let role = String(meta.role || claims.role || 'admin').toLowerCase().trim();
-
-      // Explicit platform admin guarantee for SolutionsBay operators
-      if (email === 'roman.zeleznik@solutionsbay.pl' || email === 'admin@100k-rycos.eu' || email === 'admin@rycos.eu') {
-        role = 'platform_admin';
-      }
-
-      return {
-        ...meta,
-        id: meta.id || claims.sub,
-        email,
-        company_id: companyId,
-        role,
-        location_id: meta.location_id ?? null,
-      };
-    } catch (err) {
-      // Fall through to non-prod fallback if in dev
-    }
+  if (PLATFORM_ADMIN_EMAILS.has(email)) {
+    role = 'platform_admin';
+    if (!Number.isFinite(companyId) || companyId <= 0) companyId = 1;
   }
 
-  // Developer / local fallback ONLY when no valid token was provided in non-production
-  if (env.NODE_ENV !== 'production') {
+  if (!Number.isFinite(companyId) || companyId <= 0) return null;
+  if (!role || role === 'authenticated') role = 'admin';
+
+  return {
+    ...meta,
+    id: meta.id || claims.sub,
+    email,
+    company_id: companyId,
+    role,
+    location_id: meta.location_id ?? null,
+  };
+}
+
+export function resolveUser(req: FastifyRequest): AuthUser | null {
+  const user = resolveUserFromToken(extractBearer(req));
+  if (user) return user;
+
+  // Developer fallback ONLY outside production (Dockerfile sets NODE_ENV=production)
+  if (env.NODE_ENV !== 'production' && !req.headers['x-terminal-token']) {
     const overrideCompany = req.headers['x-company-id'];
     const compId = overrideCompany ? parseInt(String(overrideCompany), 10) : 1;
     return {
@@ -83,82 +89,137 @@ export function resolveUser(req: FastifyRequest): AuthUser | null {
   return null;
 }
 
-export async function resolveTerminalUser(req: FastifyRequest): Promise<AuthUser | null> {
-  const terminalIdHeader = req.headers['x-terminal-id'];
-  if (!terminalIdHeader || Array.isArray(terminalIdHeader)) return null;
-  const cleanTermId = terminalIdHeader.trim();
-  if (!cleanTermId) return null;
+// ---------------------------------------------------------------------------
+// Terminal (POS / KDS / Pickup device) authentication
+// ---------------------------------------------------------------------------
 
+interface TerminalTokenClaims {
+  typ: 'terminal';
+  tid: string;
+  cid: number;
+  sv: number;
+}
+
+/** Issue a signed device token after a successful pairing. */
+export function issueTerminalToken(terminal: { terminalId: string; companyId: number; sessionVersion: number }): string {
+  const claims: TerminalTokenClaims = {
+    typ: 'terminal',
+    tid: terminal.terminalId,
+    cid: terminal.companyId,
+    sv: terminal.sessionVersion,
+  };
+  return jwt.sign(claims, getTerminalTokenSecret(), { algorithm: 'HS256', expiresIn: '365d' });
+}
+
+const terminalCache = new Map<string, { user: AuthUser | null; expires: number }>();
+
+export async function resolveTerminalFromToken(token: string | null | undefined): Promise<AuthUser | null> {
+  if (!token) return null;
+  let claims: TerminalTokenClaims;
   try {
-    const { getDatabase, terminals, eq, and, sql } = await import('@rycos/database');
+    claims = jwt.verify(token, getTerminalTokenSecret(), { algorithms: ['HS256'] }) as TerminalTokenClaims;
+  } catch {
+    return null;
+  }
+  if (!claims || claims.typ !== 'terminal' || !claims.tid || !claims.cid) return null;
+
+  const cacheKey = `${claims.tid}:${claims.cid}:${claims.sv}`;
+  const cached = terminalCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.user;
+
+  let user: AuthUser | null = null;
+  try {
+    const { getDatabase, terminals, eq, and } = await import('@rycos/database');
     const db = getDatabase();
-
-    const companyIdHeader = req.headers['x-company-id'];
-    const companyId = companyIdHeader ? parseInt(String(companyIdHeader), 10) : undefined;
-
     const [term] = await db
       .select()
       .from(terminals)
-      .where(
-        companyId && !isNaN(companyId)
-          ? and(sql`lower(${terminals.terminalId}) = lower(${cleanTermId})`, eq(terminals.companyId, companyId))
-          : sql`lower(${terminals.terminalId}) = lower(${cleanTermId})`
-      )
+      .where(and(eq(terminals.terminalId, claims.tid), eq(terminals.companyId, claims.cid)))
       .limit(1);
 
-    if (term && term.status !== 'archived' && term.status !== 'inactive') {
-      return {
+    if (term && term.status === 'active' && (term.sessionVersion ?? 0) === claims.sv) {
+      user = {
         id: `terminal-${term.terminalId}`,
         name: term.name,
         company_id: term.companyId,
         location_id: term.locationId,
-        role: term.role || 'staff',
+        role: 'staff',
+        terminal_role: term.role,
         terminal_id: term.terminalId,
       };
     }
-
-    // Fallback if terminal is registered for this company
-    if (!term && companyId && !isNaN(companyId)) {
-      const [anyTerm] = await db
-        .select()
-        .from(terminals)
-        .where(and(eq(terminals.companyId, companyId), eq(terminals.status, 'active')))
-        .limit(1);
-
-      if (anyTerm) {
-        return {
-          id: `terminal-${cleanTermId}`,
-          name: anyTerm.name,
-          company_id: companyId,
-          role: anyTerm.role || 'staff',
-          terminal_id: cleanTermId,
-        };
-      }
-    }
   } catch (err) {
-    console.error('Failed to resolve terminal user:', err);
+    console.error('Failed to resolve terminal token:', err);
+    return null;
   }
-  return null;
+
+  terminalCache.set(cacheKey, { user, expires: Date.now() + 15_000 });
+  if (terminalCache.size > 5000) terminalCache.clear();
+  return user;
 }
 
-export async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
-  let user = resolveUser(req);
-  if (!user) {
-    user = await resolveTerminalUser(req);
+export function invalidateTerminalCache() {
+  terminalCache.clear();
+}
+
+export async function resolveTerminalUser(req: FastifyRequest): Promise<AuthUser | null> {
+  const headerToken = req.headers['x-terminal-token'];
+  const token = typeof headerToken === 'string' ? headerToken : extractBearer(req);
+  return resolveTerminalFromToken(token);
+}
+
+/** Resolve any authenticated principal (admin JWT or paired terminal) without replying. */
+export async function resolveAnyPrincipal(req: FastifyRequest): Promise<AuthUser | null> {
+  if (req.headers['x-terminal-token']) {
+    return resolveTerminalUser(req);
   }
+  return resolveUser(req) || (await resolveTerminalUser(req));
+}
+
+// Admin API prefixes a paired terminal (POS/KDS/Pickup) is allowed to call.
+const TERMINAL_ALLOWED_ADMIN_PREFIXES = ['/v1/admin/orders', '/v1/admin/terminals/check'];
+
+/** Admin panel routes: admin JWT; terminals only for the order-handling endpoints. */
+export async function requireAdminAuth(req: FastifyRequest, reply: FastifyReply) {
+  const user = await resolveAnyPrincipal(req);
   if (!user) {
     return unauthorized(reply, 'Brak autoryzacji do panelu administracyjnego');
+  }
+  if (user.terminal_id) {
+    const url = req.url.split('?')[0];
+    if (!TERMINAL_ALLOWED_ADMIN_PREFIXES.some((p) => url.startsWith(p))) {
+      return forbidden(reply, 'Stanowisko (terminal) nie ma dostępu do tej sekcji panelu');
+    }
   }
   req.user = user;
 }
 
+/** Staff / device routes (POS payments, printing): admin JWT or paired terminal. */
+export async function requireStaffAuth(req: FastifyRequest, reply: FastifyReply) {
+  const user = await resolveAnyPrincipal(req);
+  if (!user) {
+    return unauthorized(reply, 'Brak autoryzacji stanowiska. Sparuj urządzenie ponownie.');
+  }
+  req.user = user;
+}
+
+const PRIVILEGED_ROLES = new Set(['platform_admin', 'super_admin']);
+
+/** Only platform admins may grant platform-level roles. */
+export function canAssignRole(actor: AuthUser | null, role: string | undefined | null): boolean {
+  if (!role) return true;
+  const r = String(role).toLowerCase().trim();
+  if (!PRIVILEGED_ROLES.has(r)) return true;
+  return isPlatformAdmin(actor);
+}
+
 export function isPlatformAdmin(user: AuthUser | null): boolean {
-  if (!user) return false;
+  if (!user || user.terminal_id) return false;
   const role = String(user.role || '').toLowerCase().trim();
   const email = String(user.email || '').toLowerCase().trim();
   if (role === 'platform_admin') return true;
-  if (user.company_id === 1 && (role === 'super_admin' || role === 'platform_admin')) return true;
-  if (email === 'roman.zeleznik@solutionsbay.pl' || email === 'admin@100k-rycos.eu' || email === 'admin@rycos.eu') return true;
+  if (user.company_id === 1 && role === 'super_admin') return true;
+  if (PLATFORM_ADMIN_EMAILS.has(email)) return true;
   return false;
 }
 
@@ -174,6 +235,10 @@ export async function requirePlatformAdmin(req: FastifyRequest, reply: FastifyRe
   }
 }
 
+/**
+ * Company scope of the current request. Only platform admins may switch company via X-Company-Id.
+ * Returns 0 when there is no authenticated principal (matches no rows).
+ */
 export function getCompanyId(req: FastifyRequest): number {
   const user = req.user || resolveUser(req);
   if (user && isPlatformAdmin(user)) {
@@ -185,7 +250,7 @@ export function getCompanyId(req: FastifyRequest): number {
       }
     }
   }
-  return user?.company_id || 1;
+  return user?.company_id || 0;
 }
 
 export function getAuthUser(req: FastifyRequest): AuthUser | null {

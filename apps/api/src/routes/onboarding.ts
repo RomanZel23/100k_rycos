@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, getRawClient, platformPricing, onboardingOrders, companies, brands, locations, users, eq } from '@rycos/database';
-import { env } from '../config/env.js';
+import { getDatabase, getRawClient, platformPricing, onboardingOrders, companies, brands, locations, users, eq, and, sql } from '@rycos/database';
+import { env, getJwtSecret } from '../config/env.js';
+import { rateLimit } from '../lib/rateLimit.js';
 import { success, error, validationError } from '../lib/response.js';
 import { hashPassword } from '../lib/password.js';
 import { initializePaymentPage, assertPaymentPage, captureTransaction } from '../services/saferpayClient.js';
@@ -59,6 +60,7 @@ async function ensureOnboardingTables() {
         "created_at" timestamp DEFAULT now() NOT NULL,
         "completed_at" timestamp
       );
+      ALTER TABLE "onboarding_orders" ADD COLUMN IF NOT EXISTS "provisioning_state" jsonb DEFAULT '{}'::jsonb NOT NULL;
     `);
 
     // Seed default pricing if empty
@@ -183,12 +185,23 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
       return validationError(reply, { email: 'Poprawny adres e-mail jest wymagany' });
     }
 
+    if (!(await rateLimit(`onboarding:${req.ip}`, 10, 600))) {
+      return error(reply, 'Zbyt wiele prób. Spróbuj ponownie za kilka minut.', 429);
+    }
+
+    // An existing account must not be duplicated / hijacked through a new onboarding order
+    const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    if (existingUser) {
+      return error(reply, 'Konto z tym adresem e-mail już istnieje. Zaloguj się do panelu, aby dokupić licencje.', 409);
+    }
+
+    const seat = (v: any) => Math.min(50, Math.max(0, parseInt(String(v || 0), 10) || 0));
     const plan = {
       platform_100k: body.plan?.platform_100k !== false ? 1 : 0,
-      seats_pf: Math.max(0, parseInt(String(body.plan?.seats_pf || 0), 10) || 0),
-      seats_f: Math.max(0, parseInt(String(body.plan?.seats_f || 0), 10) || 0),
-      seats_p: Math.max(0, parseInt(String(body.plan?.seats_p || 0), 10) || 0),
-      seats_0: Math.max(0, parseInt(String(body.plan?.seats_0 || 0), 10) || 0),
+      seats_pf: seat(body.plan?.seats_pf),
+      seats_f: seat(body.plan?.seats_f),
+      seats_p: seat(body.plan?.seats_p),
+      seats_0: seat(body.plan?.seats_0),
     };
 
     // Calculate prices
@@ -208,6 +221,9 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
 
     const netAmountGrosze = totalNetPln * 100;
     const grossAmountGrosze = totalGrossPln * 100;
+    if (grossAmountGrosze <= 0) {
+      return validationError(reply, { plan: 'Wybierz co najmniej jeden produkt' });
+    }
 
     const orderToken = `ob_${Date.now()}_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
     // Hash password if provided now, otherwise placeholder hash until step 3
@@ -222,8 +238,11 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
     let redirectUrl: string | undefined;
     let saferpayToken: string | undefined;
 
-    // In test mode or if no Saferpay key yet, provide direct flow
+    // Without Saferpay credentials a test checkout is allowed ONLY outside production
     if (!creds.password || creds.password === '') {
+      if (env.NODE_ENV === 'production') {
+        return error(reply, 'Płatności online są chwilowo niedostępne (brak konfiguracji bramki).', 503);
+      }
       console.warn('[Onboarding] SolutionsBay Saferpay password not configured, fallback to direct test checkout');
       redirectUrl = `${returnUrl}&test_auto_pay=1`;
       saferpayToken = `test_token_${orderToken}`;
@@ -271,7 +290,8 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
     }, 'Checkout initialized');
   });
 
-  // POST /v1/onboarding/finalize - Assert payment, provision RYCOS Portal seats, create company & auto-login
+  // POST /v1/onboarding/finalize - Verify payment, provision RYCOS Portal seats, create company & auto-login.
+  // Idempotent and serialized: an atomic status claim guarantees a single provisioning run per order.
   fastify.post('/v1/onboarding/finalize', async (req, reply) => {
     await ensureOnboardingTables();
     const db = getDatabase();
@@ -282,125 +302,141 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
     if (!orderToken) {
       return validationError(reply, { order_token: 'order_token is required' });
     }
+    if (!(await rateLimit(`onboarding-fin:${req.ip}`, 20, 600))) {
+      return error(reply, 'Zbyt wiele prób. Spróbuj ponownie za kilka minut.', 429);
+    }
 
-    const [order] = await db
-      .select()
-      .from(onboardingOrders)
-      .where(eq(onboardingOrders.orderToken, orderToken))
-      .limit(1);
-
+    const [order] = await db.select().from(onboardingOrders).where(eq(onboardingOrders.orderToken, orderToken)).limit(1);
     if (!order) {
       return error(reply, 'Nie znaleziono zamówienia onboardingowego', 404);
     }
 
-    // Determine final password hash: from body if provided, or from order if already set
-    let finalPasswordHash = order.adminPasswordHash;
-    if (newPassword && newPassword.length >= 6) {
-      finalPasswordHash = await hashPassword(newPassword);
-      await db
-        .update(onboardingOrders)
-        .set({ adminPasswordHash: finalPasswordHash })
-        .where(eq(onboardingOrders.id, order.id));
-    } else if (order.adminPasswordHash === 'pending_set_password') {
-      return validationError(reply, { password: 'Hasło administratora musi mieć minimum 6 znaków' });
-    }
-
-    // If already completed, generate new login token and redirect
-    if (order.status === 'completed' && order.createdCompanyId) {
-      const [existingCompany] = await db
-        .select()
-        .from(companies)
-        .where(eq(companies.id, order.createdCompanyId))
-        .limit(1);
-
-      const [existingUser] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, order.email))
-        .limit(1);
-
-      const secret = env.SUPABASE_JWT_SECRET || '100k_secret_jwt_key_development';
-      const authToken = jwt.sign(
-        {
-          sub: existingUser?.id || order.createdUserId || 'admin',
-          email: order.email,
-          company_id: order.createdCompanyId,
-          role: existingUser?.role || 'admin',
-        },
-        secret,
+    const signToken = (userId: string, companyId: number, role: string) =>
+      jwt.sign(
+        { sub: userId, email: order.email, company_id: companyId, role: 'authenticated', user_metadata: { id: userId, company_id: companyId, role, email: order.email } },
+        getJwtSecret(),
         { expiresIn: '30d' }
       );
 
+    // Already completed: auto-login only shortly after completion (the token in the URL must not be a permanent key)
+    if (order.status === 'completed' && order.createdCompanyId) {
+      const completedAgoMs = order.completedAt ? Date.now() - new Date(order.completedAt).getTime() : Infinity;
+      if (completedAgoMs > 30 * 60 * 1000) {
+        return error(reply, 'Konto zostało już utworzone. Zaloguj się do panelu administracyjnego.', 409, {
+          redirect_to: `${env.PUBLIC_ADMIN_URL}/login`,
+        });
+      }
+      const [existingCompany] = await db.select().from(companies).where(eq(companies.id, order.createdCompanyId)).limit(1);
       return success(reply, {
         completed: true,
         company_id: order.createdCompanyId,
         company_name: existingCompany?.name || order.companyName,
         nip: order.nip,
-        token: authToken,
+        token: signToken(order.createdUserId || 'admin', order.createdCompanyId, 'admin'),
         redirect_to: `${env.PUBLIC_ADMIN_URL}/dashboard/licenses`,
       }, 'Onboarding already completed');
     }
 
-    const creds = getSolutionsBayCredentials();
-
-    // Verify payment with Saferpay (if token present and not mock)
-    if (order.saferpayToken && !order.saferpayToken.startsWith('test_token_') && creds.password) {
-      const assertRes = await assertPaymentPage(order.saferpayToken, creds);
-      if (!assertRes.success || !assertRes.transactionId) {
-        return error(reply, `Płatność nie została potwierdzona: ${assertRes.error || 'Nieautoryzowana'}`, 402);
+    // Password can be (re)set only before the account exists
+    let finalPasswordHash = order.adminPasswordHash;
+    if (newPassword) {
+      if (newPassword.length < 6) {
+        return validationError(reply, { password: 'Hasło administratora musi mieć minimum 6 znaków' });
       }
-
-      if (assertRes.status === 'AUTHORIZED') {
-        await captureTransaction(assertRes.transactionId, creds);
-      }
-
-      await db
-        .update(onboardingOrders)
-        .set({
-          status: 'paid',
-          saferpayTransactionId: assertRes.transactionId,
-        })
-        .where(eq(onboardingOrders.id, order.id));
+      finalPasswordHash = await hashPassword(newPassword);
+      await db.update(onboardingOrders).set({ adminPasswordHash: finalPasswordHash }).where(eq(onboardingOrders.id, order.id));
+    } else if (order.adminPasswordHash === 'pending_set_password') {
+      return validationError(reply, { password: 'Hasło administratora musi mieć minimum 6 znaków' });
     }
 
-    // Step A: Register / find client in RYCOS Portal API by NIP
-    let rycosClient = null;
-    let generatedLicenseToken: string | null = null;
+    // Atomic claim — concurrent finalize calls (double click, refresh) cannot provision twice
+    const claimed = await db
+      .update(onboardingOrders)
+      .set({ status: 'provisioning', errorDetails: null })
+      .where(and(
+        eq(onboardingOrders.id, order.id),
+        sql`(${onboardingOrders.status} IN ('pending', 'paid', 'failed') OR (${onboardingOrders.status} = 'provisioning' AND ${onboardingOrders.createdAt} < now() - interval '1 day'))`
+      ))
+      .returning();
+    if (claimed.length === 0) {
+      return error(reply, 'Zamówienie jest właśnie przetwarzane — odśwież stronę za chwilę.', 409);
+    }
+
+    const state: Record<string, any> = { ...((order.provisioningState as any) || {}) };
+    const saveState = async (patch: Record<string, any>) => {
+      Object.assign(state, patch);
+      await db.update(onboardingOrders).set({ provisioningState: state }).where(eq(onboardingOrders.id, order.id));
+    };
+    const fail = async (message: string, httpStatus = 502) => {
+      await db.update(onboardingOrders).set({ status: 'failed', errorDetails: message.slice(0, 2000) }).where(eq(onboardingOrders.id, order.id));
+      return error(reply, message, httpStatus);
+    };
 
     try {
-      if (rycosIntegratorService.isConfigured()) {
-        rycosClient = await rycosIntegratorService.createClient({
-          nip: order.nip,
-          name: order.companyName,
-          email: order.email,
-          phone: order.phone || undefined,
-          address_street: order.address || undefined,
-        });
+      // Step 1: Payment verification (mandatory; test tokens only outside production)
+      if (!order.saferpayTransactionId) {
+        const creds = getSolutionsBayCredentials();
+        if (!order.saferpayToken) return await fail('Brak płatności dla zamówienia', 402);
 
-        const plan = order.planDetails as any;
-        const expiryDate = new Date();
-        expiryDate.setMonth(expiryDate.getMonth() + (order.months || 1));
-
-        // Step B1: Provision server solution license if platform_100k included
-        if (rycosClient && plan.platform_100k > 0) {
-          try {
-            const solRes = await rycosIntegratorService.createSolutionLicense(rycosClient.id, {
-              solution: 'p_immo',
-              instance_name: `${order.companyName} (100k)`,
-              valid_until: expiryDate.toISOString(),
-              notes: `Self-Service Onboarding Order #${order.id} (${order.months}m)`,
-            });
-            if (solRes?.token) {
-              generatedLicenseToken = solRes.token;
-            }
-          } catch (solErr: any) {
-            console.error('[Onboarding] RYCOS Portal solution license provisioning warning:', solErr.message);
+        if (order.saferpayToken.startsWith('test_token_')) {
+          if (env.NODE_ENV === 'production') return await fail('Testowa płatność nie jest akceptowana', 402);
+        } else {
+          const assertRes = await assertPaymentPage(order.saferpayToken, creds);
+          if (!assertRes.success || !assertRes.transactionId) {
+            await db.update(onboardingOrders).set({ status: 'pending' }).where(eq(onboardingOrders.id, order.id));
+            return error(reply, `Płatność nie została potwierdzona: ${assertRes.error || 'Nieautoryzowana'}`, 402);
           }
+          if (assertRes.amount !== undefined && assertRes.amount !== order.grossAmountGrosze) {
+            return await fail(`Kwota płatności (${assertRes.amount}) nie zgadza się z zamówieniem (${order.grossAmountGrosze})`, 402);
+          }
+          let payStatus = assertRes.status;
+          if (assertRes.status === 'AUTHORIZED') {
+            const cap = await captureTransaction(assertRes.transactionId, creds);
+            if (!cap.success) {
+              await db.update(onboardingOrders).set({ status: 'pending' }).where(eq(onboardingOrders.id, order.id));
+              return error(reply, `Nie udało się rozliczyć płatności: ${cap.error || 'błąd bramki'}`, 402);
+            }
+            payStatus = cap.status || 'CAPTURED';
+          }
+          if (payStatus !== 'CAPTURED') {
+            await db.update(onboardingOrders).set({ status: 'pending' }).where(eq(onboardingOrders.id, order.id));
+            return error(reply, `Płatność w trakcie potwierdzania (${payStatus}). Spróbuj za chwilę.`, 402);
+          }
+          await db.update(onboardingOrders).set({ saferpayTransactionId: assertRes.transactionId }).where(eq(onboardingOrders.id, order.id));
+        }
+      }
+
+      // Step 2: RYCOS Portal provisioning — each sub-step recorded, so a retry never duplicates licenses
+      const plan = order.planDetails as any;
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + (order.months || 1));
+
+      if (rycosIntegratorService.isConfigured()) {
+        if (!state.rycosClientId) {
+          const rycosClient = await rycosIntegratorService.createClient({
+            nip: order.nip,
+            name: order.companyName,
+            email: order.email,
+            phone: order.phone || undefined,
+            address_street: order.address || undefined,
+          });
+          if (!rycosClient?.id) return await fail('Nie udało się zarejestrować klienta w RYCOS Portal');
+          await saveState({ rycosClientId: rycosClient.id });
         }
 
-        // Step B2: Provision purchased SBR device seats in RYCOS Portal
-        if (rycosClient && (plan.seats_pf > 0 || plan.seats_f > 0 || plan.seats_p > 0 || plan.seats_0 > 0)) {
-          await rycosIntegratorService.createPurchase(rycosClient.id, {
+        if (plan.platform_100k > 0 && !state.licenseDone) {
+          const solRes = await rycosIntegratorService.createSolutionLicense(state.rycosClientId, {
+            solution: 'p_immo',
+            instance_name: `${order.companyName} (100k)`,
+            valid_until: expiryDate.toISOString(),
+            notes: `Self-Service Onboarding Order #${order.id} (${order.months}m)`,
+          });
+          await saveState({ licenseDone: true, licenseToken: solRes?.token || null });
+        }
+
+        const hasSeats = plan.seats_pf > 0 || plan.seats_f > 0 || plan.seats_p > 0 || plan.seats_0 > 0;
+        if (hasSeats && !state.purchaseDone) {
+          await rycosIntegratorService.createPurchase(state.rycosClientId, {
             bundle_type: 'flex',
             seats_pf: plan.seats_pf || 0,
             seats_f: plan.seats_f || 0,
@@ -409,107 +445,88 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
             expires_at: expiryDate.toISOString(),
             notes: `Self-Service Onboarding Order #${order.id} (${order.months}m)`,
           });
+          await saveState({ purchaseDone: true });
         }
       }
-    } catch (portalErr: any) {
-      console.error('[Onboarding] RYCOS Portal provisioning warning:', portalErr.message);
-    }
 
-    // Step C: Create company in 100k database
-    const companySlug = order.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cmp-${Date.now()}`;
-    const [newCompany] = await db
-      .insert(companies)
-      .values({
-        name: order.companyName,
-        slug: companySlug,
-        nip: order.nip,
-        email: order.email,
-        phone: order.phone || null,
-        address: order.address || null,
-        currency: 'PLN',
-        licenseToken: generatedLicenseToken,
-        licenseStatus: generatedLicenseToken ? 'active' : 'unconfigured',
-        isAcceptingOrders: true,
-      })
-      .returning();
+      // Step 3: Company, location, brand and admin user — one transaction
+      const baseSlug = order.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'firma';
+      const uniqueSuffix = randomUUID().slice(0, 6);
+      const generatedLicenseToken: string | null = state.licenseToken || null;
+      const userId = `usr_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
-    // Trigger initial heartbeat check if token was generated
-    if (generatedLicenseToken) {
-      rycosLicenseService.checkHeartbeat({
-        companyId: newCompany.id,
-        token: generatedLicenseToken,
-        instanceName: `${newCompany.name} (100k)`,
-      }).catch(() => {});
-    }
+      const newCompany = await db.transaction(async (tx) => {
+        const [company] = await tx
+          .insert(companies)
+          .values({
+            name: order.companyName,
+            slug: `${baseSlug}-${uniqueSuffix}`,
+            nip: order.nip,
+            email: order.email,
+            phone: order.phone || null,
+            address: order.address || null,
+            currency: 'PLN',
+            licenseToken: generatedLicenseToken,
+            licenseStatus: generatedLicenseToken ? 'active' : 'unconfigured',
+            isAcceptingOrders: true,
+          })
+          .returning();
 
-    // Step D: Create default location and brand
-    const [newLoc] = await db
-      .insert(locations)
-      .values({
-        companyId: newCompany.id,
-        name: 'Lokal Główny',
-        address: order.address || null,
-        isActive: true,
-      })
-      .returning();
+        const [loc] = await tx
+          .insert(locations)
+          .values({ companyId: company.id, name: 'Lokal Główny', address: order.address || null, isActive: true })
+          .returning();
 
-    await db
-      .insert(brands)
-      .values({
-        companyId: newCompany.id,
-        locationId: newLoc.id,
-        name: order.companyName,
-        slug: order.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `brand-${newCompany.id}`,
-        isActive: true,
-        allowPayAtCounter: true,
+        await tx.insert(brands).values({
+          companyId: company.id,
+          locationId: loc.id,
+          name: order.companyName,
+          slug: `${baseSlug}-${uniqueSuffix}`,
+          isActive: true,
+          allowPayAtCounter: true,
+        });
+
+        await tx.insert(users).values({
+          id: userId,
+          companyId: company.id,
+          email: order.email,
+          passwordHash: finalPasswordHash,
+          name: order.companyName,
+          role: 'admin',
+          isActive: true,
+        });
+
+        await tx
+          .update(onboardingOrders)
+          .set({
+            status: 'completed',
+            createdCompanyId: company.id,
+            createdUserId: userId,
+            rycosClientId: state.rycosClientId || null,
+            completedAt: new Date(),
+          })
+          .where(eq(onboardingOrders.id, order.id));
+
+        return company;
       });
 
-    // Step E: Create Company Admin user account
-    const userId = `usr_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-    await db
-      .insert(users)
-      .values({
-        id: userId,
-        companyId: newCompany.id,
-        email: order.email,
-        passwordHash: finalPasswordHash,
-        name: order.companyName,
-        role: 'admin',
-        isActive: true,
-      });
+      if (generatedLicenseToken) {
+        rycosLicenseService
+          .checkHeartbeat({ companyId: newCompany.id, token: generatedLicenseToken, instanceName: `${newCompany.name} (100k)` })
+          .catch(() => {});
+      }
 
-    // Step F: Mark order as completed
-    await db
-      .update(onboardingOrders)
-      .set({
-        status: 'completed',
-        createdCompanyId: newCompany.id,
-        createdUserId: userId,
-        rycosClientId: rycosClient?.id || null,
-        completedAt: new Date(),
-      })
-      .where(eq(onboardingOrders.id, order.id));
-
-    // Generate JWT token
-    const secret = env.SUPABASE_JWT_SECRET || '100k_secret_jwt_key_development';
-    const authToken = jwt.sign(
-      {
-        sub: userId,
-        email: order.email,
+      return success(reply, {
+        completed: true,
         company_id: newCompany.id,
-        role: 'admin',
-      },
-      secret,
-      { expiresIn: '30d' }
-    );
-
-    return success(reply, {
-      completed: true,
-      company_id: newCompany.id,
-      company_name: newCompany.name,
-      nip: newCompany.nip,
-      token: authToken,
-      redirect_to: `${env.PUBLIC_ADMIN_URL}/dashboard/licenses`,
-    }, 'Firma została pomyślnie utworzona i skonfigurowana');
+        company_name: newCompany.name,
+        nip: newCompany.nip,
+        token: signToken(userId, newCompany.id, 'admin'),
+        redirect_to: `${env.PUBLIC_ADMIN_URL}/dashboard/licenses`,
+      }, 'Firma została pomyślnie utworzona i skonfigurowana');
+    } catch (err: any) {
+      console.error('[Onboarding] Provisioning failed:', err);
+      return await fail(`Błąd konfiguracji konta: ${err.message}. Płatność została zapisana — spróbuj ponownie lub skontaktuj się z nami.`, 500);
+    }
   });
 }

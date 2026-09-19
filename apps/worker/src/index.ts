@@ -1,6 +1,6 @@
 import { env } from './config/env.js';
 import { ensureDatabaseSchema } from '@rycos/database';
-import { startFiscalWorker } from './processors/fiscalProcessor.js';
+import { startFiscalWorker, startFiscalSweeper } from './processors/fiscalProcessor.js';
 import { startOutboxDispatcher } from './processors/outboxDispatcher.js';
 
 async function bootstrap() {
@@ -13,6 +13,7 @@ async function bootstrap() {
 
   // Start BullMQ Fiscal Worker
   startFiscalWorker();
+  startFiscalSweeper();
 
   // Start Outbox Poller / Dispatcher
   startOutboxDispatcher();

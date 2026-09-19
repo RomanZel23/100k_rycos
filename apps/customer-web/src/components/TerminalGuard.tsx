@@ -29,6 +29,8 @@ export interface PairedTerminal {
   tap_device_id?: string | null;
   printer_device_id?: string | null;
   fiscal_device_id?: string | null;
+  /** Signed device token returned by /v1/terminals/claim (required by staff endpoints). */
+  terminal_token?: string;
   capabilities?: {
     can_sell?: boolean;
     can_kds?: boolean;
@@ -109,7 +111,13 @@ export function TerminalGuard({
       if (stored) {
         const parsed: PairedTerminal = JSON.parse(stored);
         if (parsed && (parsed.terminal_id || parsed.id)) {
-          setTerminal(parsed);
+          if (parsed.terminal_token) {
+            setTerminal(parsed);
+          } else {
+            // Paired before device tokens were introduced — a fresh pairing is required
+            localStorage.removeItem('rycos_terminal');
+            setError('Zaktualizowano zabezpieczenia stanowisk. Wpisz kod stanowiska, aby sparować urządzenie ponownie.');
+          }
         }
       }
     } catch (err) {

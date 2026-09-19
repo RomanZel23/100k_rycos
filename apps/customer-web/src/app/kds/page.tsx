@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw, MapPin, Bell, Camera, KeyRound, QrCode, Download, Smartphone, ChevronRight, ChevronLeft, Eye, X, Undo2 } from 'lucide-react';
-import { getApiBaseUrl } from '../../lib/api';
+import { getApiBaseUrl, terminalAuthHeaders, isRouteMissing, getTerminalToken } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
 import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
 
@@ -47,12 +47,16 @@ const getWsBaseUrl = (companyId?: number, terminalId?: string) => {
     const url = new URL(base);
     if (companyId) url.searchParams.set('companyId', String(companyId));
     if (terminalId) url.searchParams.set('terminalId', terminalId);
+    const token = getTerminalToken();
+    if (token) url.searchParams.set('token', token);
     return url.toString();
   } catch {
     const sep = base.includes('?') ? '&' : '?';
     const params = [];
     if (companyId) params.push(`companyId=${companyId}`);
     if (terminalId) params.push(`terminalId=${encodeURIComponent(terminalId)}`);
+    const token = getTerminalToken();
+    if (token) params.push(`token=${encodeURIComponent(token)}`);
     return params.length > 0 ? `${base}${sep}${params.join('&')}` : base;
   }
 };
@@ -186,6 +190,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
         headers: {
           'x-company-id': String(companyId),
           ...(termId ? { 'x-terminal-id': termId } : {}),
+          ...terminalAuthHeaders(),
         },
       });
       if (res.ok) {
@@ -306,6 +311,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
           ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...terminalAuthHeaders(),
         },
         body: JSON.stringify({ status: canonicalStatus }),
       });

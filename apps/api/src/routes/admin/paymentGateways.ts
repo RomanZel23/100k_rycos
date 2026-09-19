@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { parseBool } from '../../lib/ids.js';
 import { getDatabase, companyPaymentGateways, eq, and, desc } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
@@ -48,7 +49,7 @@ export async function adminPaymentGatewaysRoutes(fastify: FastifyInstance) {
     const customerId = body.customer_id || body.customerId;
     const terminalId = body.terminal_id || body.terminalId;
     const rawIsTest = body.is_test !== undefined ? body.is_test : body.isTest;
-    const isTest = rawIsTest !== undefined ? Boolean(rawIsTest) : true;
+    const isTest = parseBool(rawIsTest, true);
     const id = body.id ? parseInt(String(body.id), 10) : undefined;
 
     try {
@@ -137,7 +138,7 @@ export async function adminPaymentGatewaysRoutes(fastify: FastifyInstance) {
     const updateData: Record<string, any> = {
       updatedAt: new Date(),
     };
-    if (rawIsTest !== undefined) updateData.isTest = Boolean(rawIsTest);
+    if (rawIsTest !== undefined) updateData.isTest = parseBool(rawIsTest, true);
     if (publicKey !== undefined) updateData.publicKey = publicKey;
     if (privateKey) updateData.privateKey = privateKey;
     if (customerId !== undefined) updateData.customerId = String(customerId);
