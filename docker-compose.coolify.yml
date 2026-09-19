@@ -9,11 +9,17 @@ services:
     ports:
       - "${API_HOST_PORT:-8008}:8000"
     environment:
+      - NODE_ENV=production
       - PORT=8000
       - HOST=0.0.0.0
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET is required}
+      - TERMINAL_TOKEN_SECRET=${TERMINAL_TOKEN_SECRET:-}
+      - PLATFORM_ADMIN_PASSWORD=${PLATFORM_ADMIN_PASSWORD:-}
+      - PENDING_PAYMENT_TTL_MINUTES=${PENDING_PAYMENT_TTL_MINUTES:-30}
+      - PUBLIC_CUSTOMER_URL=${PUBLIC_CUSTOMER_URL:-https://100k.rycos.eu}
+      - PUBLIC_ADMIN_URL=${PUBLIC_ADMIN_URL:-https://100k-admin.rycos.eu}
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - PUBLIC_API_URL=${PUBLIC_API_URL:-https://100k-api.rycos.eu}
@@ -22,6 +28,7 @@ services:
       - RYCOS_MQTT_USERNAME=${RYCOS_MQTT_USERNAME}
       - RYCOS_MQTT_PASSWORD=${RYCOS_MQTT_PASSWORD}
       - RYCOS_DEFAULT_DISPLAY_ID=${RYCOS_DEFAULT_DISPLAY_ID}
+      - RYCOS_DISPLAY_ID=${RYCOS_DEFAULT_DISPLAY_ID}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/health"]
       interval: 15s
@@ -39,6 +46,7 @@ services:
       dockerfile: apps/worker/Dockerfile
     restart: unless-stopped
     environment:
+      - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - RYCOS_MQTT_HOST=${RYCOS_MQTT_HOST:-rycos.eu}

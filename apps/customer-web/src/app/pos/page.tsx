@@ -29,7 +29,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Product, MenuResponse, AddonOption } from '@rycos/shared';
-import { fetchMenu, submitOrder, getApiBaseUrl } from '../../lib/api';
+import { fetchMenu, submitOrder, getApiBaseUrl, terminalAuthHeaders, isRouteMissing } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
 import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
 
@@ -416,6 +416,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
           ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...terminalAuthHeaders(),
         },
         body: JSON.stringify({
           order_id: orderId,
@@ -485,6 +486,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
         headers: {
           'x-company-id': String(companyId),
           ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...terminalAuthHeaders(),
         },
       });
       if (res.ok) {
@@ -565,6 +567,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
           ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...terminalAuthHeaders(),
         },
         body: JSON.stringify({
           company_id: companyId,
@@ -630,6 +633,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             'Content-Type': 'application/json',
             'x-company-id': String(companyId),
             ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+            ...terminalAuthHeaders(),
           },
           body: JSON.stringify({
             company_id: companyId,
@@ -668,6 +672,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
           'Content-Type': 'application/json',
           'x-company-id': String(companyId),
           ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...terminalAuthHeaders(),
         },
         body: JSON.stringify({
           paymentMethod: method,
@@ -961,7 +966,8 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
           orderId: placed.id,
           orderNumber: placed.orderNumber,
           pin: placed.collectionPin,
-          amount: totalAmount,
+          // server-calculated total is authoritative (the API rejects mismatching amounts)
+          amount: Number(placed.totalAmount) || totalAmount,
           isNewCheckout: true,
         });
         return;
@@ -978,6 +984,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
               'Content-Type': 'application/json',
               'x-company-id': String(companyId),
               ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+              ...terminalAuthHeaders(),
             },
             body: JSON.stringify({
               paymentMethod: 'cash',

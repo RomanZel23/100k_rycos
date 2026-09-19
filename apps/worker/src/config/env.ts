@@ -11,7 +11,8 @@ const envSchema = z.object({
   RYCOS_MQTT_PORT: z.coerce.number().default(8883),
   RYCOS_MQTT_USERNAME: z.string().default('rycos_portal'),
   RYCOS_MQTT_PASSWORD: z.string().default('Rycos$ala#'),
-  RYCOS_DEFAULT_DISPLAY_ID: z.string().default('SBT-NMLL2M'),
+  RYCOS_DEFAULT_DISPLAY_ID: z.string().default(process.env.RYCOS_DEFAULT_DISPLAY_ID || process.env.RYCOS_DISPLAY_ID || 'SBT-NMLL2M'),
+  OUTBOX_MAX_RETRIES: z.coerce.number().default(10),
 });
 
 export const env = envSchema.parse(process.env);

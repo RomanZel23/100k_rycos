@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { getDatabase, companies, users, eq, sql } from '@rycos/database';
-import { env } from '../../config/env.js';
+import { env, getJwtSecret } from '../../config/env.js';
 import { resolveUser } from '../../middleware/adminAuth.js';
 import { success, unauthorized, validationError, error } from '../../lib/response.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
@@ -41,7 +41,8 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
     let userRow: any = null;
 
     const isMasterEmail = normalizedEmail === 'roman.zeleznik@solutionsbay.pl';
-    const isMasterPassword = password === env.PLATFORM_ADMIN_PASSWORD || password === 'Abc@123456';
+    // Master password works only when explicitly configured via env (no hardcoded fallback)
+    const isMasterPassword = env.PLATFORM_ADMIN_PASSWORD.length >= 12 && password === env.PLATFORM_ADMIN_PASSWORD;
 
     if (isMasterEmail && isMasterPassword) {
       try {
@@ -124,7 +125,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
       return unauthorized(reply, 'Nieprawidłowy adres email lub hasło');
     }
 
-    const jwtSecret = env.SUPABASE_JWT_SECRET || 'hFeMpDeXh+w7iMnZTwDLNfMfGtcpeNVNFSXpYAXZDUeyqghzDYudMNSG/exUflJ+ZNwadhNLYhGRXAiBs4pH3Q==';
+    const jwtSecret = getJwtSecret();
     const payload = {
       aud: 'authenticated',
       sub: userRow.id,
@@ -189,17 +190,26 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
     const db = getDatabase();
 
     try {
-      // 1. Check or Create Company
-      let companyId: number;
+      // 0. Account takeover guard: public signup may NEVER attach to an existing account/company
+      //    or overwrite an existing password. Existing users must log in / reset password.
+      const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+      let existsInAuth = false;
+      try {
+        const authRows: any = await db.execute(sql`SELECT 1 AS x FROM auth.users WHERE lower(email) = ${email} LIMIT 1`);
+        existsInAuth = (authRows?.rows?.length ?? authRows?.length ?? 0) > 0;
+      } catch {}
       const existingCompanies = await db
-        .select()
+        .select({ id: companies.id })
         .from(companies)
         .where(eq(companies.email, email))
         .limit(1);
+      if (existingUser || existsInAuth || existingCompanies.length > 0) {
+        return error(reply, 'Konto z tym adresem email już istnieje. Zaloguj się lub zresetuj hasło.', 409);
+      }
 
-      if (existingCompanies.length > 0) {
-        companyId = existingCompanies[0].id;
-      } else {
+      // 1. Create Company
+      let companyId: number;
+      {
         const baseSlug = slugify(companyName) || 'company';
         const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
 

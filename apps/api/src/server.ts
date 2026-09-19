@@ -81,8 +81,10 @@ async function bootstrap() {
   // Error Handler
   fastify.setErrorHandler((error: any, _request, reply) => {
     fastify.log.error(error);
-    reply.status(error.statusCode || 500).send({
-      error: error.message || 'Internal Server Error',
+    const status = error.statusCode || 500;
+    reply.status(status).send({
+      error: status >= 500 && env.NODE_ENV === 'production' ? 'Internal Server Error' : error.message || 'Internal Server Error',
+      ...(error.errors || {}),
     });
   });
 
@@ -97,6 +99,15 @@ async function bootstrap() {
     ensureDatabaseSchema().catch((err) => {
       console.error('[DB Auto-Init] Error during schema ensure:', err);
     });
+
+    // Payment reconciliation: finalize abandoned online payments & expire unpaid orders
+    try {
+      const { startPaymentReconciliation, logSaferpayModes } = await import('./services/paymentService.js');
+      startPaymentReconciliation();
+      logSaferpayModes().catch(() => {});
+    } catch (e: any) {
+      console.warn('[Reconcile] Could not start payment reconciliation:', e.message);
+    }
 
     // Start background RYCOS server licensing telemetry heartbeat (100k-rycos instance)
     try {

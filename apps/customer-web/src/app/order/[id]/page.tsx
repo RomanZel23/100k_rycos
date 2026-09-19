@@ -16,6 +16,7 @@ function OrderTrackingContent() {
   const searchParams = useSearchParams();
   const orderId = params.id as string;
   const paymentErrorParam = searchParams.get('payment_error');
+  const paymentPendingParam = searchParams.get('payment_pending');
   const urlLang = searchParams.get('lang') as Language | null;
 
   const [lang, setLang] = useState<Language>(urlLang || 'pl');
@@ -203,7 +204,7 @@ function OrderTrackingContent() {
   }
 
   const isReady = order.status === 'ready_to_collect';
-  const isPending = order.status === 'pending_payment';
+  const isPending = order.status === 'pending_payment' || order.status === 'payment_failed';
 
   const statusSteps = [
     {
@@ -387,6 +388,14 @@ function OrderTrackingContent() {
             <CreditCard size={18} className="text-brand-500" />
             <span>{t.orderPayOnlineOption} ({order.totalAmount.toFixed(2)} {order.currency || 'zł'})</span>
           </button>
+        </div>
+      )}
+
+      {/* Payment being confirmed by the gateway (e.g. BLIK confirmation still in progress) */}
+      {paymentPendingParam && !paymentErrorParam && isPending && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-2xl text-sm font-bold flex items-center gap-2.5">
+          <Clock size={20} className="shrink-0 text-blue-600" />
+          <span>Płatność jest weryfikowana przez bankowość. Status zaktualizuje się automatycznie — nie płać ponownie.</span>
         </div>
       )}
 

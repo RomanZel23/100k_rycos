@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, products, categories, brands, contentTranslations, eq, and, desc, sql } from '@rycos/database';
+import { getDatabase, products, categories, brands, contentTranslations, eq, and, desc, sql, inArray, inventoryHistory } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { uploadImageToSupabase, deleteImageFromSupabase } from '../../lib/storage.js';
@@ -496,16 +496,47 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
       updateData.stockQuantity = rawStock === null || rawStock === '' ? null : parseInt(String(rawStock), 10);
     }
 
+    if (updateData.stockQuantity !== undefined && updateData.stockQuantity !== null && (!Number.isFinite(updateData.stockQuantity) || updateData.stockQuantity < 0)) {
+      return validationError(reply, { stock_quantity: 'Stan magazynowy musi być liczbą nieujemną' });
+    }
+
     try {
-      const [updated] = await db
-        .update(products)
-        .set(updateData)
-        .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
-        .returning();
+      const updated = await db.transaction(async (tx) => {
+        const [before] = await tx
+          .select({ stockQuantity: products.stockQuantity, isAvailable: products.isAvailable })
+          .from(products)
+          .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
+          .for('update')
+          .limit(1);
+        if (!before) return null;
+
+        const [row] = await tx
+          .update(products)
+          .set(updateData)
+          .where(and(eq(products.id, productId), eq(products.companyId, companyId)))
+          .returning();
+
+        const change = (row.stockQuantity ?? 0) - (before.stockQuantity ?? 0);
+        if (change !== 0 || row.isAvailable !== before.isAvailable || (row.stockQuantity === null) !== (before.stockQuantity === null)) {
+          await tx.insert(inventoryHistory).values({
+            companyId,
+            productId,
+            quantityChange: change,
+            quantityAfter: row.stockQuantity,
+            isAvailableAfter: row.isAvailable,
+            source: 'manual',
+            reference: (req as any).user?.email || (req as any).user?.id || null,
+            note: row.stockQuantity === null ? 'Wyłączono śledzenie stanu' : null,
+          });
+        }
+        return row;
+      });
 
       if (!updated) {
         return notFound(reply, 'Product not found');
       }
+
+      await invalidateBrandMenuCache();
 
       return success(reply, {
         ...updated,
@@ -515,6 +546,76 @@ export async function adminProductsRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       return error(reply, err.message || 'Failed to update stock');
     }
+  });
+
+  // GET /v1/admin/inventory-history - Stock movement ledger (orders, manual edits, auto-disable)
+  fastify.get('/v1/admin/inventory-history', async (req, reply) => {
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+    const q = (req.query ?? {}) as { source?: string; product_id?: string; limit?: string };
+    const limit = Math.min(Math.max(parseInt(q.limit || '100', 10) || 100, 1), 500);
+
+    const conds = [eq(inventoryHistory.companyId, companyId)];
+    if (q.source) {
+      conds.push(q.source === 'order'
+        ? inArray(inventoryHistory.source, ['order', 'order_release'])
+        : eq(inventoryHistory.source, q.source));
+    }
+    if (q.product_id && Number.isFinite(parseInt(q.product_id, 10))) {
+      conds.push(eq(inventoryHistory.productId, parseInt(q.product_id, 10)));
+    }
+
+    const rows = await db
+      .select({
+        id: inventoryHistory.id,
+        product_id: inventoryHistory.productId,
+        product_name: products.name,
+        quantity_change: inventoryHistory.quantityChange,
+        quantity_after: inventoryHistory.quantityAfter,
+        is_available_after: inventoryHistory.isAvailableAfter,
+        source: inventoryHistory.source,
+        reference: inventoryHistory.reference,
+        note: inventoryHistory.note,
+        created_at: inventoryHistory.createdAt,
+      })
+      .from(inventoryHistory)
+      .leftJoin(products, eq(inventoryHistory.productId, products.id))
+      .where(and(...conds))
+      .orderBy(desc(inventoryHistory.id))
+      .limit(limit);
+
+    return success(reply, rows);
+  });
+
+  // GET /v1/admin/inventory-insights - 30-day sales deductions, top movers, low stock
+  fastify.get('/v1/admin/inventory-insights', async (req, reply) => {
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+
+    const deductions: any = await db.execute(sql`
+      SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day, SUM(-quantity_change)::int AS total
+      FROM inventory_history
+      WHERE company_id = ${companyId} AND source = 'order' AND created_at > now() - interval '30 days'
+      GROUP BY 1 ORDER BY 1
+    `);
+    const movers: any = await db.execute(sql`
+      SELECT oi.product_id AS id, MAX(oi.name) AS name, SUM(oi.quantity)::int AS total_deducted
+      FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE o.company_id = ${companyId} AND o.status <> 'cancelled' AND o.order_type <> 'test'
+        AND o.created_at > now() - interval '30 days' AND oi.product_id IS NOT NULL
+      GROUP BY oi.product_id ORDER BY total_deducted DESC LIMIT 10
+    `);
+    const low: any = await db.execute(sql`
+      SELECT id, name, stock_quantity, is_available FROM products
+      WHERE company_id = ${companyId} AND stock_quantity IS NOT NULL AND stock_quantity <= 5
+      ORDER BY stock_quantity ASC LIMIT 20
+    `);
+
+    return success(reply, {
+      deductions_by_day: Array.from(deductions),
+      top_movers: Array.from(movers),
+      low_stock: Array.from(low),
+    });
   });
 
   // POST /v1/admin/products/:id/image - Upload product image to Supabase Storage

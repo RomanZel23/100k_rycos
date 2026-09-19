@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, terminals, locations, brands, fiscalDevices, eq, and, desc, inArray } from '@rycos/database';
-import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
+import { getDatabase, terminals, locations, brands, fiscalDevices, eq, and, desc, inArray, sql } from '@rycos/database';
+import { requireAdminAuth, getCompanyId, issueTerminalToken, invalidateTerminalCache } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 
 export async function adminTerminalsRoutes(fastify: FastifyInstance) {
@@ -254,12 +254,16 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       .set({
         status: 'active',
         lastActiveAt: new Date(),
+        sessionVersion: sql`${terminals.sessionVersion} + 1`,
       })
       .where(eq(terminals.id, term.id))
       .returning();
 
+    invalidateTerminalCache();
+
     return success(reply, {
       ...updated,
+      terminal_token: issueTerminalToken(updated),
       terminal_id: updated.terminalId,
       location_id: updated.locationId,
       assigned_brand_ids: updated.assignedBrandIds,
@@ -439,6 +443,7 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'Terminal not found');
     }
 
+    invalidateTerminalCache();
     return success(reply, { id: termId }, 'Terminal deleted');
   });
 
@@ -451,7 +456,7 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
 
     const [updated] = await db
       .update(terminals)
-      .set({ status: 'archived' })
+      .set({ status: 'archived', sessionVersion: sql`${terminals.sessionVersion} + 1` })
       .where(and(eq(terminals.id, termId), eq(terminals.companyId, companyId)))
       .returning();
 
@@ -459,6 +464,7 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'Terminal not found');
     }
 
+    invalidateTerminalCache();
     return success(reply, updated, 'Terminal archived');
   });
 
@@ -471,7 +477,7 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
 
     const [updated] = await db
       .update(terminals)
-      .set({ status: 'unclaimed' })
+      .set({ status: 'unclaimed', sessionVersion: sql`${terminals.sessionVersion} + 1` })
       .where(and(eq(terminals.id, termId), eq(terminals.companyId, companyId)))
       .returning();
 
@@ -479,6 +485,7 @@ export async function adminTerminalsRoutes(fastify: FastifyInstance) {
       return notFound(reply, 'Terminal not found');
     }
 
+    invalidateTerminalCache();
     return success(reply, updated, 'Terminal logged out');
   });
 

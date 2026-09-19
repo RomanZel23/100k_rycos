@@ -11,6 +11,8 @@ export const outboxEvents = pgTable('outbox_events', {
   lastError: text('last_error'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   processedAt: timestamp('processed_at'),
+  nextAttemptAt: timestamp('next_attempt_at').defaultNow().notNull(),
+  lockedAt: timestamp('locked_at'),
 }, (t) => [
   index('idx_outbox_status_created').on(t.status, t.createdAt),
 ]);
@@ -54,6 +56,8 @@ export const onboardingOrders = pgTable('onboarding_orders', {
   createdUserId: varchar('created_user_id', { length: 64 }),
   rycosClientId: varchar('rycos_client_id', { length: 64 }),
   errorDetails: text('error_details'),
+  // Idempotent provisioning progress: { licenseToken?, purchaseDone?, rycosClientId? }
+  provisioningState: jsonb('provisioning_state').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 });

@@ -73,6 +73,8 @@ export const terminals = pgTable('terminals', {
   configJson: jsonb('config_json').$type<Record<string, any>>().default({}).notNull(),
   isPrimary: boolean('is_primary').default(false).notNull(),
   status: varchar('status', { length: 32 }).default('active').notNull(),
+  // Incremented on every pairing / logout / archive: invalidates previously issued terminal tokens
+  sessionVersion: integer('session_version').default(0).notNull(),
   lastActiveAt: timestamp('last_active_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

@@ -11,21 +11,42 @@ export const OrderStatusSchema = z.enum([
 ]);
 export type OrderStatus = z.infer<typeof OrderStatusSchema>;
 
+/**
+ * Allowed order lifecycle transitions (single source of truth for API + UIs).
+ * Any transition not listed here is rejected by the order engine.
+ */
+export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending_payment: ['paid', 'in_progress', 'ready_to_collect', 'cancelled', 'payment_failed'],
+  payment_failed: ['pending_payment', 'paid', 'cancelled'],
+  paid: ['in_progress', 'ready_to_collect', 'completed', 'cancelled'],
+  in_progress: ['paid', 'ready_to_collect', 'completed', 'cancelled'],
+  ready_to_collect: ['in_progress', 'completed', 'cancelled'],
+  completed: [],
+  cancelled: [],
+};
+
+export function canTransitionOrder(from: OrderStatus, to: OrderStatus): boolean {
+  if (from === to) return true;
+  return (ORDER_STATUS_TRANSITIONS[from] || []).includes(to);
+}
+
 export const OrderTypeSchema = z.enum(['dine_in', 'takeaway', 'parking']);
 export type OrderType = z.infer<typeof OrderTypeSchema>;
 
+// NOTE: name / priceDelta sent by the client are IGNORED by the API — the server
+// always resolves addon names and prices from addon_options by optionId.
 export const OrderItemAddonSchema = z.object({
-  optionId: z.number(),
-  name: z.string(),
-  priceDelta: z.number().default(0),
+  optionId: z.number().int().positive(),
+  name: z.string().optional().default(''),
+  priceDelta: z.number().optional().default(0),
 });
 export type OrderItemAddon = z.infer<typeof OrderItemAddonSchema>;
 
 export const OrderItemInputSchema = z.object({
-  productId: z.number(),
-  name: z.string().min(1),
-  quantity: z.number().int().positive(),
-  unitPrice: z.number().nonnegative(),
+  productId: z.number().int().positive(),
+  name: z.string().optional().default(''),
+  quantity: z.number().int().positive().max(99),
+  unitPrice: z.number().nonnegative().optional().default(0), // ignored by API (server-side pricing)
   taxRate: z.number().default(23),
   ptuCode: z.string().default('a'),
   addons: z.array(OrderItemAddonSchema).default([]),
@@ -41,8 +62,8 @@ export const CreateOrderRequestSchema = z.object({
   customerNote: z.string().max(500).nullable().optional(),
   customerNip: z.string().regex(/^\d{10}$/, 'NIP must be exactly 10 digits').nullable().optional(),
   ageConsentAccepted: z.boolean().default(false),
-  items: z.array(OrderItemInputSchema).min(1, 'Order must contain at least one item'),
-  tipAmount: z.number().nonnegative().default(0),
+  items: z.array(OrderItemInputSchema).min(1, 'Order must contain at least one item').max(100),
+  tipAmount: z.number().nonnegative().max(10000).default(0),
   paymentMethod: z.enum(['blik', 'card', 'google_pay', 'apple_pay', 'cash', 'terminal_tap']).default('blik'),
   currency: z.string().default('PLN'),
   idempotencyKey: z.string().uuid().optional(),

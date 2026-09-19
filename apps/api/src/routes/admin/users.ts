@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { getDatabase, users, eq, and, desc, sql } from '@rycos/database';
-import { requireAdminAuth, getCompanyId, getAuthUser } from '../../middleware/adminAuth.js';
+import { requireAdminAuth, getCompanyId, getAuthUser, canAssignRole } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError } from '../../lib/response.js';
 import { hashPassword } from '../../lib/password.js';
 import { env } from '../../config/env.js';
@@ -149,6 +149,14 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
   }
 
   fastify.addHook('preHandler', requireAdminAuth);
+
+  // Privilege escalation guard: only platform admins may grant platform_admin / super_admin
+  fastify.addHook('preHandler', async (req, reply) => {
+    const body = (req.body ?? {}) as any;
+    if (body && typeof body === 'object' && body.role !== undefined && !canAssignRole(getAuthUser(req), body.role)) {
+      return reply.code(403).send({ success: false, message: 'Brak uprawnień do nadania tej roli' });
+    }
+  });
 
   // GET /v1/admin/users/me - Current user profile
   fastify.get('/v1/admin/users/me', async (req, reply) => {

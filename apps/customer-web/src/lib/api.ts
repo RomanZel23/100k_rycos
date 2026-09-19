@@ -13,6 +13,34 @@ export function getApiBaseUrl(): string {
   return envUrl || 'http://localhost:8000';
 }
 
+/**
+ * Auth headers of the paired workstation (POS / KDS / Pickup). The terminal token is issued by
+ * POST /v1/terminals/claim and is required by all staff endpoints.
+ */
+export function getTerminalToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem('rycos_terminal');
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    return parsed?.terminal_token || null;
+  } catch {
+    return null;
+  }
+}
+
+export function terminalAuthHeaders(): Record<string, string> {
+  const token = getTerminalToken();
+  return token ? { 'x-terminal-token': token } : {};
+}
+
+/** True when a staff request should be retried on the /v1/admin/* twin (route missing on older API). */
+export async function isRouteMissing(res: Response): Promise<boolean> {
+  if (res.status !== 404) return false;
+  const body = await res.clone().json().catch(() => ({} as any));
+  return body?.error === 'Not Found' && typeof body?.message === 'string' && body.message.startsWith('Route ');
+}
+
 export async function fetchMenu(slug: string, lang: string = 'pl'): Promise<MenuResponse> {
   const apiBase = getApiBaseUrl();
   const query = lang ? `?lang=${encodeURIComponent(lang)}` : '';
@@ -35,6 +63,7 @@ export async function submitOrder(orderData: CreateOrderRequest): Promise<OrderD
     headers: {
       'Content-Type': 'application/json',
       ...(orderData.idempotencyKey ? { 'Idempotency-Key': orderData.idempotencyKey } : {}),
+      ...terminalAuthHeaders(),
     },
     body: JSON.stringify(orderData),
   });

@@ -15,6 +15,8 @@ export interface InitializePaymentPageParams {
   currency: string;
   method?: string;
   returnUrl: string;
+  /** Server-to-server notification URL (called by Saferpay even if the customer closes the browser). */
+  notifyUrl?: string;
   credentials?: SaferpayCredentials;
 }
 
@@ -30,9 +32,14 @@ export interface AssertPaymentPageResult {
   success: boolean;
   transactionId?: string;
   status?: string;
+  amount?: number; // grosze
+  currency?: string;
+  orderId?: string;
   paymentMeans?: any;
   payer?: any;
   error?: string;
+  /** Saferpay ErrorName, e.g. TRANSACTION_ABORTED / TRANSACTION_DECLINED / TRANSACTION_IN_PROGRESS */
+  errorName?: string;
 }
 
 export interface CaptureTransactionResult {
@@ -109,6 +116,13 @@ export async function initializePaymentPage(
       Url: params.returnUrl,
     },
   };
+
+  if (params.notifyUrl) {
+    payload.Notification = {
+      SuccessNotifyUrl: params.notifyUrl,
+      FailNotifyUrl: params.notifyUrl,
+    };
+  }
 
   if (paymentMethods && paymentMethods.length > 0) {
     payload.PaymentMethods = paymentMethods;
@@ -189,6 +203,9 @@ export async function assertPaymentPage(
         success: true,
         transactionId: tx.Id,
         status: tx.Status,
+        amount: tx.Amount?.Value !== undefined ? Number(tx.Amount.Value) : undefined,
+        currency: tx.Amount?.CurrencyCode,
+        orderId: tx.OrderId,
         paymentMeans: data.PaymentMeans,
         payer: data.Payer,
       };
@@ -198,6 +215,7 @@ export async function assertPaymentPage(
     return {
       success: false,
       error: data.ErrorMessage || data.ErrorName || `HTTP ${res.status}`,
+      errorName: data.ErrorName,
     };
   } catch (err: any) {
     console.error(`[Saferpay] Assert exception:`, err.message);
