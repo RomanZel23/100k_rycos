@@ -25,6 +25,7 @@ import {
 import jsQR from 'jsqr';
 import { getApiBaseUrl, terminalAuthHeaders, isRouteMissing } from '../../lib/api';
 import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
+import { useTerminalSync } from '../../lib/terminalSync';
 
 interface CompletedOrderLog {
   orderNumber: number;
@@ -34,6 +35,7 @@ interface CompletedOrderLog {
 
 function PickupPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }) {
   const [terminal, setTerminal] = useState<PairedTerminal>(initialTerminal);
+  useTerminalSync<PairedTerminal>(setTerminal);
   const [activeTab, setActiveTab] = useState<'camera' | 'pin'>('camera');
   const [pin, setPin] = useState('');
   const [orderNumberInput, setOrderNumberInput] = useState('');

@@ -13,6 +13,7 @@ import {
 import { requireAdminAuth, getCompanyId, getAuthUser, invalidateTerminalCache } from '../../middleware/adminAuth.js';
 import { success, error, forbidden, validationError } from '../../lib/response.js';
 import { invalidateBrandMenuCache } from '../../services/catalogService.js';
+import { broadcastToStaff } from '../../plugins/websocket.js';
 
 /**
  * Graphical structure editor backend.
@@ -21,6 +22,8 @@ import { invalidateBrandMenuCache } from '../../services/catalogService.js';
  */
 
 const LAYOUT_KEY = 'structure_layout';
+/** A terminal is "online" when its heartbeat (every 30 s) arrived within this window. */
+export const TERMINAL_ONLINE_MS = 90_000;
 const VALID_ROLES = ['all_in_one', 'pos', 'kds', 'pickup', 'kiosk', 'fiscal_hub'] as const;
 type Role = (typeof VALID_ROLES)[number];
 
@@ -40,14 +43,18 @@ function randomCode(): string {
   return code;
 }
 
+const cleanTables = (v: unknown): string[] =>
+  Array.isArray(v) ? Array.from(new Set(v.map((x) => String(x).trim()).filter(Boolean))).slice(0, 500).map((x) => x.slice(0, 32)) : [];
+
 /** Location reference in a PUT payload: existing id, "new:<tempId>", or null. */
 type LocationRef = number | string | null;
 
 interface StructurePut {
   layout?: unknown;
-  new_locations?: Array<{ temp_id: string; name: string }>;
-  locations?: Array<{ id: number; name?: string }>;
-  brands?: Array<{ id: number; location_ref: LocationRef }>;
+  new_locations?: Array<{ temp_id: string; name: string; tables?: string[] }>;
+  locations?: Array<{ id: number; name?: string; tables?: string[] }>;
+  /** tables: own table list of the brand; null = use the location's tables; undefined = unchanged */
+  brands?: Array<{ id: number; location_ref?: LocationRef; tables?: string[] | null }>;
   new_terminals?: Array<{ temp_id: string; name: string; role: string }>;
   terminals?: Array<{
     ref: number | string; // existing terminal id, or "new:<tempId>"
@@ -70,8 +77,8 @@ function isManagerRole(role: string | undefined, isTerminal: boolean): boolean {
 async function loadStructure(companyId: number) {
   const db = getDatabase();
   const [locRows, brandRows, termRows, devRows, layoutRows] = await Promise.all([
-    db.select({ id: locations.id, name: locations.name, isActive: locations.isActive }).from(locations).where(eq(locations.companyId, companyId)).orderBy(locations.id),
-    db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId, isActive: brands.isActive }).from(brands).where(eq(brands.companyId, companyId)).orderBy(brands.id),
+    db.select({ id: locations.id, name: locations.name, isActive: locations.isActive, tables: locations.tables }).from(locations).where(eq(locations.companyId, companyId)).orderBy(locations.id),
+    db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId, isActive: brands.isActive, tables: brands.tables }).from(brands).where(eq(brands.companyId, companyId)).orderBy(brands.id),
     db.select().from(terminals).where(and(eq(terminals.companyId, companyId), ne(terminals.status, 'archived'))).orderBy(terminals.id),
     db.select().from(fiscalDevices).where(eq(fiscalDevices.companyId, companyId)).orderBy(fiscalDevices.id),
     db.select({ config: companySettings.config }).from(companySettings)
@@ -79,8 +86,8 @@ async function loadStructure(companyId: number) {
   ]);
 
   return {
-    locations: locRows.map((l) => ({ id: l.id, name: l.name, is_active: l.isActive })),
-    brands: brandRows.map((b) => ({ id: b.id, name: b.name, slug: b.slug, location_id: b.locationId, is_active: b.isActive })),
+    locations: locRows.map((l) => ({ id: l.id, name: l.name, is_active: l.isActive, tables: l.tables || [] })),
+    brands: brandRows.map((b) => ({ id: b.id, name: b.name, slug: b.slug, location_id: b.locationId, is_active: b.isActive, tables: b.tables && b.tables.length ? b.tables : null })),
     terminals: termRows.map((t) => ({
       id: t.id,
       terminal_id: t.terminalId,
@@ -117,6 +124,31 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
   fastify.get('/v1/admin/structure', async (req, reply) => {
     const companyId = getCompanyId(req);
     return success(reply, await loadStructure(companyId), 'Structure retrieved');
+  });
+
+  // GET /v1/admin/structure/status — lightweight live status for the editor (polled every ~20 s)
+  fastify.get('/v1/admin/structure/status', async (req, reply) => {
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+    const [termRows, devRows] = await Promise.all([
+      db.select({ id: terminals.id, status: terminals.status, lastActiveAt: terminals.lastActiveAt })
+        .from(terminals).where(and(eq(terminals.companyId, companyId), ne(terminals.status, 'archived'))),
+      db.select({ deviceId: fiscalDevices.deviceId, isOnline: fiscalDevices.isOnline, lastSeenAt: fiscalDevices.lastSeenAt })
+        .from(fiscalDevices).where(eq(fiscalDevices.companyId, companyId)),
+    ]);
+    const now = Date.now();
+    return success(reply, {
+      server_time: new Date(now).toISOString(),
+      terminals: Object.fromEntries(termRows.map((t) => [t.id, {
+        status: t.status,
+        last_active: t.lastActiveAt ? t.lastActiveAt.toISOString() : null,
+        online: !!t.lastActiveAt && now - t.lastActiveAt.getTime() < TERMINAL_ONLINE_MS,
+      }])),
+      devices: Object.fromEntries(devRows.map((d) => [d.deviceId, {
+        online: d.isOnline,
+        last_seen: d.lastSeenAt ? d.lastSeenAt.toISOString() : null,
+      }])),
+    });
   });
 
   // PUT /v1/admin/structure — save the whole graph atomically
@@ -205,7 +237,12 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
         for (const l of body.new_locations || []) {
           const [row] = await tx
             .insert(locations)
-            .values({ companyId, name: String(l.name).trim(), isActive: true })
+            .values({
+              companyId,
+              name: String(l.name).trim(),
+              isActive: true,
+              ...(l.tables && cleanTables(l.tables).length ? { tables: cleanTables(l.tables) } : {}),
+            })
             .returning({ id: locations.id });
           locMap.set(String(l.temp_id), row.id);
         }
@@ -217,16 +254,25 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
         };
 
         for (const l of body.locations || []) {
-          if (l.name !== undefined) {
-            await tx.update(locations).set({ name: String(l.name).trim() })
+          const set: Record<string, unknown> = {};
+          if (l.name !== undefined) set.name = String(l.name).trim();
+          if (l.tables !== undefined) set.tables = cleanTables(l.tables);
+          if (Object.keys(set).length) {
+            await tx.update(locations).set(set)
               .where(and(eq(locations.id, l.id), eq(locations.companyId, companyId)));
           }
         }
 
         for (const b of body.brands || []) {
+          const set: Record<string, unknown> = {};
           const loc = resolveLoc(b.location_ref);
-          if (loc === undefined) continue;
-          await tx.update(brands).set({ locationId: loc })
+          if (loc !== undefined) set.locationId = loc;
+          if (b.tables !== undefined) {
+            const t = b.tables === null ? [] : cleanTables(b.tables);
+            set.tables = t.length ? t : null;
+          }
+          if (!Object.keys(set).length) continue;
+          await tx.update(brands).set(set)
             .where(and(eq(brands.id, b.id), eq(brands.companyId, companyId)));
         }
 
@@ -319,6 +365,13 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
 
       invalidateTerminalCache();
       if ((body.brands || []).length) await invalidateBrandMenuCache();
+      // Paired stations refresh their configuration right away (they also poll every 30 s)
+      broadcastToStaff(companyId, {
+        type: 'terminal.config_updated',
+        timestamp: new Date().toISOString(),
+        companyId,
+        payload: { source: 'structure_editor' },
+      }).catch(() => {});
 
       return success(reply, { ...(await loadStructure(companyId)), id_map: idMap }, 'Struktura zapisana');
     } catch (err: any) {

@@ -5,6 +5,7 @@ import { ChefHat, Volume2, VolumeX, Clock, CheckCircle2, AlertCircle, RefreshCw,
 import { getApiBaseUrl, terminalAuthHeaders, isRouteMissing, getTerminalToken } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
 import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
+import { useTerminalSync, TERMINAL_REFRESH } from '../../lib/terminalSync';
 
 interface ServiceCallNotification {
   id: string;
@@ -69,6 +70,7 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState('');
   const [terminal, setTerminal] = useState<PairedTerminal>(initialTerminal);
+  useTerminalSync<PairedTerminal>(setTerminal);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Mobile tab state
@@ -241,6 +243,8 @@ function KitchenDisplayPageContent({ initialTerminal }: { initialTerminal: Paire
               loadOrders();
             } else if (data.type === 'order.status_changed' || data.type === 'order.status_updated') {
               loadOrders();
+            } else if (data.type === 'terminal.config_updated') {
+              window.dispatchEvent(new Event(TERMINAL_REFRESH));
             } else if (data.type === 'service_call') {
               playServiceCallChime();
               setServiceCalls((prev) => [

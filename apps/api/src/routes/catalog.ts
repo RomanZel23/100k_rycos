@@ -92,4 +92,41 @@ export async function catalogRoutes(fastify: FastifyInstance) {
       message: 'Terminal paired successfully',
     });
   });
+
+  // POST /v1/terminals/heartbeat — paired station reports it is alive and receives its CURRENT configuration.
+  // Lets stations pick up changes from the admin panel / structure editor without re-pairing.
+  fastify.post('/v1/terminals/heartbeat', async (req, reply) => {
+    const { getDatabase, terminals, eq } = await import('@rycos/database');
+    const { resolveTerminalUser } = await import('../middleware/adminAuth.js');
+    const principal = await resolveTerminalUser(req);
+    if (!principal?.terminal_id) {
+      return reply.code(401).send({ error: 'Stanowisko nie jest sparowane lub zostało wylogowane', unpaired: true });
+    }
+    const db = getDatabase();
+    const [term] = await db.select().from(terminals).where(eq(terminals.terminalId, String(principal.terminal_id))).limit(1);
+    if (!term) return reply.code(401).send({ error: 'Stanowisko nie istnieje', unpaired: true });
+
+    // throttle writes: at most one last_active update per 25 s per station
+    if (!term.lastActiveAt || Date.now() - term.lastActiveAt.getTime() > 25_000) {
+      await db.update(terminals).set({ lastActiveAt: new Date() }).where(eq(terminals.id, term.id));
+    }
+
+    return reply.send({
+      data: {
+        id: term.id,
+        terminal_id: term.terminalId,
+        name: term.name,
+        role: term.role,
+        company_id: term.companyId,
+        location_id: term.locationId,
+        assigned_brand_ids: term.assignedBrandIds,
+        tap_device_id: term.tapDeviceId,
+        printer_device_id: term.printerDeviceId,
+        fiscal_device_id: term.fiscalDeviceId,
+        capabilities: term.capabilities,
+        config_json: term.configJson,
+        status: term.status,
+      },
+    });
+  });
 }

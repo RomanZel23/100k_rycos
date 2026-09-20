@@ -32,6 +32,7 @@ import { Product, MenuResponse, AddonOption } from '@rycos/shared';
 import { fetchMenu, submitOrder, getApiBaseUrl, terminalAuthHeaders, isRouteMissing } from '../../lib/api';
 import { PinVerificationModal } from '../../components/PinVerificationModal';
 import { TerminalGuard, PairedTerminal } from '../../components/TerminalGuard';
+import { useTerminalSync } from '../../lib/terminalSync';
 
 interface PosCartItem {
   id: string; // unique key
@@ -448,6 +449,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
 
   // Paired Workstation Terminal
   const [terminal, setTerminal] = useState<PairedTerminal>(initialTerminal);
+  useTerminalSync<PairedTerminal>(setTerminal);
 
   // Open tickets (Otwarte rachunki / stoliki) state
   const [isOpenTicketsModalOpen, setIsOpenTicketsModalOpen] = useState(false);
