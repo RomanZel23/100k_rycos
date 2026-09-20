@@ -14,6 +14,7 @@ import { adminStressTestRoutes } from './stressTest.js';
 import { adminBillingRoutes } from './billing.js';
 import { adminRycosRoutes } from './rycos.js';
 import { adminDatabaseRoutes } from './database.js';
+import { adminStructureRoutes } from './structure.js';
 
 export async function adminRoutes(fastify: FastifyInstance) {
   // Register modular admin sub-routes
@@ -32,4 +33,5 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminBillingRoutes);
   await fastify.register(adminRycosRoutes);
   await fastify.register(adminDatabaseRoutes);
+  await fastify.register(adminStructureRoutes);
 }

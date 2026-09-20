@@ -60,14 +60,7 @@ export async function resolveTapDisplayId(companyId: number, terminalId?: string
   }
   for (const f of companyFiscal) allowed.add(f.deviceId);
 
-  // 1. Explicit device — only if it belongs to the company
-  if (explicitTapDeviceId && explicitTapDeviceId.trim() !== '' && explicitTapDeviceId !== 'self') {
-    const clean = explicitTapDeviceId.trim();
-    if (!allowed.has(clean)) throw new HttpError(403, `Urządzenie ${clean} nie należy do tej firmy`);
-    return clean;
-  }
-
-  // 2. Terminal configuration
+  // 1. Terminal configuration from the database (source of truth — the device's local copy may be stale)
   if (terminalId) {
     const cleanTermId = terminalId.trim().toUpperCase();
     const term = companyTerms.find((t) => t.terminalId === cleanTermId);
@@ -75,6 +68,13 @@ export async function resolveTapDisplayId(companyId: number, terminalId?: string
       if (term.tapDeviceId && term.tapDeviceId !== 'self' && term.tapDeviceId.trim() !== '') return term.tapDeviceId.trim();
       if (term.tapDeviceId === 'self' || term.terminalId.startsWith('SBR-') || term.terminalId.startsWith('SBT-')) return term.terminalId;
     }
+  }
+
+  // 2. Explicit device sent by the client — only if it belongs to the company
+  if (explicitTapDeviceId && explicitTapDeviceId.trim() !== '' && explicitTapDeviceId !== 'self') {
+    const clean = explicitTapDeviceId.trim();
+    if (!allowed.has(clean)) throw new HttpError(403, `Urządzenie ${clean} nie należy do tej firmy`);
+    return clean;
   }
 
   // 3. Any company SBR/SBT device

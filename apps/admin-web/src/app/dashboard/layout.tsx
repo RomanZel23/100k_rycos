@@ -22,6 +22,7 @@ const NAV = [
   { href: '/dashboard/orders', key: 'nav.orders', defaultLabel: 'Orders', manager: true },
   { href: '/dashboard/products', key: 'nav.products', defaultLabel: 'Products', manager: true },
   { href: '/dashboard/brands', key: 'nav.brands', defaultLabel: 'Brands', manager: true },
+  { href: '/dashboard/structure', key: 'nav.structure', defaultLabel: 'Structure', manager: true },
   { href: '/dashboard/locations', key: 'nav.locations', defaultLabel: 'Locations', manager: true },
   { href: '/dashboard/terminals', key: 'nav.terminals', defaultLabel: 'POS terminals', manager: true },
   { href: '/dashboard/fiscal-devices', key: 'nav.fiscal', defaultLabel: 'Fiscal devices', manager: true },
