@@ -662,14 +662,19 @@ export async function ensureDatabaseSchema() {
 
       if (brandsTableCheck.length > 0) {
         const brandsCount: any = await raw.unsafe(`SELECT count(*)::int as cnt FROM brands LIMIT 1;`);
-        if (brandsCount[0]?.cnt === 0) {
+        const freshDatabase = brandsCount[0]?.cnt === 0;
+        if (freshDatabase) {
           console.log('🌱 [DB Auto-Init] Database is empty. Seeding demo menu (100k-RYCOS Burger & Pizza)...');
           await seedDatabase();
           console.log('✓ [DB Auto-Init] Demo menu seeded successfully');
         }
 
-        // Migrate any legacy Yalla names to 100k-RYCOS and ensure slugs
-        await raw.unsafe(`
+        // One-time demo bootstrap — ONLY right after seeding an empty database.
+        // Previously this ran on EVERY boot and:
+        //  - re-assigned every company product to every brand (brand menu edits reset after each deploy),
+        //  - created en/de translations equal to the Polish name for every new product
+        //    (later name edits in the panel never reached EN/DE customers).
+        if (freshDatabase) await raw.unsafe(`
           UPDATE companies SET name = '100k-RYCOS Food Group' WHERE name ILIKE '%yalla%';
           UPDATE brands SET name = '100k-RYCOS Burger & Pizza' WHERE name ILIKE '%yalla%';
 
