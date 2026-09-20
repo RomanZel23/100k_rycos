@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { getApiBaseUrl } from '../lib/api';
 import { refreshTerminalConfig, TERMINAL_REFRESH, TERMINAL_UPDATED, TERMINAL_UNPAIRED } from '../lib/terminalSync';
+import { QrScanner, extractPairingCode } from './QrScanner';
 
 export interface PairedTerminal {
   id: number;
@@ -105,6 +106,7 @@ export function TerminalGuard({
   const [code, setCode] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -128,9 +130,9 @@ export function TerminalGuard({
     }
   }, []);
 
-  const handleClaim = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanCode = code.trim().toUpperCase();
+  const handleClaim = async (e: React.FormEvent | null, scanned?: string) => {
+    e?.preventDefault();
+    const cleanCode = (scanned ?? code).trim().toUpperCase();
     if (!cleanCode) {
       setError('Wpisz 8-znakowy kod stanowiska');
       return;
@@ -263,6 +265,16 @@ export function TerminalGuard({
             </div>
 
             <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              disabled={claiming}
+              className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-100 font-black rounded-2xl text-sm flex items-center justify-center gap-2 border border-slate-700 transition-colors cursor-pointer min-h-[52px] disabled:opacity-50"
+            >
+              <QrCode size={18} className="text-amber-400" />
+              <span>Skanuj kod QR stanowiska</span>
+            </button>
+
+            <button
               type="submit"
               disabled={claiming || !code.trim()}
               className="w-full py-4 bg-amber-500 hover:bg-amber-400 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black rounded-2xl text-base flex items-center justify-center gap-2 shadow-xl shadow-amber-500/25 transition-all cursor-pointer min-h-[56px]"
@@ -280,6 +292,23 @@ export function TerminalGuard({
               )}
             </button>
           </form>
+
+          <QrScanner
+            open={scannerOpen}
+            onClose={() => setScannerOpen(false)}
+            title="Skanuj kod QR stanowiska"
+            hint="Kod QR znajdziesz w panelu menadżera → Terminale & Stanowiska."
+            onResult={(text) => {
+              setScannerOpen(false);
+              const scanned = extractPairingCode(text);
+              if (!scanned) {
+                setError('Nie rozpoznano kodu QR. Spróbuj ponownie lub wpisz kod ręcznie.');
+                return;
+              }
+              setCode(scanned);
+              handleClaim(null, scanned);
+            }}
+          />
 
           {/* Alternative: QR Code & Admin Panel */}
           <div className="pt-4 border-t border-slate-800/80 space-y-3">
