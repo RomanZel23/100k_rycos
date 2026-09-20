@@ -75,7 +75,15 @@ export default async function StockPage({
               <form action={saveStock} className="flex shrink-0 flex-wrap items-end gap-3">
                 <input type="hidden" name="id" value={p.id} />
                 <input type="hidden" name="name" value={p.name} />
-                <StockEditor productId={p.id} initialQty={p.stock_quantity} />
+                <StockEditor
+                  productId={p.id}
+                  initialQty={p.stock_quantity}
+                  labels={{
+                    track: locale === 'pl' ? 'Śledź stan' : locale === 'de' ? 'Bestand führen' : 'Track stock',
+                    quantity: locale === 'pl' ? 'Ilość' : locale === 'de' ? 'Menge' : 'Quantity',
+                    untracked: locale === 'pl' ? 'bez limitu' : locale === 'de' ? 'unbegrenzt' : 'untracked',
+                  }}
+                />
                 <label className="flex cursor-pointer items-center gap-2 pb-3 text-xs font-medium text-neutral-700">
                   <input type="checkbox" name="is_available" defaultChecked={p.is_available} className="h-4 w-4 accent-brand" />
                   {locale === 'pl' ? 'Dostępny' : 'Available'}

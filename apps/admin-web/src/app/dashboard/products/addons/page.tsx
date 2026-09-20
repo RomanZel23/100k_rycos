@@ -19,7 +19,7 @@ interface AddonOption {
 interface AddonGroup {
   id: number
   name: string
-  selection_mode: 'single' | 'multi'
+  selection_mode: 'single' | 'multiple'
   required: boolean
   min_select: number
   max_select: number | null
@@ -95,7 +95,7 @@ export default async function AddonsPage({ searchParams }: {
                 <label className="label">{getTranslation(locale, 'addons.selection_mode', 'Mode')}</label>
                 <select name="selection_mode" defaultValue={g.selection_mode} className="input">
                   <option value="single">{getTranslation(locale, 'addons.mode_single', 'Single (pick one)')}</option>
-                  <option value="multi">{getTranslation(locale, 'addons.mode_multiple', 'Multi (pick any)')}</option>
+                  <option value="multiple">{getTranslation(locale, 'addons.mode_multiple', 'Multi (pick any)')}</option>
                 </select>
               </div>
               <div>
@@ -104,7 +104,7 @@ export default async function AddonsPage({ searchParams }: {
               </div>
               <div>
                 <label className="label">{getTranslation(locale, 'addons.max_select', 'Max')}</label>
-                <input name="max_select" type="number" min={1} defaultValue={g.max_select ?? ''} placeholder="—" className="input" />
+                <input name="max_select" type="number" min={1} defaultValue={g.max_select ?? ''} placeholder={locale === 'pl' ? 'bez limitu' : locale === 'de' ? 'unbegrenzt' : 'no limit'} className="input" />
               </div>
               <div className="flex items-end gap-2">
                 <label className="flex items-center gap-2 pb-1 text-sm">
@@ -211,7 +211,7 @@ export default async function AddonsPage({ searchParams }: {
             <label className="label">{getTranslation(locale, 'addons.selection_mode', 'Mode')}</label>
             <select name="selection_mode" defaultValue="single" className="input">
               <option value="single">{getTranslation(locale, 'addons.mode_single', 'Single (pick one)')}</option>
-              <option value="multi">{getTranslation(locale, 'addons.mode_multiple', 'Multi (pick any)')}</option>
+              <option value="multiple">{getTranslation(locale, 'addons.mode_multiple', 'Multi (pick any)')}</option>
             </select>
           </div>
           <div>
@@ -220,7 +220,7 @@ export default async function AddonsPage({ searchParams }: {
           </div>
           <div>
             <label className="label">{getTranslation(locale, 'addons.max_select', 'Max')}</label>
-            <input name="max_select" type="number" min={1} placeholder="—" className="input" />
+            <input name="max_select" type="number" min={1} placeholder={locale === 'pl' ? 'bez limitu' : locale === 'de' ? 'unbegrenzt' : 'no limit'} className="input" />
           </div>
           <label className="flex items-center gap-2 pb-1 text-sm">
             <input type="checkbox" name="required" className="h-4 w-4 accent-brand" />

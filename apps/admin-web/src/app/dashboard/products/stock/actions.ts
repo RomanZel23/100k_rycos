@@ -19,7 +19,7 @@ export async function saveStock(formData: FormData): Promise<void> {
     stock_quantity: rawStock === '' ? null : rawStock,
   }
   const res = await adminApi(`/products/${id}/stock`, { method: 'PUT', body: JSON.stringify(body) })
-  if (!res.ok) await failTo('/dashboard/products/stock', res, `Failed to update ${name}`)
+  if (!res.ok) await failTo('/dashboard/products/stock', res, `Nie udało się zapisać: ${name}`)
   revalidatePath('/dashboard/products/stock')
-  redirect('/dashboard/products/stock?notice=' + encodeURIComponent(`${name} updated`))
+  redirect('/dashboard/products/stock?notice=' + encodeURIComponent(`Zapisano: ${name}`))
 }

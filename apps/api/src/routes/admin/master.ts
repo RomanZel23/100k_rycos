@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getDatabase, companies, orders, locations, brands, platformPricing, eq, sql, desc } from '@rycos/database';
 import { requirePlatformAdmin } from '../../middleware/adminAuth.js';
+import { paidOrdersOnly } from '../../lib/orderFilters.js';
 import { success, notFound, error } from '../../lib/response.js';
 
 export async function adminMasterRoutes(fastify: FastifyInstance) {
@@ -17,10 +18,11 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
         .from(companies)
         .where(eq(companies.isAcceptingOrders, true));
 
+      // GMV = paid orders only (see lib/orderFilters)
       const [ordersStats] = await db.select({
         totalOrders: sql<number>`count(*)::int`,
         totalVolume: sql<string>`coalesce(sum(${orders.totalAmount}), 0)`,
-      }).from(orders);
+      }).from(orders).where(paidOrdersOnly());
 
       const [signups7d] = await db.select({
         count: sql<number>`count(*)::int`,
@@ -41,23 +43,38 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
           currency: companies.currency,
           isAcceptingOrders: companies.isAcceptingOrders,
           createdAt: companies.createdAt,
-          ordersCount: sql<number>`(SELECT count(*)::int FROM orders WHERE orders.company_id::text = ${companies.id}::text)`,
-          totalVolume: sql<string>`coalesce((SELECT sum(total_amount) FROM orders WHERE orders.company_id::text = ${companies.id}::text), 0)`,
         })
         .from(companies)
         .orderBy(desc(companies.createdAt));
 
-      const mappedCompanies = compRows.map((c) => ({
-        id: c.id,
-        name: c.name,
-        nip: c.nip,
-        country: c.country,
-        currency: c.currency,
-        status: c.isAcceptingOrders ? 'active' : 'suspended',
-        createdAt: c.createdAt ? c.createdAt.toISOString() : new Date().toISOString(),
-        ordersCount: c.ordersCount || 0,
-        totalVolume: parseFloat(c.totalVolume || '0'),
-      }));
+      // One grouped pass over orders instead of a correlated sub-select per company
+      const perCompany = await db
+        .select({
+          companyId: orders.companyId,
+          ordersCount: sql<number>`count(*)::int`,
+          totalVolume: sql<string>`coalesce(sum(${orders.totalAmount}), 0)`,
+        })
+        .from(orders)
+        .where(paidOrdersOnly())
+        .groupBy(orders.companyId);
+      const statsByCompany = new Map(perCompany.map((r) => [Number(r.companyId), r]));
+
+      const mappedCompanies = compRows.map((c) => {
+        const stats = statsByCompany.get(Number(c.id));
+        return {
+          id: c.id,
+          name: c.name,
+          nip: c.nip,
+          country: c.country,
+          currency: c.currency,
+          status: c.isAcceptingOrders ? 'active' : 'suspended',
+          createdAt: c.createdAt ? c.createdAt.toISOString() : new Date().toISOString(),
+          ordersCount: stats?.ordersCount ?? 0,
+          orders_count: stats?.ordersCount ?? 0,
+          totalVolume: parseFloat(stats?.totalVolume || '0'),
+          total_volume: parseFloat(stats?.totalVolume || '0'),
+        };
+      });
 
       return success(reply, {
         totalCompanies: totalCompaniesRes?.count || 0,
@@ -94,14 +111,32 @@ export async function adminMasterRoutes(fastify: FastifyInstance) {
           currency: companies.currency,
           isAcceptingOrders: companies.isAcceptingOrders,
           createdAt: companies.createdAt,
-          ordersCount: sql<number>`(SELECT count(*)::int FROM orders WHERE orders.company_id::text = ${companies.id}::text)`,
-          brandsCount: sql<number>`(SELECT count(*)::int FROM brands WHERE brands.company_id::text = ${companies.id}::text)`,
-          locationsCount: sql<number>`(SELECT count(*)::int FROM locations WHERE locations.company_id::text = ${companies.id}::text)`,
         })
         .from(companies)
         .orderBy(desc(companies.createdAt));
 
-      return success(reply, rows, 'Companies retrieved');
+      const [orderStats, brandStats, locationStats] = await Promise.all([
+        db.select({ companyId: orders.companyId, cnt: sql<number>`count(*)::int`, volume: sql<string>`coalesce(sum(${orders.totalAmount}), 0)` }).from(orders).where(paidOrdersOnly()).groupBy(orders.companyId),
+        db.select({ companyId: brands.companyId, cnt: sql<number>`count(*)::int` }).from(brands).groupBy(brands.companyId),
+        db.select({ companyId: locations.companyId, cnt: sql<number>`count(*)::int` }).from(locations).groupBy(locations.companyId),
+      ]);
+      const orderMap = new Map(orderStats.map((r) => [Number(r.companyId), r]));
+      const brandMap = new Map(brandStats.map((r) => [Number(r.companyId), r.cnt]));
+      const locationMap = new Map(locationStats.map((r) => [Number(r.companyId), r.cnt]));
+
+      const withCounts = rows.map((c) => ({
+        ...c,
+        ordersCount: orderMap.get(Number(c.id))?.cnt ?? 0,
+        orders_count: orderMap.get(Number(c.id))?.cnt ?? 0,
+        totalVolume: parseFloat(orderMap.get(Number(c.id))?.volume || '0'),
+        total_volume: parseFloat(orderMap.get(Number(c.id))?.volume || '0'),
+        brandsCount: brandMap.get(Number(c.id)) ?? 0,
+        brands_count: brandMap.get(Number(c.id)) ?? 0,
+        locationsCount: locationMap.get(Number(c.id)) ?? 0,
+        locations_count: locationMap.get(Number(c.id)) ?? 0,
+      }));
+
+      return success(reply, withCounts, 'Companies retrieved');
     } catch (err: any) {
       return error(reply, err.message || 'Failed to list companies');
     }

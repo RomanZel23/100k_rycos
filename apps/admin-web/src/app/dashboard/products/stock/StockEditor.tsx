@@ -11,9 +11,11 @@ import { useState } from 'react'
 export function StockEditor({
   productId,
   initialQty,
+  labels,
 }: {
   productId: number
   initialQty: number | null
+  labels: { track: string; quantity: string; untracked: string }
 }) {
   const initialTracking = initialQty != null
   const [tracking, setTracking] = useState<boolean>(initialTracking)
@@ -28,11 +30,11 @@ export function StockEditor({
           onChange={(e) => setTracking(e.target.checked)}
           className="h-4 w-4 accent-brand"
         />
-        Track stock
+        {labels.track}
       </label>
       <div className="w-32">
         <label className="label text-xs" htmlFor={`stock-${productId}`}>
-          Quantity
+          {labels.quantity}
         </label>
         <input
           id={`stock-${productId}`}
@@ -42,7 +44,7 @@ export function StockEditor({
           inputMode="numeric"
           value={tracking ? value : ''}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={tracking ? '0' : 'untracked'}
+          placeholder={tracking ? '0' : labels.untracked}
           disabled={!tracking}
           className="input h-11 text-base disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400"
         />

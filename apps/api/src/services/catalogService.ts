@@ -1,4 +1,4 @@
-import { getDatabase, companies, companySettings, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, contentTranslations, locations, eq, inArray, and } from '@rycos/database';
+import { getDatabase, companies, companySettings, brands, categories, products, brandProducts, addonGroups, addonOptions, productAddonGroups, productAddonOptionPrices, contentTranslations, locations, eq, inArray, and, sql } from '@rycos/database';
 import { BrandInfo, MenuResponse, Product, AddonGroup } from '@rycos/shared';
 import { Redis } from 'ioredis';
 import { env } from '../config/env.js';
@@ -469,7 +469,7 @@ function getTranslated(
         .from(productAddonGroups)
         .innerJoin(addonGroups, eq(productAddonGroups.groupId, addonGroups.id))
         .where(inArray(productAddonGroups.productId, effectiveProductIds))
-        .orderBy(addonGroups.position)
+        .orderBy(productAddonGroups.position, addonGroups.position)
     : [];
 
   const groupIds = Array.from(new Set(productAddonGroupRows.map((g) => g.groupId)));
@@ -494,8 +494,26 @@ function getTranslated(
         position: addonOptions.position,
       })
       .from(addonOptions)
-      .where(and(inArray(addonOptions.groupId, groupIds), eq(addonOptions.isAvailable, true)))
+      // an option with a tracked stock that ran out disappears from the menu
+      .where(and(
+        inArray(addonOptions.groupId, groupIds),
+        eq(addonOptions.isAvailable, true),
+        sql`(${addonOptions.stockQuantity} IS NULL OR ${addonOptions.stockQuantity} > 0)`
+      ))
       .orderBy(addonOptions.position);
+  }
+
+  // Per-product price overrides (e.g. extra cheese costs more on a family pizza)
+  const overrideRows = effectiveProductIds.length > 0
+    ? await db
+        .select({ productId: productAddonOptionPrices.productId, optionId: productAddonOptionPrices.optionId, priceDelta: productAddonOptionPrices.priceDelta })
+        .from(productAddonOptionPrices)
+        .where(inArray(productAddonOptionPrices.productId, effectiveProductIds))
+    : [];
+  const overrideByProduct = new Map<number, Map<number, number>>();
+  for (const row of overrideRows) {
+    if (!overrideByProduct.has(row.productId)) overrideByProduct.set(row.productId, new Map());
+    overrideByProduct.get(row.productId)!.set(row.optionId, parseFloat(row.priceDelta));
   }
 
   // 6. Build Nested Addons structure
@@ -517,15 +535,22 @@ function getTranslated(
   for (const grp of productAddonGroupRows) {
     if (!addonGroupsByProduct.has(grp.productId)) addonGroupsByProduct.set(grp.productId, []);
     const translatedGrpName = getTranslated('addon_groups', grp.groupId, 'name', grp.groupName, normalizedLang, translationsMap);
+    const productOverrides = overrideByProduct.get(grp.productId);
+    const baseOptions = optionsByGroup.get(grp.groupId) || [];
+    const options = productOverrides
+      ? baseOptions.map((o) => (productOverrides.has(o.id) ? { ...o, priceDelta: productOverrides.get(o.id)! } : o))
+      : baseOptions;
     addonGroupsByProduct.get(grp.productId)!.push({
       id: grp.groupId,
+      // 'multi' was written by an older admin panel and means the same as 'multiple'
       name: translatedGrpName,
-      selectionMode: grp.selectionMode as 'single' | 'multiple',
+      selectionMode: String(grp.selectionMode).startsWith('multi') ? 'multiple' : 'single',
       required: grp.required,
       minSelect: grp.minSelect,
-      maxSelect: grp.maxSelect,
+      // 0 = no upper limit
+      maxSelect: grp.maxSelect > 0 ? grp.maxSelect : Math.max(options.length, 1),
       position: grp.position,
-      options: optionsByGroup.get(grp.groupId) || [],
+      options,
       translations: {},
     });
   }

@@ -3,6 +3,7 @@ import { getDatabase, orders, orderItems, products, brands, eq, and, desc, sql, 
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
 import { success, notFound, error, validationError, sendHttpError } from '../../lib/response.js';
 import { updateOrderStatus, markOrderPaid } from '../../services/orderEngine.js';
+import { paidOrdersOnly } from '../../lib/orderFilters.js';
 import { fiscalizeOrder } from '../../services/fiscalService.js';
 import { verifyPinAndComplete, pickupChallenge, pickupConfirm } from '../../services/pickupService.js';
 
@@ -238,7 +239,7 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
     // Orders included in stats: completed or in fulfillment/paid
     const currentConditions = [
       eq(orders.companyId, companyId),
-      sql`${orders.status} IN ('paid', 'in_progress', 'ready_to_collect', 'completed')`,
+      paidOrdersOnly(),
       gte(orders.createdAt, startDate),
       lte(orders.createdAt, endDate),
     ];
@@ -248,7 +249,7 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
 
     const priorConditions = [
       eq(orders.companyId, companyId),
-      sql`${orders.status} IN ('paid', 'in_progress', 'ready_to_collect', 'completed')`,
+      paidOrdersOnly(),
       gte(orders.createdAt, prevStartDate),
       lte(orders.createdAt, prevEndDate),
     ];

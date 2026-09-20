@@ -390,6 +390,41 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
   // Addon Modal for POS
   const [customizingProduct, setCustomizingProduct] = useState<Product | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<AddonOption[]>([]);
+
+  // --- add-on group rules (same rules the API enforces when the order is placed) ---
+  const addonGroupOf = (product: Product | null, optionId: number) =>
+    product?.addonGroups?.find((g) => g.options.some((o) => o.id === optionId));
+
+  const addonCountIn = (product: Product | null, list: AddonOption[], groupId: number) =>
+    list.filter((o) => addonGroupOf(product, o.id)?.id === groupId).length;
+
+  const addonLimitOf = (group: { selectionMode: string; maxSelect: number; options: unknown[] }) => {
+    if (group.selectionMode === 'single') return 1;
+    return group.maxSelect > 0 ? group.maxSelect : group.options.length || 99;
+  };
+
+  const addonMinOf = (group: { required: boolean; minSelect: number }) =>
+    Math.max(group.required ? 1 : 0, group.minSelect || 0);
+
+  const toggleAddonOption = (product: Product | null, opt: AddonOption) => {
+    const group = addonGroupOf(product, opt.id);
+    if (!group) return;
+    setSelectedAddons((prev) => {
+      const selected = prev.some((a) => a.id === opt.id);
+      if (group.selectionMode === 'single') {
+        const withoutGroup = prev.filter((a) => addonGroupOf(product, a.id)?.id !== group.id);
+        if (selected) return group.required ? prev : withoutGroup;
+        return [...withoutGroup, opt];
+      }
+      if (selected) return prev.filter((a) => a.id !== opt.id);
+      if (addonCountIn(product, prev, group.id) >= addonLimitOf(group)) return prev;
+      return [...prev, opt];
+    });
+  };
+
+  const missingAddonGroup = customizingProduct?.addonGroups?.find(
+    (g) => addonCountIn(customizingProduct, selectedAddons, g.id) < addonMinOf(g)
+  );
   const [modalInstructions, setModalInstructions] = useState('');
 
   // Confirmation / Success Overlay
@@ -1617,26 +1652,38 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             <div className="space-y-3 max-h-60 overflow-y-auto">
               {customizingProduct.addonGroups?.map((group) => (
                 <div key={group.id} className="space-y-1.5">
-                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                    {group.name}
-                  </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                      {group.name}
+                    </span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                      addonCountIn(customizingProduct, selectedAddons, group.id) < addonMinOf(group) ? 'text-rose-400' : 'text-slate-500'
+                    }`}>
+                      {group.selectionMode === 'single'
+                        ? addonMinOf(group) > 0 ? 'wymagany · 1' : 'wybierz 1'
+                        : `${addonMinOf(group) > 0 ? `wymagany · min. ${addonMinOf(group)}` : 'opcjonalnie'}${
+                            addonLimitOf(group) < (group.options.length || 99) ? ` · max. ${addonLimitOf(group)}` : ''
+                          }`}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 gap-1.5">
                     {group.options.map((opt) => {
                       const isSelected = selectedAddons.some((a) => a.id === opt.id);
+                      const groupFull =
+                        !isSelected &&
+                        group.selectionMode !== 'single' &&
+                        addonCountIn(customizingProduct, selectedAddons, group.id) >= addonLimitOf(group);
                       return (
                         <button
                           key={opt.id}
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedAddons((prev) => prev.filter((a) => a.id !== opt.id));
-                            } else {
-                              setSelectedAddons((prev) => [...prev, opt]);
-                            }
-                          }}
-                          className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+                          disabled={groupFull}
+                          onClick={() => toggleAddonOption(customizingProduct, opt)}
+                          className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between transition-all ${
                             isSelected
-                              ? 'bg-amber-500/20 border-amber-400 text-white'
-                              : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
+                              ? 'bg-amber-500/20 border-amber-400 text-white cursor-pointer'
+                              : groupFull
+                              ? 'bg-slate-800/50 border-slate-800 text-slate-600 cursor-not-allowed'
+                              : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600 cursor-pointer'
                           }`}
                         >
                           <span>{opt.name}</span>
@@ -1667,13 +1714,19 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                 Anuluj
               </button>
               <button
+                disabled={!!missingAddonGroup}
                 onClick={() => {
+                  if (missingAddonGroup) return;
                   addToCartDirect(customizingProduct, selectedAddons, modalInstructions);
                   setCustomizingProduct(null);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold shadow-md cursor-pointer"
+                className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold shadow-md ${
+                  missingAddonGroup
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-amber-500 hover:bg-amber-400 text-slate-950 cursor-pointer'
+                }`}
               >
-                Dodaj do rachunku
+                {missingAddonGroup ? `Wybierz: ${missingAddonGroup.name}` : 'Dodaj do rachunku'}
               </button>
             </div>
           </div>

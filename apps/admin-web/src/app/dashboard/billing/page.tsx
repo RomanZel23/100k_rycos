@@ -5,6 +5,22 @@ import { NoAccess } from '@/components/NoAccess'
 import { getTranslation } from '@/lib/i18n'
 import { getAdminLocale } from '@/lib/i18n-server'
 
+interface SubscriptionItem {
+  key: string
+  title: string
+  qty: number
+  monthly_price_pln: number
+  monthly_total_pln: number
+}
+interface Subscription {
+  items: SubscriptionItem[]
+  monthly_net_pln: number
+  months: number
+  prepaid_net_pln: number
+  paid_at: string | null
+  valid_until: string | null
+  label: string
+}
 interface Billing {
   month: string
   currency: string
@@ -12,10 +28,19 @@ interface Billing {
   sales_gross: number
   commission_pct: number
   commission: number
-  tier: { label: string; up_to: number | null; base_usd: number }
-  base_usd: number
+  subscription: Subscription | null
+  base_monthly_pln: number
   base_currency: string
-  by_terminal: { terminal_id: string | null; order_count: number; gross: number; commission: number }[]
+  estimated_total_pln: number
+  by_terminal: {
+    terminal_id: string | null
+    terminal_name: string | null
+    terminal_role: string | null
+    unknown_terminal: boolean
+    order_count: number
+    gross: number
+    commission: number
+  }[]
   note: string
 }
 interface Stats {
@@ -25,7 +50,9 @@ interface Stats {
 }
 
 const money = (n: number, c: string) => `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${c ? ' ' + c : ''}`
-const usd = (n: number) => `$${n.toLocaleString()}`
+const pln = (n: number) => money(n, 'PLN')
+const dateLabel = (iso: string | null, locale: string) =>
+  iso ? new Date(iso).toLocaleDateString(locale === 'pl' ? 'pl-PL' : locale === 'de' ? 'de-DE' : 'en-US') : '—'
 
 function bucketLabel(iso: string, bucket: string, locale: string) {
   const d = new Date(iso)
@@ -64,22 +91,52 @@ export default async function BillingPage({
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
             <Stat label={`${getTranslation(locale, 'nav.orders', 'Zamówienia')} (${billing.month})`} value={billing.orders.toLocaleString()} />
             <Stat label={getTranslation(locale, 'billing.sales', 'Wartość sprzedaży')} value={money(billing.sales_gross, billing.currency)} />
-            <Stat label={`${getTranslation(locale, 'billing.plan', 'Plan')} — ${billing.tier.label}`} value={usd(billing.base_usd) + (locale === 'pl' ? '/mies.' : '/mo')} />
+            <Stat
+              label={billing.subscription ? `${getTranslation(locale, 'billing.plan', 'Plan')} — ${billing.subscription.label}` : getTranslation(locale, 'billing.plan', 'Plan')}
+              value={billing.subscription ? `${pln(billing.base_monthly_pln)}${locale === 'pl' ? '/mies.' : '/mo'}` : (locale === 'pl' ? 'Brak abonamentu' : 'No subscription')}
+            />
             <Stat label={`${getTranslation(locale, 'billing.commission', 'Prowizja')} (${billing.commission_pct}%)`} value={money(billing.commission, billing.currency)} />
           </div>
 
-          <div className="card mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-neutral-400">{getTranslation(locale, 'billing.estimated_charge', 'Szacowane opłaty w tym miesiącu')}</p>
-              <p className="mt-1 text-lg font-semibold">
-                {usd(billing.base_usd)} <span className="text-neutral-400">{locale === 'pl' ? 'baza' : 'base'}</span>
-                {'  +  '}
-                {money(billing.commission, billing.currency)} <span className="text-neutral-400">{getTranslation(locale, 'billing.commission', 'prowizja')}</span>
-              </p>
+          <div className="card mt-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-neutral-400">{getTranslation(locale, 'billing.estimated_charge', 'Szacowane opłaty w tym miesiącu')}</p>
+                <p className="mt-1 text-lg font-semibold">
+                  {pln(billing.base_monthly_pln)} <span className="text-neutral-400">{locale === 'pl' ? 'abonament' : 'subscription'}</span>
+                  {'  +  '}
+                  {money(billing.commission, billing.currency)} <span className="text-neutral-400">{getTranslation(locale, 'billing.commission', 'prowizja')}</span>
+                  {'  =  '}
+                  {pln(billing.estimated_total_pln)}
+                </p>
+                <p className="mt-0.5 text-xs text-neutral-400">{locale === 'pl' ? 'Kwoty netto.' : 'Net amounts.'}</p>
+              </div>
+              {billing.subscription?.valid_until && (
+                <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+                  {locale === 'pl' ? 'Opłacone do' : 'Paid until'} {dateLabel(billing.subscription.valid_until, locale)}
+                </span>
+              )}
             </div>
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-              {billing.tier.label}
-            </span>
+
+            {billing.subscription ? (
+              <ul className="divide-y divide-neutral-100 border-t border-neutral-100 pt-1 text-sm">
+                {billing.subscription.items.map((item) => (
+                  <li key={item.key} className="flex items-center justify-between gap-3 py-1.5">
+                    <span className="text-neutral-700">
+                      {item.title}
+                      {item.qty > 1 && <span className="ml-1 text-neutral-400">× {item.qty}</span>}
+                    </span>
+                    <span className="shrink-0 font-medium">{pln(item.monthly_total_pln)}{locale === 'pl' ? '/mies.' : '/mo'}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="border-t border-neutral-100 pt-3 text-sm text-neutral-500">
+                {locale === 'pl'
+                  ? 'Brak zarejestrowanego abonamentu dla tej firmy — naliczana jest wyłącznie prowizja transakcyjna.'
+                  : 'No subscription on record for this company — only the transaction commission applies.'}
+              </p>
+            )}
           </div>
           <p className="mt-2 text-xs text-neutral-400">{billing.note}</p>
 
@@ -135,7 +192,16 @@ export default async function BillingPage({
                   )}
                   {billing.by_terminal.map((t, i) => (
                     <tr key={t.terminal_id ?? `none-${i}`}>
-                      <td className="px-4 py-3 font-medium">{t.terminal_id ?? (locale === 'pl' ? 'Online / nieprzypisane' : 'Online / unassigned')}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {t.terminal_id === null
+                          ? (locale === 'pl' ? 'Online / nieprzypisane' : 'Online / unassigned')
+                          : (
+                            <>
+                              <span>{t.terminal_name ?? (locale === 'pl' ? 'Usunięte stanowisko' : 'Removed station')}</span>
+                              <span className="ml-2 font-mono text-xs text-neutral-400">{t.terminal_id}</span>
+                            </>
+                          )}
+                      </td>
                       <td className="px-4 py-3 text-right">{t.order_count}</td>
                       <td className="px-4 py-3 text-right">{money(t.gross, billing.currency)}</td>
                       <td className="px-4 py-3 text-right">{money(t.commission, billing.currency)}</td>

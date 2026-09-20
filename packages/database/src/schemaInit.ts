@@ -463,6 +463,20 @@ BEGIN
   END IF;
 END $ob$;
 
+-- Add-ons: per-option stock and per-product price overrides
+ALTER TABLE "addon_options" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
+
+CREATE TABLE IF NOT EXISTS "product_addon_option_prices" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "product_id" integer NOT NULL REFERENCES "products"("id") ON DELETE cascade,
+  "option_id" integer NOT NULL REFERENCES "addon_options"("id") ON DELETE cascade,
+  "price_delta" numeric(10, 2) NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "uq_product_addon_option_price" ON "product_addon_option_prices" ("product_id", "option_id");
+
+-- 'multi' (written by an older admin panel) and 'multiple' meant the same thing
+UPDATE "addon_groups" SET "selection_mode" = 'multiple' WHERE "selection_mode" LIKE 'multi%' AND "selection_mode" <> 'multiple';
+
 DELETE FROM "idempotency_keys" WHERE "expires_at" < now();
 `;
 
