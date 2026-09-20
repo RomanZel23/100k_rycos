@@ -364,6 +364,9 @@ function PosTicketContent({
 
 function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }) {
   const [menu, setMenu] = useState<MenuResponse | null>(null);
+  // Brands this station may sell (from /v1/terminals/brands) and the one currently shown
+  const [posBrands, setPosBrands] = useState<{ id: number; name: string; slug: string }[]>([]);
+  const [brandSlug, setBrandSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -751,9 +754,33 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lastOrderSuccess]);
 
-  // Load Menu
+  // Resolve which brand(s) this paired station sells
   useEffect(() => {
-    fetchMenu('default', 'pl')
+    let alive = true;
+    fetch(`${getApiBaseUrl()}/v1/terminals/brands`, { headers: { ...terminalAuthHeaders() }, cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!alive) return;
+        const list: { id: number; name: string; slug: string }[] = json?.data || [];
+        setPosBrands(list);
+        let saved: string | null = null;
+        try { saved = localStorage.getItem('rycos_pos_brand'); } catch {}
+        const pick = list.find((b) => b.slug === saved) || list[0];
+        setBrandSlug(pick ? pick.slug : 'default');
+      })
+      .catch(() => { if (alive) setBrandSlug('default'); });
+    return () => { alive = false; };
+  }, [terminal?.terminal_id, JSON.stringify(terminal?.assigned_brand_ids ?? []), terminal?.location_id]);
+
+  const switchBrand = (slug: string) => {
+    try { localStorage.setItem('rycos_pos_brand', slug); } catch {}
+    setBrandSlug(slug);
+  };
+
+  // Load Menu of the selected brand
+  useEffect(() => {
+    if (!brandSlug) return;
+    fetchMenu(brandSlug, 'pl')
       .then((data) => {
         const activeCatIds = new Set(data.products.map((p) => p.categoryId));
         const filteredCategories = data.categories.filter((c) => activeCatIds.has(c.id));
@@ -871,7 +898,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
         setActiveCategory(1);
         setLoading(false);
       });
-  }, []);
+  }, [brandSlug]);
 
   const handleProductClick = (product: Product) => {
     if (product.addonGroups && product.addonGroups.length > 0) {
@@ -1044,6 +1071,19 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
           <div className="hidden xs:flex w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 items-center justify-center font-black shadow-md shrink-0">
             <Utensils size={16} />
           </div>
+
+          {/* Brand switcher (only when the station sells more than one brand) */}
+          {posBrands.length > 1 && brandSlug && (
+            <select
+              id="pos-brand"
+              aria-label="Marka"
+              value={brandSlug}
+              onChange={(e) => switchBrand(e.target.value)}
+              className="bg-slate-950/80 border border-slate-800 text-slate-100 text-xs font-bold rounded-xl px-2 py-1.5 max-w-[140px] sm:max-w-[200px]"
+            >
+              {posBrands.map((b) => <option key={b.id} value={b.slug}>{b.name}</option>)}
+            </select>
+          )}
 
           {/* Workstation Quick Switcher */}
           <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs shrink-0">

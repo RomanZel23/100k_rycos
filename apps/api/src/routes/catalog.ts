@@ -129,4 +129,34 @@ export async function catalogRoutes(fastify: FastifyInstance) {
       },
     });
   });
+
+  // GET /v1/terminals/brands — brands a paired POS may sell: assigned brands, else the brands of its location,
+  // else all active brands of its company. Replaces the old hard-coded 'default' brand on the POS.
+  fastify.get('/v1/terminals/brands', async (req, reply) => {
+    const { getDatabase, terminals, brands, eq, and, inArray } = await import('@rycos/database');
+    const { resolveTerminalUser, resolveUser } = await import('../middleware/adminAuth.js');
+    const principal = (await resolveTerminalUser(req)) || resolveUser(req);
+    if (!principal) return reply.code(401).send({ error: 'Stanowisko nie jest sparowane', unpaired: true });
+
+    const db = getDatabase();
+    let assigned: number[] = [];
+    let locationId: number | null = null;
+    if (principal.terminal_id) {
+      const [term] = await db.select().from(terminals).where(eq(terminals.terminalId, String(principal.terminal_id))).limit(1);
+      assigned = (term?.assignedBrandIds as number[]) || [];
+      locationId = term?.locationId ?? null;
+    }
+    const base = and(eq(brands.companyId, principal.company_id), eq(brands.isActive, true));
+    let rows = assigned.length
+      ? await db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId }).from(brands).where(and(base, inArray(brands.id, assigned)))
+      : [];
+    if (!rows.length && locationId) {
+      rows = await db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId }).from(brands).where(and(base, eq(brands.locationId, locationId)));
+    }
+    if (!rows.length) {
+      rows = await db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId }).from(brands).where(base);
+    }
+    rows.sort((a, b) => a.id - b.id);
+    return reply.send({ data: rows.map((b) => ({ id: b.id, name: b.name, slug: b.slug, location_id: b.locationId })) });
+  });
 }

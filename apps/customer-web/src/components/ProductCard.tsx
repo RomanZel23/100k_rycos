@@ -7,9 +7,47 @@ import { Plus, Clock, AlertTriangle } from 'lucide-react';
 interface ProductCardProps {
   product: Product;
   onSelect: (product: Product) => void;
+  /** 'row' = list layout (image left), 'tile' = boxed layout (image on top, 2-column grid) */
+  variant?: 'row' | 'tile';
 }
 
-export function ProductCard({ product, onSelect }: ProductCardProps) {
+export function ProductCard({ product, onSelect, variant = 'row' }: ProductCardProps) {
+  if (variant === 'tile') {
+    return (
+      <div
+        onClick={() => onSelect(product)}
+        className="bg-white rounded-2xl overflow-hidden shadow-xs sm:shadow-sm border border-slate-100 flex flex-col cursor-pointer active:scale-[0.98] transition-transform hover:shadow-md w-full min-w-0"
+      >
+        <div className="relative w-full aspect-square bg-slate-100 flex items-center justify-center overflow-hidden">
+          {product.imageUrl ? (
+            <img src={product.imageUrl} alt={product.name} crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <span className="text-4xl">🍽️</span>
+          )}
+          {product.isAgeRestricted && (
+            <span className="absolute top-2 left-2 bg-red-600 text-white text-xs font-black px-2 py-0.5 rounded-full shadow-sm">18+</span>
+          )}
+        </div>
+        <div className="p-3 flex flex-col flex-1 min-w-0">
+          <h3 className="font-black text-slate-900 text-sm sm:text-base leading-snug line-clamp-2 break-words">{product.name}</h3>
+          {product.description && (
+            <p className="text-slate-500 text-xs mt-1 line-clamp-2 leading-relaxed break-words">{product.description}</p>
+          )}
+          <div className="flex items-center justify-between mt-auto pt-2.5 gap-2">
+            <span className="font-black text-slate-950 text-sm sm:text-base font-mono whitespace-nowrap">{product.price.toFixed(2)} zł</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelect(product); }}
+              aria-label={`Dodaj ${product.name}`}
+              className="w-9 h-9 rounded-full bg-brand-500 hover:bg-brand-600 text-brand-text flex items-center justify-center shadow-md active:scale-90 transition-all shrink-0"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={() => onSelect(product)}
