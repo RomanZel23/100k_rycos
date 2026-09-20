@@ -9,6 +9,7 @@ export const WSEventTypeSchema = z.enum([
   'pickup.challenge',
   'catalog.updated',
   'device.status',
+  'terminal.config_updated',
 ]);
 export type WSEventType = z.infer<typeof WSEventTypeSchema>;
 
