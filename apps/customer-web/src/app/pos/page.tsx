@@ -25,6 +25,7 @@ import {
   List,
   Wifi,
   AlertCircle,
+  AlertTriangle,
   Radio,
   Loader2
 } from 'lucide-react';
@@ -402,11 +403,60 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
     fiscalPdfUrl?: string | null;
     fiscalQrCode?: string | null;
     fiscalJobId?: string | null;
+    fiscalError?: string | null;
     printerDeviceId?: string | null;
   } | null>(null);
 
   const [isPrintingPaper, setIsPrintingPaper] = useState(false);
   const [printStatusMessage, setPrintStatusMessage] = useState<string | null>(null);
+  const [isRetryingFiscal, setIsRetryingFiscal] = useState(false);
+
+  /** Reads the fiscalization outcome returned by the API (null = no answer from the device at all). */
+  const readFiscal = (raw: any) => {
+    const fiscal = raw && typeof raw === 'object' && Object.keys(raw).length > 0 ? raw : null;
+    return {
+      fiscalReceiptNumber: fiscal?.success === false ? null : fiscal?.receiptNumber ?? null,
+      fiscalPdfUrl: fiscal?.pdfReceiptUrl ?? null,
+      fiscalQrCode: fiscal?.qrCodeBase64 ?? null,
+      fiscalJobId: fiscal?.jobId ?? null,
+      fiscalError: !fiscal
+        ? 'Brak odpowiedzi z urządzenia fiskalnego. Zamówienie jest opłacone — fiskalizacja zostanie ponowiona automatycznie.'
+        : fiscal.success === false
+        ? fiscal.error || 'Fiskalizacja nie powiodła się.'
+        : null,
+    };
+  };
+
+  /** Manual retry of a failed fiscalization straight from the confirmation screen. */
+  const handleRetryFiscalization = async (orderId?: string) => {
+    if (!orderId) return;
+    setIsRetryingFiscal(true);
+    try {
+      const companyId = terminal?.company_id || menu?.brand?.companyId || 1;
+      const res = await fetch(`${getApiBaseUrl()}/v1/orders/${orderId}/fiscalize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-company-id': String(companyId),
+          ...(terminal?.terminal_id ? { 'x-terminal-id': terminal.terminal_id } : {}),
+          ...terminalAuthHeaders(),
+        },
+        body: JSON.stringify({ autoPrint: false, terminalId: terminal?.terminal_id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      const fiscal = json.data || null;
+      if (res.ok && json.success && fiscal) {
+        setLastOrderSuccess((prev) => (prev ? { ...prev, ...readFiscal(fiscal) } : prev));
+      } else {
+        const message = json.error || fiscal?.error || json.message || 'Fiskalizacja nadal się nie powiodła.';
+        setLastOrderSuccess((prev) => (prev ? { ...prev, fiscalError: message } : prev));
+      }
+    } catch (err: any) {
+      setLastOrderSuccess((prev) => (prev ? { ...prev, fiscalError: err.message || 'Błąd połączenia z API' } : prev));
+    } finally {
+      setIsRetryingFiscal(false);
+    }
+  };
 
   const handlePrintPaperReceipt = async (orderId?: string, jobId?: string | null) => {
     if (!orderId && !jobId) return;
@@ -590,7 +640,6 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
 
       if (res.ok && json.success) {
         setTapPaymentState((prev) => ({ ...prev, status: 'success' }));
-        const fiscal = json.fiscal || {};
         setTimeout(() => {
           setTapPaymentState((prev) => ({ ...prev, isOpen: false }));
           setLastOrderSuccess({
@@ -599,10 +648,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             pin: pin || '0000',
             action: `Terminal ${json.displayId || displayDevice} (Fiskalizacja)`,
             total: amount,
-            fiscalReceiptNumber: fiscal.receiptNumber,
-            fiscalPdfUrl: fiscal.pdfReceiptUrl,
-            fiscalQrCode: fiscal.qrCodeBase64,
-            fiscalJobId: fiscal.jobId,
+            ...readFiscal(json.fiscal),
             printerDeviceId: terminal?.printer_device_id,
           });
           if (isNewCheckout) {
@@ -699,10 +745,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
         pin: order.collectionPin,
         action: 'Rozliczono: Gotówka (Fiskalizacja)',
         total: parseFloat(order.totalAmount || '0'),
-        fiscalReceiptNumber: fiscal.receiptNumber,
-        fiscalPdfUrl: fiscal.pdfReceiptUrl,
-        fiscalQrCode: fiscal.qrCodeBase64,
-        fiscalJobId: fiscal.jobId,
+        ...readFiscal(fiscal),
         printerDeviceId: terminal?.printer_device_id,
       });
 
@@ -1036,10 +1079,7 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
             ? 'Gotówka (Fiskalizacja)'
             : 'Wysłano do kuchni (Rachunek otwarty)',
         total: totalAmount,
-        fiscalReceiptNumber: fiscalData?.receiptNumber,
-        fiscalPdfUrl: fiscalData?.pdfReceiptUrl,
-        fiscalQrCode: fiscalData?.qrCodeBase64,
-        fiscalJobId: fiscalData?.jobId,
+        ...(action === 'cash' ? readFiscal(fiscalData) : {}),
         printerDeviceId: terminal?.printer_device_id,
       });
 
@@ -1852,11 +1892,44 @@ function PosPageContent({ initialTerminal }: { initialTerminal: PairedTerminal }
                         Zeskanuj smartfonem e-paragon
                       </span>
                     </div>
+                  ) : lastOrderSuccess.fiscalError ? (
+                    <div className="py-4 px-4 bg-rose-500/10 rounded-xl border border-rose-500/30 space-y-2.5">
+                      <p className="text-[11px] font-bold text-rose-300 flex items-center gap-1.5">
+                        <AlertTriangle size={14} />
+                        Paragon fiskalny nie został wystawiony
+                      </p>
+                      <p className="text-[11px] text-rose-200/80 leading-relaxed break-words">
+                        {lastOrderSuccess.fiscalError}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => handleRetryFiscalization(lastOrderSuccess.orderId)}
+                        disabled={isRetryingFiscal}
+                        className="w-full py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold rounded-lg text-[11px] border border-rose-500/40 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isRetryingFiscal ? (
+                          <>
+                            <Loader2 className="animate-spin" size={14} />
+                            <span>Ponawiam fiskalizację...</span>
+                          </>
+                        ) : (
+                          <span>Ponów fiskalizację</span>
+                        )}
+                      </button>
+                    </div>
                   ) : (
-                    <div className="py-6 px-4 bg-slate-900/60 rounded-xl border border-dashed border-slate-800 text-center">
+                    <div className="py-6 px-4 bg-slate-900/60 rounded-xl border border-dashed border-slate-800 text-center space-y-2.5">
                       <p className="text-xs text-slate-400">
                         Brak wygenerowanego kodu QR lub trwa fiskalizacja...
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => handleRetryFiscalization(lastOrderSuccess.orderId)}
+                        disabled={isRetryingFiscal}
+                        className="text-[11px] text-emerald-400 hover:text-emerald-300 underline font-medium cursor-pointer disabled:opacity-50"
+                      >
+                        {isRetryingFiscal ? 'Sprawdzam...' : 'Sprawdź / ponów fiskalizację'}
+                      </button>
                     </div>
                   )}
 

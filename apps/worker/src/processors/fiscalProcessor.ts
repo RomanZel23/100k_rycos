@@ -12,7 +12,13 @@ import {
   markFiscalIssuedByDuplicate,
   resolveFiscalDisplayId,
 } from '@rycos/database';
-import { buildFiscalPayload, parseFiscalResult, fiscalExternalRef, isDuplicateFiscalRefError } from '@rycos/shared';
+import {
+  buildFiscalPayload,
+  parseFiscalResult,
+  fiscalExternalRef,
+  isDuplicateFiscalRefError,
+  summarizeFiscalResponse,
+} from '@rycos/shared';
 import { redisConnection, fiscalQueue } from '../queues/index.js';
 import { env } from '../config/env.js';
 import { MqttRpc } from '../lib/mqttRpc.js';
@@ -91,7 +97,28 @@ export function startFiscalWorker() {
         throw err;
       }
 
+      console.log(
+        `[Fiscal Worker] \u2190 ${displayId} responded for Order #${claimed.orderNumber} (ref ${fiscalExternalRef(orderId)}): ${summarizeFiscalResponse(result)}`
+      );
+
       const parsed = parseFiscalResult(result, claimed.orderNumber);
+
+      // 2xx without any receipt data = no receipt. Fail loudly so BullMQ retries instead of
+      // silently closing the order with an empty receipt.
+      if (!parsed.hasReceipt || parsed.deviceError) {
+        const detail = parsed.deviceError || summarizeFiscalResponse(result);
+
+        if (claimed.fiscalAttempts > 1 && isDuplicateFiscalRefError(detail)) {
+          console.warn(`[Fiscal Worker] Order #${claimed.orderNumber}: duplicate reference — receipt was issued by an earlier attempt`);
+          await markFiscalIssuedByDuplicate(orderId, detail, displayId);
+          return;
+        }
+
+        const message = `Urz\u0105dzenie ${displayId} nie zwr\u00f3ci\u0142o danych paragonu: ${detail}`;
+        await failOrderFiscalization(orderId, message);
+        throw new Error(message);
+      }
+
       await completeOrderFiscalization({
         orderId,
         companyId: claimed.companyId,

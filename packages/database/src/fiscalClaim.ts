@@ -39,6 +39,30 @@ export async function claimOrderFiscalization(orderId: string, staleSeconds = 12
   return { order, items };
 }
 
+/**
+ * An order marked 'issued' although NOTHING was recorded (no receipt number, no JPK id,
+ * no QR and no print job) is not a real receipt — a device answered with an empty body.
+ * Such an order is released back to 'failed' so it can be fiscalized again. The stable
+ * externalrefFR protects the customer: if the receipt WAS printed, the device rejects the
+ * repeat as a duplicate and the order is closed without a second receipt.
+ */
+export async function repairBogusFiscalIssue(orderId: string): Promise<boolean> {
+  const db = getDatabase();
+  const rows = await db
+    .update(orders)
+    .set({ fiscalStatus: 'failed', fiscalClaimedAt: null, updatedAt: new Date() })
+    .where(
+      sql`${orders.id} = ${orderId}
+        AND ${orders.fiscalStatus} = 'issued'
+        AND (${orders.fiscalReceiptNumber} IS NULL OR ${orders.fiscalReceiptNumber} = 'PAR_' || ${orders.orderNumber})
+        AND ${orders.fiscalJobId} IS NULL
+        AND ${orders.fiscalQrCode} IS NULL
+        AND ${orders.fiscalPdfUrl} IS NULL`
+    )
+    .returning({ id: orders.id });
+  return rows.length > 0;
+}
+
 export interface FiscalCompletion {
   orderId: string;
   companyId: number;

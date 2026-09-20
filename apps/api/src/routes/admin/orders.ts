@@ -113,9 +113,15 @@ export async function adminOrdersRoutes(fastify: FastifyInstance) {
   // POST /v1/admin/orders/:id/pay - Record counter payment and fiscalize (POS / Staff / Tables)
   fastify.post('/v1/admin/orders/:id/pay', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { paymentMethod, autoPrint } = (req.body || {}) as { paymentMethod?: string; autoPrint?: boolean };
+    const { paymentMethod, autoPrint, terminalId: bodyTerminalId } = (req.body || {}) as {
+      paymentMethod?: string;
+      autoPrint?: boolean;
+      terminalId?: string;
+    };
     const companyId = getCompanyId(req);
-    const terminalId = (req.user as any)?.terminal_id || null;
+    // A paired station is authoritative; a staff member signed in to the panel may name the
+    // station it is settling at (the device is then resolved within this company only).
+    const terminalId = (req.user as any)?.terminal_id || (bodyTerminalId ? String(bodyTerminalId).trim().toUpperCase() : null) || null;
 
     const method = paymentMethod || 'cash';
     if (!['cash', 'card', 'blik', 'voucher', 'other'].includes(method)) {

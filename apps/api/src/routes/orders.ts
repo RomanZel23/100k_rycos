@@ -200,15 +200,17 @@ export async function orderRoutes(fastify: FastifyInstance) {
 
     // POST /v1/orders/:id/fiscalize - Manual (re)fiscalization of a PAID order
     staff.post('/v1/orders/:id/fiscalize', async (req: any, reply) => {
-      const body = (req.body ?? {}) as { autoPrint?: boolean };
+      const body = (req.body ?? {}) as { autoPrint?: boolean; repair?: boolean; terminalId?: string; terminal_id?: string };
       try {
         const res = await fiscalizeOrder({
           orderId: req.params.id,
           autoPrint: body.autoPrint,
-          terminalId: req.user?.terminal_id,
+          terminalId: req.user?.terminal_id || body.terminalId || body.terminal_id,
           companyId: getCompanyId(req),
+          // A manual retry releases an order stuck in 'issued' with no receipt data at all
+          repair: body.repair !== false,
         });
-        return reply.send({ success: res.success, data: res });
+        return reply.send({ success: res.success, error: res.error, data: res });
       } catch (err: any) {
         return sendHttpError(reply, err, 'Błąd fiskalizacji zamówienia');
       }
