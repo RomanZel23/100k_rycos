@@ -13,6 +13,7 @@ import {
 import { requireAdminAuth, getCompanyId, getAuthUser, invalidateTerminalCache } from '../../middleware/adminAuth.js';
 import { success, error, forbidden, validationError } from '../../lib/response.js';
 import { invalidateBrandMenuCache } from '../../services/catalogService.js';
+import { broadcastToStaff } from '../../plugins/websocket.js';
 
 /**
  * Graphical structure editor backend.
@@ -21,6 +22,8 @@ import { invalidateBrandMenuCache } from '../../services/catalogService.js';
  */
 
 const LAYOUT_KEY = 'structure_layout';
+/** A terminal is "online" when its heartbeat (every 30 s) arrived within this window. */
+export const TERMINAL_ONLINE_MS = 90_000;
 const VALID_ROLES = ['all_in_one', 'pos', 'kds', 'pickup', 'kiosk', 'fiscal_hub'] as const;
 type Role = (typeof VALID_ROLES)[number];
 
@@ -117,6 +120,31 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
   fastify.get('/v1/admin/structure', async (req, reply) => {
     const companyId = getCompanyId(req);
     return success(reply, await loadStructure(companyId), 'Structure retrieved');
+  });
+
+  // GET /v1/admin/structure/status — lightweight live status for the editor (polled every ~20 s)
+  fastify.get('/v1/admin/structure/status', async (req, reply) => {
+    const companyId = getCompanyId(req);
+    const db = getDatabase();
+    const [termRows, devRows] = await Promise.all([
+      db.select({ id: terminals.id, status: terminals.status, lastActiveAt: terminals.lastActiveAt })
+        .from(terminals).where(and(eq(terminals.companyId, companyId), ne(terminals.status, 'archived'))),
+      db.select({ deviceId: fiscalDevices.deviceId, isOnline: fiscalDevices.isOnline, lastSeenAt: fiscalDevices.lastSeenAt })
+        .from(fiscalDevices).where(eq(fiscalDevices.companyId, companyId)),
+    ]);
+    const now = Date.now();
+    return success(reply, {
+      server_time: new Date(now).toISOString(),
+      terminals: Object.fromEntries(termRows.map((t) => [t.id, {
+        status: t.status,
+        last_active: t.lastActiveAt ? t.lastActiveAt.toISOString() : null,
+        online: !!t.lastActiveAt && now - t.lastActiveAt.getTime() < TERMINAL_ONLINE_MS,
+      }])),
+      devices: Object.fromEntries(devRows.map((d) => [d.deviceId, {
+        online: d.isOnline,
+        last_seen: d.lastSeenAt ? d.lastSeenAt.toISOString() : null,
+      }])),
+    });
   });
 
   // PUT /v1/admin/structure — save the whole graph atomically
@@ -319,6 +347,13 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
 
       invalidateTerminalCache();
       if ((body.brands || []).length) await invalidateBrandMenuCache();
+      // Paired stations refresh their configuration right away (they also poll every 30 s)
+      broadcastToStaff(companyId, {
+        type: 'terminal.config_updated',
+        timestamp: new Date().toISOString(),
+        companyId,
+        payload: { source: 'structure_editor' },
+      }).catch(() => {});
 
       return success(reply, { ...(await loadStructure(companyId)), id_map: idMap }, 'Struktura zapisana');
     } catch (err: any) {

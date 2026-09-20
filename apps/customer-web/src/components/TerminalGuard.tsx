@@ -16,6 +16,7 @@ import {
   Lock
 } from 'lucide-react';
 import { getApiBaseUrl } from '../lib/api';
+import { refreshTerminalConfig, TERMINAL_REFRESH, TERMINAL_UPDATED, TERMINAL_UNPAIRED } from '../lib/terminalSync';
 
 export interface PairedTerminal {
   id: number;
@@ -159,6 +160,33 @@ export function TerminalGuard({
       setClaiming(false);
     }
   };
+
+  // Live configuration sync: heartbeat every 30 s, on focus, and when a screen asks for it
+  // (e.g. the KDS receives 'terminal.config_updated' over WebSocket after the structure editor saved).
+  useEffect(() => {
+    if (!terminal?.terminal_token) return
+    let alive = true
+    const run = () => { if (alive) refreshTerminalConfig() }
+    const onUpdated = (e: Event) => setTerminal((e as CustomEvent).detail as PairedTerminal)
+    const onUnpaired = () => {
+      setTerminal(null)
+      setError('To stanowisko zostało wylogowane lub sparowane na innym urządzeniu. Wpisz kod stanowiska, aby sparować ponownie.')
+    }
+    run()
+    const timer = setInterval(run, 30_000)
+    window.addEventListener('focus', run)
+    window.addEventListener(TERMINAL_REFRESH, run)
+    window.addEventListener(TERMINAL_UPDATED, onUpdated)
+    window.addEventListener(TERMINAL_UNPAIRED, onUnpaired)
+    return () => {
+      alive = false
+      clearInterval(timer)
+      window.removeEventListener('focus', run)
+      window.removeEventListener(TERMINAL_REFRESH, run)
+      window.removeEventListener(TERMINAL_UPDATED, onUpdated)
+      window.removeEventListener(TERMINAL_UNPAIRED, onUnpaired)
+    }
+  }, [terminal?.terminal_token])
 
   const handleUnpair = () => {
     if (confirm('Czy na pewno chcesz rozłączyć to urządzenie?')) {

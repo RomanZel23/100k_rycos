@@ -25,3 +25,21 @@ export async function saveStructure(payload: ReturnType<typeof toSavePayload>): 
     return { ok: false, message: err?.message || 'Brak połączenia z API' }
   }
 }
+
+export interface LiveStatus {
+  server_time: string
+  terminals: Record<string, { status: string; last_active: string | null; online: boolean }>
+  devices: Record<string, { online: boolean; last_seen: string | null }>
+}
+
+/** Lightweight live status (heartbeats of stations, online flag of fiscal devices). */
+export async function fetchStructureStatus(): Promise<LiveStatus | null> {
+  try {
+    const res = await adminApi('/structure/status')
+    if (!res.ok) return null
+    const json = await res.json()
+    return (json?.data ?? null) as LiveStatus
+  } catch {
+    return null
+  }
+}

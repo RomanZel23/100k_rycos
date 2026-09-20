@@ -76,3 +76,12 @@
 .legendHint { color:#667085; }
 .rowText { color:#101828; }
 .brandName { margin:0; font-weight:600; }
+.online { box-shadow: inset 3px 0 0 #12b76a, 0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.06); }
+.offline { box-shadow: inset 3px 0 0 #d0d5dd, 0 1px 2px rgba(16,24,40,.06), 0 4px 12px rgba(16,24,40,.06); }
+.offline .head { opacity: .8; }
+.presence { position:absolute; top:-9px; left:12px; font-size:10px; font-weight:700; padding:1px 7px; border-radius:99px; border:1px solid; background:#fff; white-space:nowrap; }
+.presenceOn { color:#067647; border-color:#abefc6; background:#ecfdf3; }
+.presenceOff { color:#667085; border-color:#e4e7ec; }
+.presenceTextOn { color:#067647; }
+.nodeSel.online { box-shadow: inset 3px 0 0 #12b76a, 0 0 0 2px rgba(29,95,209,.25), 0 4px 12px rgba(16,24,40,.08); }
+.nodeSel.offline { box-shadow: inset 3px 0 0 #d0d5dd, 0 0 0 2px rgba(29,95,209,.25), 0 4px 12px rgba(16,24,40,.08); }

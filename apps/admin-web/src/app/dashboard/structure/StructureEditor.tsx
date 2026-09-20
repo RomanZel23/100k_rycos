@@ -8,8 +8,8 @@ import {
   KIND_LABEL, ROLE_INFO, ROLES, NODE_W, NONE_FRAME,
   buildGraph, validate, toSavePayload, changeCount, pinsOf, pinPoint, nodeHeight, frameOfNode, tempId,
 } from './model'
-import { saveStructure } from './actions'
-import { TerminalPanel, BrandPanel, DevicePanel, IssuesPanel, KIND_CLASS } from './panels'
+import { saveStructure, fetchStructureStatus, type LiveStatus } from './actions'
+import { TerminalPanel, BrandPanel, DevicePanel, IssuesPanel, KIND_CLASS, presenceOf } from './panels'
 
 type Sel = { type: 'node' | 'edge' | 'frame'; key: string } | null
 type Drag =
@@ -18,6 +18,21 @@ type Drag =
   | { mode: 'resize'; key: string; sx: number; sy: number; w: number; h: number }
   | { mode: 'wire'; key: string; dir: 'in' | 'out'; kind: Kind; cur: { x: number; y: number } }
   | { mode: 'pan'; sx: number; sy: number; vx: number; vy: number; moved: boolean }
+
+const TEMPLATES: Record<string, { label: string; location: string; stations: { role: Role; name: string }[] }> = {
+  foodtruck: { label: 'Foodtruck (1 stanowisko All-in-One)', location: 'Foodtruck', stations: [{ role: 'all_in_one', name: 'Foodtruck — lada' }] },
+  counter: {
+    label: 'Lada + kuchnia + wydawka', location: 'Nowy lokal',
+    stations: [{ role: 'pos', name: 'Kasa' }, { role: 'kds', name: 'Kuchnia' }, { role: 'pickup', name: 'Wydawka' }],
+  },
+  foodcourt: {
+    label: 'Food court (2 kasy, kiosk, kuchnia, wydawka)', location: 'Food court',
+    stations: [
+      { role: 'pos', name: 'Kasa 1' }, { role: 'pos', name: 'Kasa 2' }, { role: 'kiosk', name: 'Kiosk' },
+      { role: 'kds', name: 'Kuchnia' }, { role: 'pickup', name: 'Wydawka' },
+    ],
+  },
+}
 
 const KIND_VAR: Record<Kind, string> = { sale: 'var(--sale)', fiscal: 'var(--fiscal)', pay: 'var(--pay)', print: 'var(--print)' }
 
@@ -37,6 +52,11 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
   const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null)
   const [saving, setSaving] = useState(false)
   const [addRole, setAddRole] = useState<Role>('pos')
+  const [past, setPast] = useState<Graph[]>([])
+  const [future, setFuture] = useState<Graph[]>([])
+  const [live, setLive] = useState<LiveStatus | null>(null)
+  const graphRef = useRef(graph)
+  graphRef.current = graph
   const wrapRef = useRef<HTMLDivElement>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -50,6 +70,47 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
     setToast({ msg, err })
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), err ? 6000 : 2600)
+  }, [])
+
+  // ---- history (undo / redo) --------------------------------------------------
+  /** Call BEFORE a discrete change; drags record once, on their first movement. */
+  const snapshot = useCallback(() => {
+    setPast((p) => [...p.slice(-49), graphRef.current])
+    setFuture([])
+  }, [])
+  const undo = useCallback(() => {
+    setPast((p) => {
+      if (!p.length) return p
+      const prev = p[p.length - 1]
+      setFuture((f) => [graphRef.current, ...f].slice(0, 50))
+      setGraph(prev)
+      setLayoutDirty(true)
+      return p.slice(0, -1)
+    })
+  }, [])
+  const redo = useCallback(() => {
+    setFuture((f) => {
+      if (!f.length) return f
+      const next = f[0]
+      setPast((p) => [...p.slice(-49), graphRef.current])
+      setGraph(next)
+      setLayoutDirty(true)
+      return f.slice(1)
+    })
+  }, [])
+
+  // ---- live status (heartbeats) ---------------------------------------------
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const st = await fetchStructureStatus()
+      if (alive && st) setLive(st)
+    }
+    load()
+    const t = setInterval(load, 20_000)
+    const onVis = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { alive = false; clearInterval(t); document.removeEventListener('visibilitychange', onVis) }
   }, [])
 
   // ---- view -----------------------------------------------------------------
@@ -108,6 +169,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
     if (kind === 'sale' && graph.edges.some((e) => e.from === from && e.to === to && e.kind === 'sale')) { notify('To połączenie już istnieje'); return }
     const prev = kind !== 'sale' ? graph.edges.find((e) => e.from === from && e.kind === kind) : undefined
     const key = `e:${kind}:${from}:${to}:${tempId()}`
+    snapshot()
     setGraph((g) => {
       let edges = g.edges
       let nodes = g.nodes
@@ -125,11 +187,13 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
   }
 
   const removeEdge = (key: string) => {
+    snapshot()
     setGraph((g) => ({ ...g, edges: g.edges.filter((e) => e.key !== key) }))
     if (sel?.key === key) setSel(null)
   }
 
   const setDeviceTarget = (term: TerminalNode, kind: DeviceKind, value: string) => {
+    snapshot()
     setGraph((g) => {
       const edges = g.edges.filter((e) => !(e.from === term.key && e.kind === kind))
       const self = { ...term.self, [kind]: value === '__self' }
@@ -141,6 +205,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
   }
 
   const toggleBrand = (term: TerminalNode, brandKey: string, on: boolean) => {
+    snapshot()
     setGraph((g) => ({
       ...g,
       edges: on
@@ -150,7 +215,8 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
   }
 
   /** Put a node into a frame, below whatever already sits in its column (grows the frame if needed). */
-  const moveIntoFrame = (nodeKey: string, frameKey: string) => {
+  const moveIntoFrame = (nodeKey: string, frameKey: string, record = true) => {
+    if (record) snapshot()
     setGraph((g) => {
       const f = g.frames.find((x) => x.key === frameKey)
       const n = g.nodes.find((x) => x.key === nodeKey)
@@ -171,8 +237,9 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
       type: 'terminal', key: `term:new:${t}`, tempId: t, code: null, name: `Nowe stanowisko (${ROLE_INFO[addRole].name})`,
       role: addRole, status: 'new', hardware: false, lastActive: null, self: {}, raw: {}, x: target.x + 310, y: target.y + 40,
     }
+    snapshot()
     setGraph((g) => ({ ...g, nodes: [...g.nodes, node] }))
-    setTimeout(() => moveIntoFrame(node.key, target.key), 0)
+    setTimeout(() => moveIntoFrame(node.key, target.key, false), 0)
     setSel({ type: 'node', key: node.key })
     notify(`Dodano stanowisko do „${target.name}” — kod parowania pojawi się po zapisie`)
   }
@@ -181,20 +248,48 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
     const t = tempId()
     const bottom = graph.frames.reduce((acc, f) => Math.max(acc, f.y + f.h), 0)
     const frame: Frame = { key: `loc:new:${t}`, tempId: t, locationId: null, name: 'Nowa lokalizacja', x: 0, y: bottom + 60, w: 860, h: 240 }
+    snapshot()
     setGraph((g) => ({ ...g, frames: [...g.frames, frame] }))
     setSel({ type: 'frame', key: frame.key })
     notify('Dodano lokalizację — nadaj jej nazwę w panelu po prawej')
   }
 
+  /** Ready-made venue: a new location with typical stations (devices and brands are connected afterwards). */
+  const addTemplate = (id: string) => {
+    const tpl = TEMPLATES[id]
+    if (!tpl) return
+    const t = tempId()
+    const bottom = graph.frames.reduce((acc, f) => Math.max(acc, f.y + f.h), 0)
+    const y0 = bottom + 60
+    const nodes: TerminalNode[] = []
+    let y = y0 + 40
+    tpl.stations.forEach((st) => {
+      const nt = tempId()
+      const node: TerminalNode = {
+        type: 'terminal', key: `term:new:${nt}`, tempId: nt, code: null, name: st.name, role: st.role,
+        status: 'new', hardware: false, lastActive: null, self: {}, raw: {}, x: 310, y,
+      }
+      nodes.push(node)
+      y += nodeHeight(node) + 24
+    })
+    const frame: Frame = { key: `loc:new:${t}`, tempId: t, locationId: null, name: tpl.location, x: 0, y: y0, w: 860, h: Math.max(240, y - y0 + 20) }
+    snapshot()
+    setGraph((g) => ({ ...g, frames: [...g.frames, frame], nodes: [...g.nodes, ...nodes] }))
+    setSel({ type: 'frame', key: frame.key })
+    notify(`Dodano „${tpl.location}” z ${nodes.length} stanowiskami — podłącz marki i urządzenia, potem zapisz`)
+    setTimeout(fit, 0)
+  }
+
   const removeNewNode = (key: string) => {
+    snapshot()
     setGraph((g) => ({ ...g, nodes: g.nodes.filter((n) => n.key !== key), edges: g.edges.filter((e) => e.from !== key && e.to !== key) }))
     setSel(null)
   }
-  const removeNewFrame = (key: string) => { setGraph((g) => ({ ...g, frames: g.frames.filter((f) => f.key !== key) })); setSel(null) }
+  const removeNewFrame = (key: string) => { snapshot(); setGraph((g) => ({ ...g, frames: g.frames.filter((f) => f.key !== key) })); setSel(null) }
 
   const resetAll = () => {
     if (dirty && !confirm('Odrzucić niezapisane zmiany?')) return
-    setGraph(buildGraph(original)); setLayoutDirty(false); setSel(null)
+    setGraph(buildGraph(original)); setLayoutDirty(false); setSel(null); setPast([]); setFuture([])
   }
 
   const save = async () => {
@@ -212,6 +307,9 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
       setGraph(buildGraph(res.data))
       setLayoutDirty(false)
       setSel(null)
+      setPast([])
+      setFuture([])
+      fetchStructureStatus().then((st) => st && setLive(st))
       notify('Zapisano — stanowiska korzystają z nowej konfiguracji')
     } finally {
       setSaving(false)
@@ -242,6 +340,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
       setSel({ type: 'node', key: n.key })
     } else if (resize) {
       const f = graph.frames.find((x) => x.key === resize.dataset.frameResize)!
+      snapshot()
       setDrag({ mode: 'resize', key: f.key, sx: p.x, sy: p.y, w: f.w, h: f.h })
     } else if (head) {
       const f = graph.frames.find((x) => x.key === head.dataset.frameHead)!
@@ -259,16 +358,16 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
     if (!drag) return
     const p = toStage(ev.clientX, ev.clientY)
     if (drag.mode === 'node') {
+      if (!drag.moved) { snapshot(); setDrag({ ...drag, moved: true }) }
       updateNode(drag.key, { x: Math.round((p.x - drag.ox) / 10) * 10, y: Math.round((p.y - drag.oy) / 10) * 10 })
-      if (!drag.moved) setDrag({ ...drag, moved: true })
     } else if (drag.mode === 'frame') {
       const dx = Math.round((p.x - drag.sx) / 10) * 10, dy = Math.round((p.y - drag.sy) / 10) * 10
+      if (!drag.moved) { snapshot(); setDrag({ ...drag, moved: true }) }
       setGraph((g) => ({
         ...g,
         frames: g.frames.map((f) => (f.key === drag.key ? { ...f, x: drag.fx + dx, y: drag.fy + dy } : f)),
         nodes: g.nodes.map((n) => { const m = drag.members.find((x) => x.key === n.key); return m ? ({ ...n, x: m.x + dx, y: m.y + dy } as GNode) : n }),
       }))
-      if (!drag.moved) setDrag({ ...drag, moved: true })
     } else if (drag.mode === 'resize') {
       const w = Math.max(320, Math.round((drag.w + p.x - drag.sx) / 10) * 10)
       const h = Math.max(140, Math.round((drag.h + p.y - drag.sy) / 10) * 10)
@@ -330,6 +429,9 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
     const onKey = (e: KeyboardEvent) => {
       const tag = (document.activeElement?.tagName || '').toUpperCase()
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return }
+      if (mod && ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')) { e.preventDefault(); redo(); return }
       if (e.key === 'Escape') setSel(null)
       if ((e.key === 'Delete' || e.key === 'Backspace') && sel?.type === 'edge') removeEdge(sel.key)
     }
@@ -380,6 +482,12 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
         </select>
         <button className={s.tbtn} onClick={addTerminal}>+ Stanowisko</button>
         <button className={s.tbtn} onClick={addLocation}>+ Lokalizacja</button>
+        <select id="structure-template" className={s.tselect} value="" onChange={(e) => { addTemplate(e.target.value); e.target.value = '' }} aria-label="Dodaj gotowy szablon lokalu">
+          <option value="">+ Szablon lokalu…</option>
+          {Object.entries(TEMPLATES).map(([id, t]) => <option key={id} value={id}>{t.label}</option>)}
+        </select>
+        <button className={s.tbtn} onClick={undo} disabled={!past.length} title="Cofnij (Ctrl/⌘+Z)" aria-label="Cofnij">↶</button>
+        <button className={s.tbtn} onClick={redo} disabled={!future.length} title="Ponów (Ctrl/⌘+Shift+Z)" aria-label="Ponów">↷</button>
         <Link className={s.tbtn} href="/dashboard/brands">Marki…</Link>
         <Link className={s.tbtn} href="/dashboard/fiscal-devices">Urządzenia…</Link>
         <span className={s.spacer} />
@@ -421,14 +529,16 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
               const sub = n.type === 'brand' ? `Marka · /${n.slug}`
                 : n.type === 'device' ? <>{n.kind === 'hub' ? 'Hub fiskalny' : 'Urządzenie SBR'} · <span className={s.mono}>{n.deviceId}</span></>
                 : <>{ROLE_INFO[n.role].name} · <span className={s.mono}>{n.code ?? 'nowe'}</span></>
-              const statusDot = (n.type === 'device' && !n.online) || term?.status === 'unclaimed' ? s.dotOff
-                : w === 'err' ? s.dotErr : w === 'warn' ? s.dotWarn : s.dotOk
+              const statusDot = w === 'err' ? s.dotErr : w === 'warn' ? s.dotWarn : s.dotOk
+              const presence = presenceOf(n, live)
               return (
                 <div key={n.key} data-node={n.key} tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter') setSel({ type: 'node', key: n.key }) }}
-                  className={`${s.node} ${sel?.key === n.key ? s.nodeSel : ''} ${w === 'err' ? s.nodeErr : ''} ${term?.tempId ? s.nodeNew : ''}`}
+                  className={`${s.node} ${sel?.key === n.key ? s.nodeSel : ''} ${w === 'err' ? s.nodeErr : ''} ${term?.tempId ? s.nodeNew : ''} ${presence ? (presence.online ? s.online : s.offline) : ''}`}
+                  title={presence ? presence.label : undefined}
                   style={{ left: n.x, top: n.y }}>
-                  <span className={`${s.dot} ${statusDot}`} />
+                  <span className={`${s.dot} ${statusDot}`} title={w === 'err' ? 'Błąd konfiguracji' : w === 'warn' ? 'Do sprawdzenia' : 'Konfiguracja OK'} />
+                  {presence && <span className={`${s.presence} ${presence.online ? s.presenceOn : s.presenceOff}`}>{presence.online ? 'online' : presence.short}</span>}
                   <div className={s.head}>{glyph}<div><b>{n.name}</b><small>{sub}</small></div></div>
                   <div className={s.pins}>
                     {pinsOf(n).map((p) => {
@@ -459,9 +569,10 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
         <aside className={s.panel} aria-label="Właściwości">
           {selNode?.type === 'terminal' && (
             <TerminalPanel
-              n={selNode} graph={graph} issues={issues.filter((i) => i.node === selNode.key)}
+              n={selNode} graph={graph} live={live} issues={issues.filter((i) => i.node === selNode.key)}
               onRename={(name) => updateNode(selNode.key, { name })}
-              onRole={(role) => setGraph((g) => pruneEdges({ ...g, nodes: g.nodes.map((x) => (x.key === selNode.key ? ({ ...x, role } as GNode) : x)) }))}
+              onEditStart={snapshot}
+              onRole={(role) => { snapshot(); setGraph((g) => pruneEdges({ ...g, nodes: g.nodes.map((x) => (x.key === selNode.key ? ({ ...x, role } as GNode) : x)) })) }}
               onDevice={(k, v) => setDeviceTarget(selNode, k, v)}
               onBrand={(bk, on) => toggleBrand(selNode, bk, on)}
               onLocation={(fk) => moveIntoFrame(selNode.key, fk)}
@@ -473,7 +584,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
               onLocation={(fk) => moveIntoFrame(selNode.key, fk)} onRemoveEdge={removeEdge} />
           )}
           {selNode?.type === 'device' && (
-            <DevicePanel n={selNode} graph={graph} issues={issues.filter((i) => i.node === selNode.key)} onRemoveEdge={removeEdge} />
+            <DevicePanel n={selNode} graph={graph} live={live} issues={issues.filter((i) => i.node === selNode.key)} onRemoveEdge={removeEdge} />
           )}
           {selEdge && (
             <>
@@ -489,7 +600,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
               {selFrame.key !== NONE_FRAME ? (
                 <div className={s.field}>
                   <label htmlFor="frame-name">Nazwa</label>
-                  <input id="frame-name" className={s.input} value={selFrame.name}
+                  <input id="frame-name" className={s.input} value={selFrame.name} onFocus={snapshot}
                     onChange={(e) => setGraph((g) => ({ ...g, frames: g.frames.map((f) => (f.key === selFrame.key ? { ...f, name: e.target.value } : f)) }))} />
                 </div>
               ) : <p className={s.muted}>Elementy w tym obszarze nie mają przypisanej lokalizacji.</p>}
@@ -500,7 +611,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
               {selFrame.locationId && <Link className={s.link} href="/dashboard/locations">Stoły, adres i ustawienia lokalizacji →</Link>}
             </>
           )}
-          {!sel && <IssuesPanel issues={issues} graph={graph} onPick={(key) => setSel({ type: 'node', key })} />}
+          {!sel && <IssuesPanel issues={issues} graph={graph} live={live} onPick={(key) => setSel({ type: 'node', key })} />}
         </aside>
       </div>
 

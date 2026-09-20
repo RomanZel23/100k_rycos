@@ -2,10 +2,51 @@
 
 import Link from 'next/link'
 import s from './structure.module.css'
+import type { LiveStatus } from './actions'
 import {
   Graph, GNode, TerminalNode, BrandNode, DeviceNode, Kind, DeviceKind, Role, Issue,
   KIND_LABEL, ROLE_INFO, ROLES, NONE_FRAME, pinsOf, frameOfNode,
 } from './model'
+
+/** "5 min temu" style relative time. */
+export function ago(iso: string | null | undefined, now = Date.now()): string {
+  if (!iso) return 'nigdy'
+  const sec = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000))
+  if (sec < 60) return `${sec} s temu`
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min} min temu`
+  const h = Math.round(min / 60)
+  if (h < 48) return `${h} godz. temu`
+  return `${Math.round(h / 24)} dni temu`
+}
+
+/** Live presence of a station / device from the status poll (null = not applicable / unknown yet). */
+export function presenceOf(n: GNode, live: LiveStatus | null): { online: boolean; label: string; short: string } | null {
+  if (!live) return null
+  if (n.type === 'terminal') {
+    if (!n.id) return null
+    const st = live.terminals[String(n.id)]
+    if (!st) return null
+    if (st.status === 'unclaimed') return { online: false, label: 'Niesparowane — czeka na wpisanie kodu na urządzeniu', short: 'niesparowane' }
+    return st.online
+      ? { online: true, label: `Online — ostatni sygnał ${ago(st.last_active)}`, short: 'online' }
+      : { online: false, label: `Offline — ostatni sygnał ${ago(st.last_active)}`, short: st.last_active ? ago(st.last_active) : 'offline' }
+  }
+  if (n.type === 'device') {
+    const st = live.devices[n.deviceId]
+    if (!st) return null
+    return st.online
+      ? { online: true, label: `Online${st.last_seen ? ` — ostatnio widziane ${ago(st.last_seen)}` : ''}`, short: 'online' }
+      : { online: false, label: `Offline${st.last_seen ? ` — ostatnio widziane ${ago(st.last_seen)}` : ''}`, short: 'offline' }
+  }
+  return null
+}
+
+function PresenceLine({ n, live }: { n: GNode; live: LiveStatus | null }) {
+  const p = presenceOf(n, live)
+  if (!p) return null
+  return <p className={`${s.muted} ${p.online ? s.presenceTextOn : ''}`}>● {p.label}</p>
+}
 
 export const KIND_CLASS: Record<Kind, string> = { sale: s.kSale, fiscal: s.kFiscal, pay: s.kPay, print: s.kPrint }
 
@@ -21,10 +62,12 @@ export function IssueList({ issues, onPick }: { issues: Issue[]; onPick?: (key: 
   )
 }
 
-export function IssuesPanel({ issues, graph, onPick }: { issues: Issue[]; graph: Graph; onPick: (k: string) => void }) {
+export function IssuesPanel({ issues, graph, live, onPick }: { issues: Issue[]; graph: Graph; live: LiveStatus | null; onPick: (k: string) => void }) {
   const errs = issues.filter((i) => i.level === 'err').length
   const warns = issues.filter((i) => i.level === 'warn').length
   const terms = graph.nodes.filter((n) => n.type === 'terminal').length
+  const offline = graph.nodes.filter((n) => { const p = presenceOf(n, live); return p && !p.online })
+  const online = graph.nodes.filter((n) => presenceOf(n, live)?.online).length
   return (
     <>
       <h3>Kontrola konfiguracji</h3>
@@ -32,6 +75,16 @@ export function IssuesPanel({ issues, graph, onPick }: { issues: Issue[]; graph:
         {terms} stanowisk · {errs ? `${errs} błędów blokujących sprzedaż` : 'brak błędów blokujących'}{warns ? ` · ${warns} do sprawdzenia` : ''}.
         Kliknij pozycję, aby przejść do elementu.
       </p>
+      {live && (
+        <div className={s.field}>
+          <span className={s.fieldLabel}>Stan urządzeń na żywo · {online} online · {offline.length} offline</span>
+          {offline.map((n) => (
+            <button key={n.key} type="button" className={`${s.issue} ${s.iInfo}`} onClick={() => onPick(n.key)}>
+              ○ {n.name} — {presenceOf(n, live)!.label}
+            </button>
+          ))}
+        </div>
+      )}
       <IssueList issues={issues} onPick={onPick} />
       {!issues.length && <p className={s.muted}>Struktura kompletna.</p>}
     </>
@@ -53,8 +106,10 @@ function LocationSelect({ n, graph, onLocation }: { n: GNode; graph: Graph; onLo
 export function TerminalPanel(props: {
   n: TerminalNode
   graph: Graph
+  live: LiveStatus | null
   issues: Issue[]
   onRename: (v: string) => void
+  onEditStart: () => void
   onRole: (r: Role) => void
   onDevice: (k: DeviceKind, v: string) => void
   onBrand: (brandKey: string, on: boolean) => void
@@ -74,8 +129,9 @@ export function TerminalPanel(props: {
       <h3>{n.hardware ? 'Stanowisko SBR' : 'Stanowisko'}</h3>
       <div className={s.field}>
         <label htmlFor="term-name">Nazwa</label>
-        <input id="term-name" className={s.input} value={n.name} onChange={(e) => props.onRename(e.target.value)} />
+        <input id="term-name" className={s.input} value={n.name} onFocus={props.onEditStart} onChange={(e) => props.onRename(e.target.value)} />
       </div>
+      <PresenceLine n={n} live={props.live} />
       <div className={s.field}>
         <label htmlFor="term-role">Rola</label>
         <select id="term-role" className={s.input} value={n.role} onChange={(e) => props.onRole(e.target.value as Role)}>
@@ -158,8 +214,8 @@ export function BrandPanel({ n, graph, issues, onLocation, onRemoveEdge }: {
   )
 }
 
-export function DevicePanel({ n, graph, issues, onRemoveEdge }: {
-  n: DeviceNode; graph: Graph; issues: Issue[]; onRemoveEdge: (k: string) => void
+export function DevicePanel({ n, graph, live, issues, onRemoveEdge }: {
+  n: DeviceNode; graph: Graph; live: LiveStatus | null; issues: Issue[]; onRemoveEdge: (k: string) => void
 }) {
   const edges = graph.edges.filter((e) => e.to === n.key)
   return (
@@ -167,8 +223,9 @@ export function DevicePanel({ n, graph, issues, onRemoveEdge }: {
       <h3>{n.kind === 'hub' ? 'Hub fiskalny' : 'Urządzenie SBR'}</h3>
       <p className={s.brandName}>{n.name}</p>
       <p className={s.muted}>
-        <span className={s.mono}>{n.deviceId}</span> · {n.online ? 'online' : 'offline'}{n.primary ? ' · domyślne urządzenie fiskalne firmy' : ''}
+        <span className={s.mono}>{n.deviceId}</span>{n.primary ? ' · domyślne urządzenie fiskalne firmy' : ''}
       </p>
+      <PresenceLine n={n} live={live} />
       <div className={s.field}>
         <span className={s.fieldLabel}>Używane przez ({edges.length})</span>
         {edges.map((e) => (
