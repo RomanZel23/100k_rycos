@@ -13,6 +13,7 @@ import {
   addonOptions,
   addonGroups,
   productAddonGroups,
+  productAddonOptionPrices,
   inventoryHistory,
   companySettings,
   eq,
@@ -144,6 +145,15 @@ export async function createOrder(
     : [];
   const optionMap = new Map(optionRows.map((r) => [r.option.id, r]));
 
+  // Per-product price overrides for add-on options (admin: "Add-ons for <product>")
+  const overrideRows = optionIds.length
+    ? await db
+        .select({ productId: productAddonOptionPrices.productId, optionId: productAddonOptionPrices.optionId, priceDelta: productAddonOptionPrices.priceDelta })
+        .from(productAddonOptionPrices)
+        .where(and(inArray(productAddonOptionPrices.productId, productIds), inArray(productAddonOptionPrices.optionId, optionIds)))
+    : [];
+  const overrideMap = new Map(overrideRows.map((r) => [`${r.productId}:${r.optionId}`, parseFloat(r.priceDelta)]));
+
   const productGroupRows = await db
     .select({ productId: productAddonGroups.productId, group: addonGroups })
     .from(productAddonGroups)
@@ -179,14 +189,20 @@ export async function createOrder(
         throw new HttpError(400, `Dodatek ${a.optionId} nie jest dostępny dla "${p.name}"`);
       }
       if (!row.option.isAvailable) throw new HttpError(409, `Dodatek "${row.option.name}" jest niedostępny`);
-      addons.push({ optionId: row.option.id, name: row.option.name, priceDelta: parseFloat(row.option.priceDelta), groupId: row.group.id });
+      if (row.option.stockQuantity !== null && row.option.stockQuantity !== undefined && row.option.stockQuantity < item.quantity) {
+        throw new HttpError(409, `Brak wystarczającej ilości dodatku "${row.option.name}" (dostępne: ${Math.max(0, row.option.stockQuantity)})`);
+      }
+      const priceDelta = overrideMap.get(`${p.id}:${row.option.id}`) ?? parseFloat(row.option.priceDelta);
+      addons.push({ optionId: row.option.id, name: row.option.name, priceDelta, groupId: row.group.id });
     }
 
     // Group selection rules
     for (const g of productGroups) {
       const count = addons.filter((x) => x.groupId === g.id).length;
       const min = Math.max(g.required ? 1 : 0, g.minSelect || 0);
-      const max = g.selectionMode === 'single' ? 1 : Math.max(g.maxSelect || 0, min, 1);
+      const multi = String(g.selectionMode).startsWith('multi');
+      // maxSelect 0 (or empty in the panel) means "no upper limit" for a multi group
+      const max = multi ? (g.maxSelect > 0 ? Math.max(g.maxSelect, min) : Number.MAX_SAFE_INTEGER) : 1;
       if (count < min) throw new HttpError(400, `Wybierz wymagany dodatek "${g.name}" dla "${p.name}"`);
       if (count > max) throw new HttpError(400, `Za dużo opcji w grupie "${g.name}" dla "${p.name}" (max ${max})`);
     }
@@ -295,6 +311,7 @@ export async function createOrder(
 
       // Stock reservation (atomic, never below zero)
       await reserveStock(tx, companyId, newOrder.id, qtyByProduct, productMap);
+      await reserveAddonStock(tx, verifiedItems);
 
       await tx.insert(orderEvents).values({
         orderId: newOrder.id,
@@ -421,8 +438,66 @@ async function reserveStock(
 }
 
 /** Return reserved stock of an order (cancel / payment timeout). Idempotent via orders.stock_released. */
+/** Add-on options with a tracked stock are decremented together with the products. */
+async function reserveAddonStock(tx: Tx, items: VerifiedItem[]) {
+  const qtyByOption = new Map<number, number>();
+  for (const it of items) {
+    for (const a of it.addons) qtyByOption.set(a.optionId, (qtyByOption.get(a.optionId) || 0) + it.quantity);
+  }
+
+  for (const [optionId, qty] of qtyByOption) {
+    const updated = await tx
+      .update(addonOptions)
+      .set({ stockQuantity: sql`${addonOptions.stockQuantity} - ${qty}` })
+      .where(and(
+        eq(addonOptions.id, optionId),
+        sql`${addonOptions.stockQuantity} IS NOT NULL`,
+        sql`${addonOptions.stockQuantity} >= ${qty}`
+      ))
+      .returning({ stockQuantity: addonOptions.stockQuantity });
+
+    if (updated.length === 0) {
+      const [cur] = await tx
+        .select({ name: addonOptions.name, stockQuantity: addonOptions.stockQuantity })
+        .from(addonOptions)
+        .where(eq(addonOptions.id, optionId))
+        .limit(1);
+      if (!cur || cur.stockQuantity === null) continue; // untracked stock
+      throw new HttpError(409, `Brak wystarczającej ilości dodatku "${cur.name}" (dostępne: ${Math.max(0, cur.stockQuantity ?? 0)})`);
+    }
+    if ((updated[0].stockQuantity ?? 0) <= 0) menuAvailabilityDirty = true;
+  }
+}
+
+/** Give tracked add-on stock back when an order is cancelled. */
+async function releaseAddonStock(tx: Tx, orderId: string) {
+  const items = await tx
+    .select({ quantity: orderItems.quantity, addonsJson: orderItems.addonsJson })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId));
+
+  const qtyByOption = new Map<number, number>();
+  for (const it of items) {
+    const list = Array.isArray(it.addonsJson) ? (it.addonsJson as any[]) : [];
+    for (const a of list) {
+      const id = Number(a?.optionId);
+      if (Number.isFinite(id)) qtyByOption.set(id, (qtyByOption.get(id) || 0) + it.quantity);
+    }
+  }
+
+  for (const [optionId, qty] of qtyByOption) {
+    const back = await tx
+      .update(addonOptions)
+      .set({ stockQuantity: sql`COALESCE(${addonOptions.stockQuantity}, 0) + ${qty}` })
+      .where(and(eq(addonOptions.id, optionId), sql`${addonOptions.stockQuantity} IS NOT NULL`))
+      .returning({ stockQuantity: addonOptions.stockQuantity });
+    if (back.length) menuAvailabilityDirty = true;
+  }
+}
+
 async function releaseStock(tx: Tx, order: OrderRow, reason: string) {
   if (order.stockReleased) return;
+  await releaseAddonStock(tx, order.id);
   const released = await tx
     .select({ productId: inventoryHistory.productId, qty: sql<number>`-SUM(${inventoryHistory.quantityChange})::int` })
     .from(inventoryHistory)

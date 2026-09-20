@@ -55,6 +55,8 @@ export const addonOptions = pgTable('addon_options', {
   name: varchar('name', { length: 128 }).notNull(),
   priceDelta: numeric('price_delta', { precision: 10, scale: 2 }).default('0.00').notNull(),
   isAvailable: boolean('is_available').default(true).notNull(),
+  /** NULL = untracked (always available); a number is decremented with every order. */
+  stockQuantity: integer('stock_quantity'),
   position: integer('position').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -66,6 +68,16 @@ export const productAddonGroups = pgTable('product_addon_groups', {
   position: integer('position').default(0).notNull(),
 }, (t) => [
   uniqueIndex('uq_product_addon_group').on(t.productId, t.groupId),
+]);
+
+/** Per-product price for an add-on option (e.g. extra cheese costs more on a family pizza). */
+export const productAddonOptionPrices = pgTable('product_addon_option_prices', {
+  id: serial('id').primaryKey(),
+  productId: integer('product_id').references(() => products.id, { onDelete: 'cascade' }).notNull(),
+  optionId: integer('option_id').references(() => addonOptions.id, { onDelete: 'cascade' }).notNull(),
+  priceDelta: numeric('price_delta', { precision: 10, scale: 2 }).notNull(),
+}, (t) => [
+  uniqueIndex('uq_product_addon_option_price').on(t.productId, t.optionId),
 ]);
 
 export const contentTranslations = pgTable('content_translations', {

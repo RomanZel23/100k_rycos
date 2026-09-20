@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Product, AddonOption } from '@rycos/shared';
+import { Product, AddonOption, AddonGroup } from '@rycos/shared';
 import { X, Check } from 'lucide-react';
 import { i18n, Language } from '../lib/i18n';
 
@@ -19,17 +19,51 @@ export function AddonModal({ product, onClose, lang = 'pl', onAddToCart }: Addon
   const [selectedAddons, setSelectedAddons] = useState<AddonOption[]>([]);
   const [instructions, setInstructions] = useState('');
 
-  const toggleOption = (opt: AddonOption, selectionMode: 'single' | 'multiple') => {
-    if (selectionMode === 'single') {
-      // Replace existing choice in this group
-      setSelectedAddons((prev) => [...prev.filter((o) => o.id !== opt.id), opt]);
-    } else {
-      setSelectedAddons((prev) => {
-        const exists = prev.some((o) => o.id === opt.id);
-        if (exists) return prev.filter((o) => o.id !== opt.id);
-        return [...prev, opt];
-      });
-    }
+  const groups = product.addonGroups || [];
+
+  // Which group an option belongs to (options arrive nested per group)
+  const groupOfOption = new Map<number, AddonGroup>();
+  for (const g of groups) for (const o of g.options) groupOfOption.set(o.id, g);
+
+  const countIn = (list: AddonOption[], group: AddonGroup) =>
+    list.filter((o) => groupOfOption.get(o.id)?.id === group.id).length;
+
+  const limitOf = (group: AddonGroup) => {
+    if (group.selectionMode === 'single') return 1;
+    const max = group.maxSelect || 0;
+    return max > 0 ? max : group.options.length || 99;
+  };
+
+  const minOf = (group: AddonGroup) => Math.max(group.required ? 1 : 0, group.minSelect || 0);
+
+  const toggleOption = (opt: AddonOption, group: AddonGroup) => {
+    setSelectedAddons((prev) => {
+      const selected = prev.some((o) => o.id === opt.id);
+
+      if (group.selectionMode === 'single') {
+        // Exactly one choice per group: a new pick replaces the previous one
+        const withoutGroup = prev.filter((o) => groupOfOption.get(o.id)?.id !== group.id);
+        if (selected) return group.required ? prev : withoutGroup;
+        return [...withoutGroup, opt];
+      }
+
+      if (selected) return prev.filter((o) => o.id !== opt.id);
+      if (countIn(prev, group) >= limitOf(group)) return prev; // group already full
+      return [...prev, opt];
+    });
+  };
+
+  const missingGroup = groups.find((g) => countIn(selectedAddons, g) < minOf(g));
+
+  const groupHint = (group: AddonGroup) => {
+    const min = minOf(group);
+    const limit = limitOf(group);
+    const openEnded = limit >= (group.options.length || 99);
+    if (group.selectionMode === 'single') return min > 0 ? t.required : t.optional;
+    if (min > 0 && !openEnded) return `${t.required} · ${min}-${limit}`;
+    if (min > 0) return `${t.required} · min. ${min}`;
+    if (!openEnded) return `${t.optional} · max. ${limit}`;
+    return t.optional;
   };
 
   const addonsTotal = selectedAddons.reduce((sum, a) => sum + a.priceDelta, 0);
@@ -79,27 +113,31 @@ export function AddonModal({ product, onClose, lang = 'pl', onAddToCart }: Addon
           )}
 
           {/* Add-on Groups */}
-          {product.addonGroups.map((group) => (
+          {groups.map((group) => (
             <div key={group.id} className="space-y-2.5">
               <div className="flex items-center justify-between gap-2 min-w-0">
                 <h4 className="font-black text-slate-900 text-base truncate">{group.name}</h4>
-                <span className="text-xs font-bold text-slate-500 shrink-0">
-                  {group.required ? t.required : t.optional}
+                <span className={`text-xs font-bold shrink-0 ${countIn(selectedAddons, group) < minOf(group) ? 'text-rose-600' : 'text-slate-500'}`}>
+                  {groupHint(group)}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 gap-2.5">
                 {group.options.map((opt) => {
                   const isSelected = selectedAddons.some((o) => o.id === opt.id);
+                  const groupFull = !isSelected && group.selectionMode !== 'single' && countIn(selectedAddons, group) >= limitOf(group);
                   return (
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => toggleOption(opt, group.selectionMode)}
-                      className={`w-full p-3 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-2 transition-all min-w-0 cursor-pointer active:scale-[0.99] ${
+                      disabled={groupFull}
+                      onClick={() => toggleOption(opt, group)}
+                      className={`w-full p-3 sm:p-3.5 rounded-2xl border flex items-center justify-between gap-2 transition-all min-w-0 active:scale-[0.99] ${
                         isSelected
-                          ? 'border-brand-500 bg-brand-50/50 text-slate-900 shadow-xs'
-                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                          ? 'border-brand-500 bg-brand-50/50 text-slate-900 shadow-xs cursor-pointer'
+                          : groupFull
+                          ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700 cursor-pointer'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -142,13 +180,24 @@ export function AddonModal({ product, onClose, lang = 'pl', onAddToCart }: Addon
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 sm:p-5 border-t border-slate-100 bg-white sticky bottom-0 shrink-0">
+        <div className="p-4 sm:p-5 border-t border-slate-100 bg-white sticky bottom-0 shrink-0 space-y-2">
+          {missingGroup && (
+            <p className="text-xs font-bold text-rose-600 text-center">
+              {t.required}: {missingGroup.name}
+            </p>
+          )}
           <button
+            disabled={!!missingGroup}
             onClick={() => {
+              if (missingGroup) return;
               onAddToCart(product, selectedAddons, instructions);
               onClose();
             }}
-            className="w-full py-4 min-h-[56px] bg-brand-500 hover:bg-brand-600 active:scale-[0.98] transition-all text-brand-text font-black rounded-2xl flex items-center justify-between px-5 sm:px-6 shadow-xl shadow-brand-500/25 text-base sm:text-lg min-w-0 cursor-pointer"
+            className={`w-full py-4 min-h-[56px] transition-all text-brand-text font-black rounded-2xl flex items-center justify-between px-5 sm:px-6 text-base sm:text-lg min-w-0 ${
+              missingGroup
+                ? 'bg-slate-300 cursor-not-allowed'
+                : 'bg-brand-500 hover:bg-brand-600 active:scale-[0.98] cursor-pointer shadow-xl shadow-brand-500/25'
+            }`}
           >
             <span className="truncate">{t.addToOrder}</span>
             <span className="shrink-0 font-mono font-black">{finalPrice.toFixed(2)} zł</span>
