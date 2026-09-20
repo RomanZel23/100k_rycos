@@ -53,9 +53,20 @@ export function toGrosze(value: string | number | null | undefined): number {
   return Math.round(n * 100);
 }
 
-/** Stable per-order reference so the fiscal device can de-duplicate retries. */
+/**
+ * Stable per-order reference so the fiscal device can de-duplicate retries.
+ *
+ * LENGTH MATTERS: the register answers
+ *   "id paragonu nadany przez klienta: dlugosc poza dozwolonym zakresem"
+ * for anything outside its allowed range. Every reference it has accepted so far was
+ * exactly 20 characters ("REQ-50-1789799914919"), so this one is 20 as well:
+ * "ORD-" + 16 hex digits of the order UUID — stable per order, unique across orders.
+ */
+export const FISCAL_EXTERNAL_REF_LENGTH = 20;
+
 export function fiscalExternalRef(orderId: string): string {
-  return `ORD-${orderId.replace(/-/g, '')}`.substring(0, 40);
+  const hex = orderId.replace(/[^0-9a-fA-F]/g, '').toUpperCase().padEnd(16, '0').substring(0, 16);
+  return `ORD-${hex}`;
 }
 
 export function buildFiscalPayload(
@@ -117,14 +128,70 @@ export function buildFiscalPayload(
   return { payload, totalGrosze };
 }
 
-/** Normalizes the RYCOS /fiscal/issue response into the fields we persist. */
-export function parseFiscalResult(result: any, fallbackNumber: string | number) {
+/** Short, log/DB-safe representation of any device response. */
+export function summarizeFiscalResponse(result: any, maxLen = 1200): string {
+  if (result === undefined) return '(brak pola result w odpowiedzi urządzenia)';
+  if (result === null) return 'null';
+  if (typeof result === 'string') return result.substring(0, maxLen);
+  try {
+    return JSON.stringify(result).substring(0, maxLen);
+  } catch {
+    return String(result).substring(0, maxLen);
+  }
+}
+
+export interface ParsedFiscalResult {
+  receiptNumber: string;
+  jpkId: string;
+  pdfUrl: string | null;
+  qrCodeBase64: string | null;
+  jobId: string | null;
+  /** The device actually returned receipt data (number / JPK id / QR / PDF / print job). */
+  hasReceipt: boolean;
+  /** Error reported by the device inside a 2xx envelope, if any. */
+  deviceError: string | null;
+}
+
+/**
+ * Normalizes the RYCOS /fiscal/issue response into the fields we persist.
+ *
+ * IMPORTANT: a 2xx envelope does not by itself mean a receipt was issued — some devices
+ * answer 200 with an empty body or with an error object. `hasReceipt` tells the caller
+ * whether anything provable came back; without it the order must NOT be marked as issued.
+ */
+export function parseFiscalResult(result: any, fallbackNumber: string | number): ParsedFiscalResult {
+  const rawNumber = result?.receiptNumber || result?.number || result?.receipt_number || null;
+  const jpkId = result?.jpkId || result?.jpk_id || '';
+  const pdfUrl = (result?.pdfReceiptUrl || result?.pdfUrl || result?.pdf_url || null) as string | null;
+  const qrCodeBase64 = (result?.qrCodeBase64 || result?.qrCode || result?.qrBase64 || result?.qr_code || null) as string | null;
+  const jobId = (result?.jobId || result?.job_id || result?.printJob?.jobId || null) as string | null;
+
+  // RYCOS reports a rejection as { created: false, error: { code, message }, errorDescription }
+  const rawError =
+    result?.error ??
+    result?.errorMessage ??
+    result?.errorDescription ??
+    result?.errorCondition ??
+    result?.errorCode ??
+    result?.remark ??
+    null;
+
+  const errText =
+    rawError && typeof rawError === 'object'
+      ? `${rawError.code ? `[${rawError.code}] ` : ''}${rawError.message || JSON.stringify(rawError)}`
+      : rawError ||
+        (result?.created === false ? 'Urządzenie nie wystawiło paragonu (created = false)' : null) ||
+        (result?.success === false ? 'Urządzenie zwróciło success = false' : null) ||
+        null;
+
   return {
-    receiptNumber: String(result?.receiptNumber || result?.number || `PAR_${fallbackNumber}`),
-    jpkId: String(result?.jpkId || ''),
-    pdfUrl: (result?.pdfReceiptUrl || result?.pdfUrl || null) as string | null,
-    qrCodeBase64: (result?.qrCodeBase64 || result?.qrCode || result?.qrBase64 || null) as string | null,
-    jobId: (result?.jobId || result?.printJob?.jobId || null) as string | null,
+    receiptNumber: String(rawNumber || `PAR_${fallbackNumber}`),
+    jpkId: String(jpkId),
+    pdfUrl,
+    qrCodeBase64,
+    jobId,
+    hasReceipt: result?.created !== false && result?.success !== false && Boolean(rawNumber || jpkId || pdfUrl || qrCodeBase64 || jobId),
+    deviceError: errText ? String(errText).substring(0, 500) : null,
   };
 }
 

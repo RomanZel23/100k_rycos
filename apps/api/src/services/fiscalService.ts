@@ -9,9 +9,16 @@ import {
   completeOrderFiscalization,
   failOrderFiscalization,
   markFiscalIssuedByDuplicate,
+  repairBogusFiscalIssue,
   resolveFiscalDisplayId as resolveFiscalDisplayIdShared,
 } from '@rycos/database';
-import { buildFiscalPayload, parseFiscalResult, fiscalExternalRef, isDuplicateFiscalRefError } from '@rycos/shared';
+import {
+  buildFiscalPayload,
+  parseFiscalResult,
+  fiscalExternalRef,
+  isDuplicateFiscalRefError,
+  summarizeFiscalResponse,
+} from '@rycos/shared';
 import { env } from '../config/env.js';
 import { broadcastToStaff, broadcastToOrder } from '../plugins/websocket.js';
 import { rycosRpc } from '../lib/rycos.js';
@@ -25,6 +32,12 @@ export interface FiscalizeOptions {
   terminalId?: string;
   /** Tenant guard: order must belong to this company. */
   companyId?: number;
+  /**
+   * Manual retry: an order stuck in 'issued' although the device never returned any receipt
+   * data is released and fiscalized again (a truly printed receipt is caught by the duplicate
+   * reference check on the device).
+   */
+  repair?: boolean;
 }
 
 export interface FiscalizeResult {
@@ -121,9 +134,14 @@ function existingResult(order: typeof orders.$inferSelect): FiscalizeResult {
  * and a stable externalrefFR per order so a device can de-duplicate retries.
  */
 export async function fiscalizeOrder(options: FiscalizeOptions): Promise<FiscalizeResult> {
-  const { orderId, autoPrint = false, terminalId, companyId } = options;
+  const { orderId, autoPrint = false, terminalId, companyId, repair = false } = options;
   if (!isUuid(orderId)) throw new HttpError(404, 'Nie znaleziono zamówienia');
   const db = getDatabase();
+
+  if (repair) {
+    const released = await repairBogusFiscalIssue(orderId);
+    if (released) console.warn(`[Fiscal Service] Order ${orderId}: released an empty 'issued' state for a retry`);
+  }
 
   const [order] = await db
     .select()
@@ -175,7 +193,30 @@ export async function fiscalizeOrder(options: FiscalizeOptions): Promise<Fiscali
     throw err;
   }
 
+  console.log(
+    `[Fiscal Service] \u2190 ${displayId} responded for Order #${claimed.orderNumber} (ref ${fiscalExternalRef(orderId)}): ${summarizeFiscalResponse(result)}`
+  );
+
   const parsed = parseFiscalResult(result, claimed.orderNumber);
+
+  // A 2xx envelope without any receipt data means NO receipt was issued — never mark it as issued,
+  // otherwise the order is silently lost (no QR, no print job, no retry).
+  if (!parsed.hasReceipt || parsed.deviceError) {
+    const detail = parsed.deviceError || summarizeFiscalResponse(result);
+
+    // The device rejected a repeat of the same reference: the receipt was issued by an earlier attempt.
+    if (claimed.fiscalAttempts > 1 && isDuplicateFiscalRefError(detail)) {
+      console.warn(`[Fiscal Service] Order #${claimed.orderNumber}: duplicate reference — receipt already issued earlier`);
+      await markFiscalIssuedByDuplicate(orderId, detail, displayId);
+      return { success: true, displayId, error: 'Paragon był już wystawiony wcześniej (duplikat numeru referencyjnego)' };
+    }
+
+    const message = `Urz\u0105dzenie ${displayId} nie zwr\u00f3ci\u0142o danych paragonu: ${detail}`;
+    console.error(`[Fiscal Service] Order #${claimed.orderNumber}: ${message}`);
+    await failOrderFiscalization(orderId, message);
+    return { success: false, error: message, displayId, raw: result };
+  }
+
   await completeOrderFiscalization({
     orderId,
     companyId: claimed.companyId,
@@ -243,10 +284,22 @@ export async function printFiscalJob(options: PrintJobOptions): Promise<{ succes
     targetJobId = ord.fiscalJobId || undefined;
     fallbackFiscalDevice = ord.fiscalDeviceId;
 
-    if (!targetJobId && ord.fiscalStatus !== 'issued') {
-      const res = await fiscalizeOrder({ orderId, autoPrint: true, terminalId, companyId });
+    // Not fiscalized yet, or marked as issued although the device returned nothing:
+    // fiscalize (again) with autoPrint — the printout comes straight from the register.
+    // 'PAR_<number>' is our own placeholder — it means the device never sent a receipt number
+    const placeholderNumber = !ord.fiscalReceiptNumber || ord.fiscalReceiptNumber === `PAR_${ord.orderNumber}`;
+    const nothingRecorded = placeholderNumber && !ord.fiscalJobId && !ord.fiscalQrCode && !ord.fiscalPdfUrl;
+    if (!targetJobId && (ord.fiscalStatus !== 'issued' || nothingRecorded)) {
+      const res = await fiscalizeOrder({ orderId, autoPrint: true, terminalId, companyId, repair: nothingRecorded });
       if (!res.success) throw new HttpError(409, res.error || 'Fiskalizacja w toku — spróbuj za chwilę');
       return { success: true, displayId: res.displayId || 'SBR', jobId: res.jobId || undefined };
+    }
+
+    if (!targetJobId) {
+      throw new HttpError(
+        409,
+        `Paragon #${ord.fiscalReceiptNumber || ord.orderNumber} został zafiskalizowany na urządzeniu ${ord.fiscalDeviceId || '—'}, ale urządzenie nie zwróciło zadania druku (jobId) — wydruk papierowy nie jest dostępny dla tego paragonu.`
+      );
     }
   } else if (targetJobId && companyId) {
     // A bare jobId must belong to this company
