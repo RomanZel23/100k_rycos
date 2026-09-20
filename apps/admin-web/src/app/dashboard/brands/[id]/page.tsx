@@ -45,12 +45,13 @@ const CURRENCIES = [
   { value: 'SEK', label: 'SEK' },
   { value: 'QAR', label: 'QAR' },
 ]
-const ALL_LAYOUTS = ['boxed', 'list', 'circled', 'cards', 'scanner', 'lines', 'free', 'parking', 'freeCards', 'freeGrid']
+// Layouts actually rendered by the customer menu (customer-web MenuApp)
+const ALL_LAYOUTS = ['list', 'boxed', 'circled']
 const LAYOUTS_BY_TYPE: Record<string, string[]> = {
-  product: ['list', 'boxed', 'circled'],
+  product: ALL_LAYOUTS,
 }
 const LAYOUT_HELP =
-  'How the customer ordering menu is arranged. list = simple rows; boxed = grid of boxed items with images; circled = round category chips.'
+  'Wygląd menu dla klienta: list = produkty w wierszach (zdjęcie z lewej); boxed = kafelki 2 w rzędzie ze zdjęciem u góry; circled = okrągłe ikony kategorii ze zdjęciami + produkty w wierszach.'
 
 const ORDER_BASES: Record<string, string> = {
   product: 'https://100k.rycos.eu',

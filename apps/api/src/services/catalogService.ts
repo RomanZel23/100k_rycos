@@ -50,6 +50,11 @@ function parseBrandColors(style: string | null | undefined): { buttonColor: stri
   return { buttonColor: active, buttonTextColor: text, backgroundColor: bg };
 }
 
+const MENU_LAYOUTS = ['list', 'boxed', 'circled'] as const;
+function normalizeLayout(v: unknown): 'list' | 'boxed' | 'circled' {
+  return (MENU_LAYOUTS as readonly string[]).includes(String(v)) ? (v as 'list' | 'boxed' | 'circled') : 'list';
+}
+
 const DEFAULT_TABLES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Bar', 'Ogródek 1', 'Ogródek 2'];
 
 export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
@@ -69,6 +74,7 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
       locationName: locations.name,
       currency: brands.currency,
       style: brands.style,
+      menuLayout: brands.menuLayout,
       brandTables: brands.tables,
       locationTables: locations.tables,
     })
@@ -77,8 +83,9 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
     .where(and(eq(brands.slug, slug), eq(brands.isActive, true)))
     .limit(1);
 
-  // If not found by exact slug (e.g. 'default', empty or unmatched), fallback to the first active brand
-  if (rows.length === 0) {
+  // Fallback to the first active brand ONLY for the demo/default entry point.
+  // An unknown slug must not open another company's menu (e.g. a mistyped or retired QR code).
+  if (rows.length === 0 && (!slug || slug === 'default' || slug === '100k-rycos')) {
     rows = await db
       .select({
         id: brands.id,
@@ -94,6 +101,7 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
         locationName: locations.name,
         currency: brands.currency,
         style: brands.style,
+        menuLayout: brands.menuLayout,
         brandTables: brands.tables,
         locationTables: locations.tables,
       })
@@ -164,6 +172,7 @@ export async function getBrandBySlug(slug: string): Promise<BrandInfo | null> {
     locationName: row.locationName,
     tables: resolvedTables,
     style: row.style,
+    menuLayout: normalizeLayout((row as any).menuLayout),
     buttonColor: brandColors.buttonColor,
     buttonTextColor: brandColors.buttonTextColor,
     backgroundColor: brandColors.backgroundColor,
@@ -398,6 +407,7 @@ function getTranslated(
     locationName: locationRow?.name || null,
     tables: resolvedTables,
     style: b.style ?? null,
+    menuLayout: normalizeLayout((b as any).menuLayout),
     buttonColor: brandColors.buttonColor,
     buttonTextColor: brandColors.buttonTextColor,
     backgroundColor: brandColors.backgroundColor,

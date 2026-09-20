@@ -70,6 +70,8 @@ export const BrandInfoSchema = z.object({
   locationName: z.string().nullable().default(null),
   tables: z.array(z.string()).optional(),
   style: z.string().nullable().optional(),
+  /** Customer menu arrangement: list = rows, boxed = image tiles grid, circled = round category chips */
+  menuLayout: z.enum(['list', 'boxed', 'circled']).optional(),
   buttonColor: z.string().nullable().optional(),
   buttonTextColor: z.string().nullable().optional(),
   backgroundColor: z.string().nullable().optional(),

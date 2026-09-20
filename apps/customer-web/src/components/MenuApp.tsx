@@ -362,6 +362,9 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const subtotal = calculateSubtotal(cartItems);
   const totalCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+  const layout = menu?.brand.menuLayout || 'list';
+  const categoryImage = (catId: number) => menu?.products.find((p) => p.categoryId === catId && p.imageUrl)?.imageUrl || null;
+
   const filteredProducts = activeCategory
     ? menu?.products.filter((p) => p.categoryId === activeCategory) || []
     : menu?.products || [];
@@ -540,7 +543,30 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
       {menu && menu.categories.length > 0 && (
         <nav className="sticky top-0 z-30 bg-[var(--menu-nav-bg)] backdrop-blur-md px-3 sm:px-4 py-3 border-b border-slate-200/70 shadow-2xs mt-2">
           <div className="flex gap-2.5 overflow-x-auto no-scrollbar py-0.5">
-            {menu.categories.map((cat) => (
+            {layout === 'circled'
+              ? menu.categories.map((cat) => {
+                  const img = categoryImage(cat.id);
+                  const active = activeCategory === cat.id;
+                  return (
+                    <button key={cat.id} onClick={() => setActiveCategory(cat.id)} className="flex flex-col items-center gap-1.5 shrink-0 w-[76px]">
+                      <span
+                        className={`w-16 h-16 rounded-full overflow-hidden flex items-center justify-center bg-white border-2 transition-all ${
+                          active ? 'border-brand-500 ring-4 ring-brand-500/20 shadow-md' : 'border-slate-200 shadow-2xs'
+                        }`}
+                      >
+                        {img ? (
+                          <img src={img} alt="" crossOrigin="anonymous" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <span className="text-lg font-black text-slate-500">{cat.name.slice(0, 2).toUpperCase()}</span>
+                        )}
+                      </span>
+                      <span className={`text-[11px] leading-tight text-center font-black line-clamp-2 ${active ? 'text-[var(--menu-fg)]' : 'text-[var(--menu-muted)]'}`}>
+                        {cat.name}
+                      </span>
+                    </button>
+                  );
+                })
+              : menu.categories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
@@ -558,15 +584,16 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
       )}
 
       {/* Products Feed */}
-      <main className="p-4 flex-1 space-y-3">
+      <main className={`p-4 flex-1 ${layout === 'boxed' ? 'grid grid-cols-2 gap-3 content-start' : 'space-y-3'}`}>
         {filteredProducts.length === 0 ? (
-          <div className="text-center py-12 text-[var(--menu-muted)] text-sm">
+          <div className="col-span-2 text-center py-12 text-[var(--menu-muted)] text-sm">
             {lang === 'de' ? 'Keine Artikel in dieser Kategorie' : lang === 'en' ? 'No items in this category' : 'Brak dostępnych pozycji w tej kategorii'}
           </div>
         ) : (
           filteredProducts.map((prod) => (
             <ProductCard
               key={prod.id}
+              variant={layout === 'boxed' ? 'tile' : 'row'}
               product={prod}
               onSelect={(p) => setSelectedProduct(p)}
             />
@@ -575,7 +602,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
         {/* Brand Footer Graphic / Sponsor Banner */}
         {menu?.brand.footerUrl && (
-          <div className="mt-8 mb-4">
+          <div className="col-span-2 mt-8 mb-4">
             <div className="w-full rounded-2xl overflow-hidden border border-slate-200/80 bg-white shadow-2xs p-3 flex items-center justify-center">
               <img
                 src={menu.brand.footerUrl}
@@ -588,7 +615,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         )}
 
         {/* Footer Brand Credit & Policy Links */}
-        <footer className="text-center pt-8 pb-16 text-xs text-[var(--menu-muted)] space-y-2">
+        <footer className="col-span-2 text-center pt-8 pb-16 text-xs text-[var(--menu-muted)] space-y-2">
           {((menu?.brand.settings?.show_tnc !== false && !!menu?.brand.termsAndConditions) ||
             (menu?.brand.settings?.show_pp !== false && !!menu?.brand.privacyPolicy)) && (
             <div className="flex items-center justify-center gap-3 text-[11px] font-semibold text-slate-500">
