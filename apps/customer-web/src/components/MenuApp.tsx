@@ -62,6 +62,9 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
   const [hasActiveOrders, setHasActiveOrders] = useState(false);
   const [activeBannerOrder, setActiveBannerOrder] = useState<StoredOrder | null>(null);
   const [placedOrderId, setPlacedOrderId] = useState<string | null>(null);
+  // Kwota zamówienia policzona przez serwer — koszyk jest czyszczony po złożeniu,
+  // więc ekran płatności nie może liczyć sumy z koszyka (pokazywałby 0.00).
+  const [placedOrderTotal, setPlacedOrderTotal] = useState(0);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isTncOpen, setIsTncOpen] = useState(false);
@@ -324,6 +327,8 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
       const placedOrder = await submitOrder(orderPayload);
       setPlacedOrderId(placedOrder.id);
+      const serverTotal = Number(placedOrder.totalAmount);
+      setPlacedOrderTotal(Number.isFinite(serverTotal) && serverTotal > 0 ? serverTotal : subtotal + tipAmount);
 
       // Save order to customer local history
       saveStoredOrder({
@@ -705,7 +710,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
           isOpen={isPaymentOpen}
           onClose={() => setIsPaymentOpen(false)}
           orderId={placedOrderId}
-          totalAmount={subtotal + tipAmount}
+          totalAmount={placedOrderTotal}
           allowPayAtCounter={menu?.brand.allowPayAtCounter ?? false}
           lang={lang}
         />
