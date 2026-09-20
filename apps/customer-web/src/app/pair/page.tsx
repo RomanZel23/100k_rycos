@@ -4,6 +4,7 @@ import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Smartphone, CheckCircle2, AlertCircle, ArrowRight, RefreshCw, QrCode, Monitor, ChefHat, PackageCheck } from 'lucide-react';
 import { getApiBaseUrl } from '../../lib/api';
+import { QrScanner, extractPairingCode } from '../../components/QrScanner';
 
 interface PairedTerminal {
   id: number;
@@ -28,6 +29,7 @@ function PairContent() {
   const [error, setError] = useState<string | null>(null);
   const [pairedTerminal, setPairedTerminal] = useState<PairedTerminal | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const roleRedirectMap: Record<string, { path: string; label: string; icon: React.ReactNode }> = {
     all_in_one: { path: '/pos', label: 'All-in-One Kasa & Wydawka', icon: <Monitor size={20} className="text-amber-400" /> },
@@ -207,16 +209,43 @@ function PairContent() {
         )}
 
         {/* Info & Footer */}
-        <div className="pt-4 border-t border-slate-800/80 text-center space-y-2">
+        <div className="pt-4 border-t border-slate-800/80 text-center space-y-3">
+          {!pairedTerminal && (
+            <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-100 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-colors border border-slate-700 cursor-pointer min-h-[52px]"
+            >
+              <QrCode size={18} className="text-amber-400" />
+              <span>Skanuj kod QR stanowiska</span>
+            </button>
+          )}
           <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
             <QrCode size={14} />
-            <span>Lub zeskanuj kod QR aparatem telefonu</span>
+            <span>Możesz też zeskanować kod aparatem telefonu</span>
           </div>
           <p className="text-[11px] text-slate-600">
             100k-RYCOS Workstation Gateway · Bezpieczne połączenie BYOD
           </p>
         </div>
       </div>
+
+      <QrScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        title="Skanuj kod QR stanowiska"
+        hint="Kod QR znajdziesz w panelu menadżera → Terminale & Stanowiska."
+        onResult={(text) => {
+          setScannerOpen(false);
+          const scanned = extractPairingCode(text);
+          if (!scanned) {
+            setError('Nie rozpoznano kodu QR. Spróbuj ponownie lub wpisz kod ręcznie.');
+            return;
+          }
+          setCode(scanned);
+          handleClaim(scanned);
+        }}
+      />
     </div>
   );
 }
