@@ -6,8 +6,8 @@ export type Kind = 'sale' | 'fiscal' | 'pay' | 'print'
 export type DeviceKind = 'fiscal' | 'pay' | 'print'
 export type Role = 'all_in_one' | 'pos' | 'kds' | 'pickup' | 'kiosk' | 'fiscal_hub'
 
-export interface ApiLocation { id: number; name: string; is_active: boolean }
-export interface ApiBrand { id: number; name: string; slug: string; location_id: number | null; is_active: boolean }
+export interface ApiLocation { id: number; name: string; is_active: boolean; tables?: string[] }
+export interface ApiBrand { id: number; name: string; slug: string; location_id: number | null; is_active: boolean; tables?: string[] | null }
 export interface ApiTerminal {
   id: number
   terminal_id: string
@@ -71,6 +71,8 @@ export interface Frame {
   locationId: number | null
   tempId?: string
   name: string
+  /** table labels of the location (undefined for a new location = server defaults) */
+  tables?: string[]
   x: number
   y: number
   w: number
@@ -78,7 +80,7 @@ export interface Frame {
 }
 
 interface BaseNode { key: string; x: number; y: number; name: string }
-export interface BrandNode extends BaseNode { type: 'brand'; id: number; slug: string; active: boolean }
+export interface BrandNode extends BaseNode { type: 'brand'; id: number; slug: string; active: boolean; /** own tables; null = uses the location's tables */ tables: string[] | null }
 export interface TerminalNode extends BaseNode {
   type: 'terminal'
   id?: number
@@ -182,7 +184,7 @@ export function buildGraph(data: ApiStructure): Graph {
   const devices = data.fiscal_devices.filter((d) => !termByCode.has(d.device_id))
 
   data.brands.forEach((b) =>
-    nodes.push({ type: 'brand', key: `brand:${b.id}`, id: b.id, name: b.name, slug: b.slug, active: b.is_active, x: 0, y: 0 })
+    nodes.push({ type: 'brand', key: `brand:${b.id}`, id: b.id, name: b.name, slug: b.slug, active: b.is_active, tables: b.tables && b.tables.length ? b.tables : null, x: 0, y: 0 })
   )
   data.terminals.forEach((t) =>
     nodes.push({
@@ -242,7 +244,7 @@ export function buildGraph(data: ApiStructure): Graph {
   })
 
   // frames
-  const frames: Frame[] = data.locations.map((l) => ({ key: `loc:${l.id}`, locationId: l.id, name: l.name, x: 0, y: 0, w: 0, h: 0 }))
+  const frames: Frame[] = data.locations.map((l) => ({ key: `loc:${l.id}`, locationId: l.id, name: l.name, tables: l.tables || [], x: 0, y: 0, w: 0, h: 0 }))
   frames.push({ key: NONE_FRAME, locationId: null, name: 'Poza lokalizacją', x: 0, y: 0, w: 0, h: 0 })
 
   // --- positions: saved layout where available, auto layout otherwise
@@ -378,18 +380,32 @@ export function toSavePayload(g: Graph, original: ApiStructure) {
     return f.locationId ?? `new:${f.tempId}`
   }
 
-  const new_locations = g.frames.filter((f) => f.tempId).map((f) => ({ temp_id: f.tempId!, name: f.name }))
+  const sameList = (a: string[] | null | undefined, b: string[] | null | undefined) => JSON.stringify(a || []) === JSON.stringify(b || [])
+
+  const new_locations = g.frames
+    .filter((f) => f.tempId)
+    .map((f) => ({ temp_id: f.tempId!, name: f.name, ...(f.tables && f.tables.length ? { tables: f.tables } : {}) }))
   const locations = g.frames
-    .filter((f) => f.locationId !== null && original.locations.find((l) => l.id === f.locationId)?.name !== f.name)
-    .map((f) => ({ id: f.locationId!, name: f.name }))
+    .filter((f) => f.locationId !== null)
+    .map((f) => {
+      const orig = original.locations.find((l) => l.id === f.locationId)
+      const row: { id: number; name?: string; tables?: string[] } = { id: f.locationId! }
+      if (orig?.name !== f.name) row.name = f.name
+      if (f.tables && !sameList(orig?.tables, f.tables)) row.tables = f.tables
+      return row
+    })
+    .filter((row) => row.name !== undefined || row.tables !== undefined)
 
   const brands = g.nodes
     .filter((n): n is BrandNode => n.type === 'brand')
-    .filter((b) => {
+    .map((b) => {
       const orig = original.brands.find((x) => x.id === b.id)
-      return (orig?.location_id ?? null) !== locRef(b)
+      const row: { id: number; location_ref?: number | string | null; tables?: string[] | null } = { id: b.id }
+      if ((orig?.location_id ?? null) !== locRef(b)) row.location_ref = locRef(b)
+      if (!sameList(orig?.tables, b.tables)) row.tables = b.tables && b.tables.length ? b.tables : null
+      return row
     })
-    .map((b) => ({ id: b.id, location_ref: locRef(b) }))
+    .filter((row) => row.location_ref !== undefined || row.tables !== undefined)
 
   const termNodes = g.nodes.filter((n): n is TerminalNode => n.type === 'terminal')
   const new_terminals = termNodes.filter((t) => t.tempId).map((t) => ({ temp_id: t.tempId!, name: t.name, role: t.role }))
@@ -445,4 +461,9 @@ export function toSavePayload(g: Graph, original: ApiStructure) {
 
 export function changeCount(p: ReturnType<typeof toSavePayload>): number {
   return p.new_locations.length + p.locations.length + p.brands.length + p.terminals.length
+}
+
+/** "1, 2, 3\nBar" → ['1','2','3','Bar'] (trimmed, unique, max 500) */
+export function parseTables(text: string): string[] {
+  return Array.from(new Set(text.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean))).slice(0, 500)
 }

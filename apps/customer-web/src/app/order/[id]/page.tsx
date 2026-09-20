@@ -10,6 +10,7 @@ import QRCode from 'qrcode';
 import { PaymentModal } from '../../../components/PaymentModal';
 import { saveStoredOrder, updateStoredOrderStatus } from '../../../store/orderStorage';
 import { i18n, Language, getStoredLanguage, saveStoredLanguage } from '../../../lib/i18n';
+import { recallBrandTheme, applyBrandTheme, clearBrandTheme } from '../../../lib/brandTheme';
 
 function OrderTrackingContent() {
   const params = useParams();
@@ -34,6 +35,15 @@ function OrderTrackingContent() {
   const t = i18n[lang] || i18n.pl;
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
+
+  // Keep the brand's accent colors on the order tracker (theme remembered by the menu page)
+  useEffect(() => {
+    if (!order?.brandId) return;
+    const theme = recallBrandTheme(order.brandId);
+    if (theme) applyBrandTheme(theme, { background: false });
+    return () => clearBrandTheme();
+  }, [order?.brandId]);
+
   const [loading, setLoading] = useState(true);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
 

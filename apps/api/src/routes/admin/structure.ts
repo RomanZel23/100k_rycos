@@ -43,14 +43,18 @@ function randomCode(): string {
   return code;
 }
 
+const cleanTables = (v: unknown): string[] =>
+  Array.isArray(v) ? Array.from(new Set(v.map((x) => String(x).trim()).filter(Boolean))).slice(0, 500).map((x) => x.slice(0, 32)) : [];
+
 /** Location reference in a PUT payload: existing id, "new:<tempId>", or null. */
 type LocationRef = number | string | null;
 
 interface StructurePut {
   layout?: unknown;
-  new_locations?: Array<{ temp_id: string; name: string }>;
-  locations?: Array<{ id: number; name?: string }>;
-  brands?: Array<{ id: number; location_ref: LocationRef }>;
+  new_locations?: Array<{ temp_id: string; name: string; tables?: string[] }>;
+  locations?: Array<{ id: number; name?: string; tables?: string[] }>;
+  /** tables: own table list of the brand; null = use the location's tables; undefined = unchanged */
+  brands?: Array<{ id: number; location_ref?: LocationRef; tables?: string[] | null }>;
   new_terminals?: Array<{ temp_id: string; name: string; role: string }>;
   terminals?: Array<{
     ref: number | string; // existing terminal id, or "new:<tempId>"
@@ -73,8 +77,8 @@ function isManagerRole(role: string | undefined, isTerminal: boolean): boolean {
 async function loadStructure(companyId: number) {
   const db = getDatabase();
   const [locRows, brandRows, termRows, devRows, layoutRows] = await Promise.all([
-    db.select({ id: locations.id, name: locations.name, isActive: locations.isActive }).from(locations).where(eq(locations.companyId, companyId)).orderBy(locations.id),
-    db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId, isActive: brands.isActive }).from(brands).where(eq(brands.companyId, companyId)).orderBy(brands.id),
+    db.select({ id: locations.id, name: locations.name, isActive: locations.isActive, tables: locations.tables }).from(locations).where(eq(locations.companyId, companyId)).orderBy(locations.id),
+    db.select({ id: brands.id, name: brands.name, slug: brands.slug, locationId: brands.locationId, isActive: brands.isActive, tables: brands.tables }).from(brands).where(eq(brands.companyId, companyId)).orderBy(brands.id),
     db.select().from(terminals).where(and(eq(terminals.companyId, companyId), ne(terminals.status, 'archived'))).orderBy(terminals.id),
     db.select().from(fiscalDevices).where(eq(fiscalDevices.companyId, companyId)).orderBy(fiscalDevices.id),
     db.select({ config: companySettings.config }).from(companySettings)
@@ -82,8 +86,8 @@ async function loadStructure(companyId: number) {
   ]);
 
   return {
-    locations: locRows.map((l) => ({ id: l.id, name: l.name, is_active: l.isActive })),
-    brands: brandRows.map((b) => ({ id: b.id, name: b.name, slug: b.slug, location_id: b.locationId, is_active: b.isActive })),
+    locations: locRows.map((l) => ({ id: l.id, name: l.name, is_active: l.isActive, tables: l.tables || [] })),
+    brands: brandRows.map((b) => ({ id: b.id, name: b.name, slug: b.slug, location_id: b.locationId, is_active: b.isActive, tables: b.tables && b.tables.length ? b.tables : null })),
     terminals: termRows.map((t) => ({
       id: t.id,
       terminal_id: t.terminalId,
@@ -233,7 +237,12 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
         for (const l of body.new_locations || []) {
           const [row] = await tx
             .insert(locations)
-            .values({ companyId, name: String(l.name).trim(), isActive: true })
+            .values({
+              companyId,
+              name: String(l.name).trim(),
+              isActive: true,
+              ...(l.tables && cleanTables(l.tables).length ? { tables: cleanTables(l.tables) } : {}),
+            })
             .returning({ id: locations.id });
           locMap.set(String(l.temp_id), row.id);
         }
@@ -245,16 +254,25 @@ export async function adminStructureRoutes(fastify: FastifyInstance) {
         };
 
         for (const l of body.locations || []) {
-          if (l.name !== undefined) {
-            await tx.update(locations).set({ name: String(l.name).trim() })
+          const set: Record<string, unknown> = {};
+          if (l.name !== undefined) set.name = String(l.name).trim();
+          if (l.tables !== undefined) set.tables = cleanTables(l.tables);
+          if (Object.keys(set).length) {
+            await tx.update(locations).set(set)
               .where(and(eq(locations.id, l.id), eq(locations.companyId, companyId)));
           }
         }
 
         for (const b of body.brands || []) {
+          const set: Record<string, unknown> = {};
           const loc = resolveLoc(b.location_ref);
-          if (loc === undefined) continue;
-          await tx.update(brands).set({ locationId: loc })
+          if (loc !== undefined) set.locationId = loc;
+          if (b.tables !== undefined) {
+            const t = b.tables === null ? [] : cleanTables(b.tables);
+            set.tables = t.length ? t : null;
+          }
+          if (!Object.keys(set).length) continue;
+          await tx.update(brands).set(set)
             .where(and(eq(brands.id, b.id), eq(brands.companyId, companyId)));
         }
 

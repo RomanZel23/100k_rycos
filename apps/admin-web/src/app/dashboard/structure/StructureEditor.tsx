@@ -9,7 +9,7 @@ import {
   buildGraph, validate, toSavePayload, changeCount, pinsOf, pinPoint, nodeHeight, frameOfNode, tempId,
 } from './model'
 import { saveStructure, fetchStructureStatus, type LiveStatus } from './actions'
-import { TerminalPanel, BrandPanel, DevicePanel, IssuesPanel, KIND_CLASS, presenceOf } from './panels'
+import { TerminalPanel, BrandPanel, DevicePanel, IssuesPanel, TablesEditor, KIND_CLASS, presenceOf } from './panels'
 
 type Sel = { type: 'node' | 'edge' | 'frame'; key: string } | null
 type Drag =
@@ -512,7 +512,8 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
               <div key={f.key} className={`${s.frame} ${f.key === NONE_FRAME ? s.frameNone : ''} ${sel?.key === f.key ? s.frameSel : ''}`}
                 style={{ left: f.x, top: f.y, width: f.w, height: f.h }}>
                 <div className={s.frameHead} data-frame-head={f.key}>
-                  {f.name}<small>{f.locationId ? `#${f.locationId}` : f.tempId ? 'nowa' : ''}</small>
+                  {f.name}
+                  <small>{f.locationId ? `#${f.locationId}` : f.tempId ? 'nowa' : ''}{f.tables && f.tables.length ? ` · ${f.tables.length} stolików` : ''}</small>
                 </div>
                 <div className={s.resize} data-frame-resize={f.key} title="Zmień rozmiar" />
               </div>
@@ -526,7 +527,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
               const glyph = n.type === 'brand' ? <div className={`${s.glyph} ${s.gBrand}`}>M</div>
                 : n.type === 'device' ? <div className={`${s.glyph} ${s.gDev}`}>{n.kind === 'hub' ? 'SBF' : 'SBR'}</div>
                 : <div className={`${s.glyph} ${n.hardware ? s.gHw : s.gTerm}`}>{ROLE_INFO[n.role].short}</div>
-              const sub = n.type === 'brand' ? `Marka · /${n.slug}`
+              const sub = n.type === 'brand' ? `/${n.slug} · ${n.tables ? `własne stoliki: ${n.tables.length}` : 'stoliki lokalizacji'}`
                 : n.type === 'device' ? <>{n.kind === 'hub' ? 'Hub fiskalny' : 'Urządzenie SBR'} · <span className={s.mono}>{n.deviceId}</span></>
                 : <>{ROLE_INFO[n.role].name} · <span className={s.mono}>{n.code ?? 'nowe'}</span></>
               const statusDot = w === 'err' ? s.dotErr : w === 'warn' ? s.dotWarn : s.dotOk
@@ -581,7 +582,8 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
           )}
           {selNode?.type === 'brand' && (
             <BrandPanel n={selNode} graph={graph} issues={issues.filter((i) => i.node === selNode.key)}
-              onLocation={(fk) => moveIntoFrame(selNode.key, fk)} onRemoveEdge={removeEdge} />
+              onLocation={(fk) => moveIntoFrame(selNode.key, fk)} onRemoveEdge={removeEdge}
+              onTables={(tables) => { snapshot(); updateNode(selNode.key, { tables } as Partial<GNode>) }} />
           )}
           {selNode?.type === 'device' && (
             <DevicePanel n={selNode} graph={graph} live={live} issues={issues.filter((i) => i.node === selNode.key)} onRemoveEdge={removeEdge} />
@@ -604,6 +606,15 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
                     onChange={(e) => setGraph((g) => ({ ...g, frames: g.frames.map((f) => (f.key === selFrame.key ? { ...f, name: e.target.value } : f)) }))} />
                 </div>
               ) : <p className={s.muted}>Elementy w tym obszarze nie mają przypisanej lokalizacji.</p>}
+              {selFrame.key !== NONE_FRAME && (
+                <div className={s.field}>
+                  <label htmlFor="frame-tables">Stoliki lokalizacji</label>
+                  <TablesEditor id="frame-tables" value={selFrame.tables || []}
+                    placeholder={selFrame.tempId ? 'puste = domyślne (1–10, Bar, Ogródek 1–2)' : 'np. 1, 2, 3, Bar'}
+                    onCommit={(tables) => { snapshot(); setGraph((g) => ({ ...g, frames: g.frames.map((f) => (f.key === selFrame.key ? { ...f, tables } : f)) })) }} />
+                  <span className={s.muted}>Marki bez własnych stolików korzystają z tej listy (QR na stolikach, wybór stolika na POS).</span>
+                </div>
+              )}
               <p className={s.muted}>Przeciągnij nagłówek ramki, aby przesunąć ją razem z zawartością; uchwyt w prawym dolnym rogu zmienia rozmiar.</p>
               {selFrame.tempId && !graph.nodes.some((n) => frameOfNode(graph.frames, n)?.key === selFrame.key) && (
                 <button className={s.tbtn} onClick={() => removeNewFrame(selFrame.key)}>Usuń pustą lokalizację</button>

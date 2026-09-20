@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import s from './structure.module.css'
 import type { LiveStatus } from './actions'
 import {
   Graph, GNode, TerminalNode, BrandNode, DeviceNode, Kind, DeviceKind, Role, Issue,
-  KIND_LABEL, ROLE_INFO, ROLES, NONE_FRAME, pinsOf, frameOfNode,
+  KIND_LABEL, ROLE_INFO, ROLES, NONE_FRAME, pinsOf, frameOfNode, parseTables,
 } from './model'
 
 /** "5 min temu" style relative time. */
@@ -46,6 +47,22 @@ function PresenceLine({ n, live }: { n: GNode; live: LiveStatus | null }) {
   const p = presenceOf(n, live)
   if (!p) return null
   return <p className={`${s.muted} ${p.online ? s.presenceTextOn : ''}`}>● {p.label}</p>
+}
+
+/** Table labels editor: free text (comma / new line), committed on blur. */
+export function TablesEditor({ id, value, onCommit, placeholder }: {
+  id: string; value: string[]; onCommit: (tables: string[]) => void; placeholder?: string
+}) {
+  const [text, setText] = useState(value.join(', '))
+  useEffect(() => { setText(value.join(', ')) }, [value])
+  return (
+    <>
+      <textarea id={id} className={s.input} rows={3} value={text} placeholder={placeholder}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => { const list = parseTables(text); if (JSON.stringify(list) !== JSON.stringify(value)) onCommit(list) }} />
+      <span className={s.muted}>{parseTables(text).length} stolików · oddziel przecinkiem lub nową linią</span>
+    </>
+  )
 }
 
 export const KIND_CLASS: Record<Kind, string> = { sale: s.kSale, fiscal: s.kFiscal, pay: s.kPay, print: s.kPrint }
@@ -189,15 +206,34 @@ export function TerminalPanel(props: {
   )
 }
 
-export function BrandPanel({ n, graph, issues, onLocation, onRemoveEdge }: {
+export function BrandPanel({ n, graph, issues, onLocation, onRemoveEdge, onTables }: {
   n: BrandNode; graph: Graph; issues: Issue[]; onLocation: (fk: string) => void; onRemoveEdge: (k: string) => void
+  onTables: (tables: string[] | null) => void
 }) {
   const edges = graph.edges.filter((e) => e.from === n.key)
+  const frame = frameOfNode(graph.frames, n)
+  const locTables = frame && frame.key !== NONE_FRAME ? frame.tables : undefined
+  const own = n.tables !== null
   return (
     <>
       <h3>Marka</h3>
       <p className={s.brandName}>{n.name}</p>
       <LocationSelect n={n} graph={graph} onLocation={onLocation} />
+      <div className={s.field}>
+        <span className={s.fieldLabel}>Stoliki (numery do zamówień z QR)</span>
+        <label className={s.check}>
+          <input type="checkbox" id={`own-tables-${n.id}`} checked={own}
+            onChange={(e) => onTables(e.target.checked ? (locTables && locTables.length ? [...locTables] : ['1']) : null)} />
+          Własne stoliki marki
+        </label>
+        {own ? (
+          <TablesEditor id={`tables-${n.id}`} value={n.tables || []} onCommit={(list) => onTables(list.length ? list : null)} placeholder="np. FT1, FT2, FT3" />
+        ) : (
+          <span className={s.muted}>
+            Używa stolików lokalizacji{locTables ? `: ${locTables.slice(0, 12).join(', ')}${locTables.length > 12 ? ` … (${locTables.length})` : ''}` : ' (brak lokalizacji)'}.
+          </span>
+        )}
+      </div>
       <div className={s.field}>
         <span className={s.fieldLabel}>Sprzedawana na ({edges.length})</span>
         {edges.length === 0 && <span className={s.muted}>Stanowiska bez przypisanych marek sprzedają wszystkie marki swojej lokalizacji.</span>}

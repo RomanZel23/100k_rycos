@@ -9,15 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Runtime-themable: values come from CSS variables (defaults in globals.css,
+        // per-brand values set by lib/brandTheme.ts from the brand's saved colors).
         brand: {
-          DEFAULT: '#ED1C24',
-          50: '#FDF2F2',
-          100: '#FDE8E8',
-          200: '#FBD5D5',
-          500: '#ED1C24',
-          600: '#CC161D',
-          700: '#990E14',
-          text: '#ffffff',
+          DEFAULT: 'rgb(var(--brand-500) / <alpha-value>)',
+          50: 'rgb(var(--brand-50) / <alpha-value>)',
+          100: 'rgb(var(--brand-100) / <alpha-value>)',
+          200: 'rgb(var(--brand-200) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
+          text: 'rgb(var(--brand-text) / <alpha-value>)',
         },
         techbay: {
           blue: '#002633',

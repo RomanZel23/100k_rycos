@@ -17,6 +17,7 @@ import { OrderHistoryModal } from './OrderHistoryModal';
 import { ShareModal } from './ShareModal';
 import { PolicyModal } from './PolicyModal';
 import { getStoredOrders, saveStoredOrder, StoredOrder } from '../store/orderStorage';
+import { themeFromBrand, applyBrandTheme, clearBrandTheme, rememberBrandTheme } from '../lib/brandTheme';
 
 interface MenuAppProps {
   initialBrandSlug?: string;
@@ -268,51 +269,14 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
     });
   };
 
-  // Apply Brand Theme Colors
+  // Apply brand theme (accent + background) saved in the admin panel
   useEffect(() => {
-    if (!menu?.brand) return;
-
-    let buttonColor = (menu.brand as any).buttonColor;
-    let buttonTextColor = (menu.brand as any).buttonTextColor;
-
-    // Fallback if buttonColor is not directly present (e.g. older response or style string)
-    if (!buttonColor && menu.brand.style) {
-      try {
-        const parsed = typeof menu.brand.style === 'string' ? JSON.parse(menu.brand.style) : menu.brand.style;
-        const s = Array.isArray(parsed) ? parsed[0] : parsed;
-        const raw = s?.active_button_color;
-        if (raw) {
-          if (raw.startsWith('0x') || raw.startsWith('0X')) {
-            const hex = raw.slice(2);
-            buttonColor = hex.length === 8 ? `#${hex.slice(2)}` : `#${hex}`;
-          } else if (raw.startsWith('#')) {
-            buttonColor = raw;
-          }
-        }
-      } catch {}
-    }
-
-    const brandColor = buttonColor || '#f97316';
-
-    // Compute contrast text if buttonTextColor not set
-    let brandTextColor = buttonTextColor;
-    if (!brandTextColor) {
-      const hex = brandColor.replace('#', '');
-      const r = parseInt(hex.substring(0, 2), 16) || 0;
-      const g = parseInt(hex.substring(2, 4), 16) || 0;
-      const b = parseInt(hex.substring(4, 6), 16) || 0;
-      const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-      brandTextColor = yiq >= 140 ? '#0F172A' : '#FFFFFF';
-    }
-
-    document.documentElement.style.setProperty('--brand-color', brandColor);
-    document.documentElement.style.setProperty('--brand-text', brandTextColor);
-
-    return () => {
-      document.documentElement.style.removeProperty('--brand-color');
-      document.documentElement.style.removeProperty('--brand-text');
-    };
-  }, [menu?.brand]);
+    if (!menu?.brand) return
+    const theme = themeFromBrand(menu.brand)
+    applyBrandTheme(theme)
+    rememberBrandTheme(menu.brand.id, theme)
+    return () => clearBrandTheme()
+  }, [menu?.brand])
 
   const handleUpdateQuantity = (id: string, qty: number) => {
     setCartItems((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: qty } : i)));
@@ -403,7 +367,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
     : menu?.products || [];
 
   return (
-    <div className="w-full max-w-lg mx-auto min-h-screen bg-slate-50 flex flex-col overflow-x-hidden">
+    <div className="w-full max-w-lg mx-auto min-h-screen bg-[var(--menu-bg)] flex flex-col overflow-x-hidden">
       {/* Brand Hero Banner */}
       {menu?.brand.bannerUrl && (
         <div className="relative w-full h-44 sm:h-56 bg-white overflow-hidden shrink-0 flex items-center justify-center pb-8 sm:pb-10 pt-3 px-3 sm:px-4 border-b border-slate-100">
@@ -574,7 +538,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
 
       {/* Sticky Category Tabs Navigation */}
       {menu && menu.categories.length > 0 && (
-        <nav className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md px-3 sm:px-4 py-3 border-b border-slate-200/70 shadow-2xs mt-2">
+        <nav className="sticky top-0 z-30 bg-[var(--menu-nav-bg)] backdrop-blur-md px-3 sm:px-4 py-3 border-b border-slate-200/70 shadow-2xs mt-2">
           <div className="flex gap-2.5 overflow-x-auto no-scrollbar py-0.5">
             {menu.categories.map((cat) => (
               <button
@@ -596,7 +560,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
       {/* Products Feed */}
       <main className="p-4 flex-1 space-y-3">
         {filteredProducts.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-sm">
+          <div className="text-center py-12 text-[var(--menu-muted)] text-sm">
             {lang === 'de' ? 'Keine Artikel in dieser Kategorie' : lang === 'en' ? 'No items in this category' : 'Brak dostępnych pozycji w tej kategorii'}
           </div>
         ) : (
@@ -624,7 +588,7 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
         )}
 
         {/* Footer Brand Credit & Policy Links */}
-        <footer className="text-center pt-8 pb-16 text-xs text-slate-400 space-y-2">
+        <footer className="text-center pt-8 pb-16 text-xs text-[var(--menu-muted)] space-y-2">
           {((menu?.brand.settings?.show_tnc !== false && !!menu?.brand.termsAndConditions) ||
             (menu?.brand.settings?.show_pp !== false && !!menu?.brand.privacyPolicy)) && (
             <div className="flex items-center justify-center gap-3 text-[11px] font-semibold text-slate-500">
@@ -652,8 +616,8 @@ export function MenuApp({ initialBrandSlug }: MenuAppProps) {
               )}
             </div>
           )}
-          <p className="font-semibold text-slate-500">100k-RYCOS Ordering</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">
+          <p className="font-semibold text-[var(--menu-muted)]">100k-RYCOS Ordering</p>
+          <p className="text-[10px] text-[var(--menu-muted)] mt-0.5">
             {lang === 'de'
               ? 'Schnelles und sicheres Bestellen am Tisch und an der Bar'
               : lang === 'en'

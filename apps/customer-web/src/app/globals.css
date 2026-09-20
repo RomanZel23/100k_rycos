@@ -7,6 +7,19 @@
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+  /* Brand palette (RGB triplets) — overridden per brand at runtime (lib/brandTheme.ts) */
+  --brand-50: 253 242 242;
+  --brand-100: 253 232 232;
+  --brand-200: 251 213 213;
+  --brand-500: 237 28 36;
+  --brand-600: 204 22 29;
+  --brand-700: 153 14 20;
+  --brand-text: 255 255 255;
+  /* Menu page surface — overridden by the brand's background color */
+  --menu-bg: #f8fafc;
+  --menu-nav-bg: rgba(248, 250, 252, 0.95);
+  --menu-fg: #0f172a;
+  --menu-muted: #64748b;
 }
 
 body {
