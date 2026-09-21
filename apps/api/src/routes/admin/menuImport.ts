@@ -219,6 +219,7 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
       const created = await db.transaction(async (tx) => {
         let createdProducts = 0;
         let createdCategories = 0;
+        const createdItems: { id: number; name: string }[] = [];
 
         for (const item of items) {
           const name = String(item?.name || '').trim();
@@ -277,10 +278,11 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
             .returning({ id: products.id });
 
           await tx.insert(brandProducts).values({ brandId, productId: product.id }).onConflictDoNothing();
+          createdItems.push({ id: product.id, name: name.substring(0, 255) });
           createdProducts++;
         }
 
-        return { createdProducts, createdCategories };
+        return { createdProducts, createdCategories, products: createdItems };
       });
 
       await invalidateBrandMenuCache(brandId);

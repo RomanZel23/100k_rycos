@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   parseFileAction,
@@ -37,12 +37,12 @@ const MAX_IMAGE_EDGE = 2200
  * szybciej się wgrywa, mieści się w limicie API i taniej kosztuje odczyt. Gdy cokolwiek zawiedzie
  * (np. HEIC, którego przeglądarka nie dekoduje), wracamy do oryginalnego pliku.
  */
-async function downscaleImage(file: File): Promise<{ blob: Blob; mimeType: string }> {
+async function downscaleImage(file: File, maxEdge: number = MAX_IMAGE_EDGE): Promise<{ blob: Blob; mimeType: string }> {
   if (!file.type.startsWith('image/')) return { blob: file, mimeType: file.type || 'application/pdf' }
 
   try {
     const bitmap = await createImageBitmap(file)
-    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height))
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height))
     if (scale === 1 && file.size < 1.5 * 1024 * 1024) {
       bitmap.close()
       return { blob: file, mimeType: file.type }
@@ -62,6 +62,36 @@ async function downscaleImage(file: File): Promise<{ blob: Blob; mimeType: strin
   } catch {
     return { blob: file, mimeType: file.type || 'image/jpeg' }
   }
+}
+
+/** Zdjęcie potrawy nie musi być tak duże jak fotografia karty — w menu i tak jest miniaturą. */
+const PHOTO_EDGE = 1400
+
+/**
+ * "TOST ŁOSOŚ – AWOKADO" i "tost-losos-awokado.jpg" to ta sama potrawa.
+ * Sprowadzamy obie nazwy do listy słów bez ogonków, interpunkcji i rozszerzenia.
+ */
+function normalizeWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ł/g, 'l')
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 2)
+}
+
+/**
+ * Zgodność nazwy pliku z nazwą produktu (0–1). Liczymy z obu stron, bo plik bywa skrótem
+ * ("syrniki.jpg" ↔ "SYRNIKI (PLACUSZKI TWAROGOWE)"), a nazwa produktu bywa dłuższa od pliku.
+ */
+function matchScore(fileWords: string[], nameWords: string[]): number {
+  if (fileWords.length === 0 || nameWords.length === 0) return 0
+  const same = (a: string, b: string) => a === b || (b.length > 4 && a.startsWith(b.slice(0, 5))) || (a.length > 4 && b.startsWith(a.slice(0, 5)))
+  const inFile = nameWords.filter((word) => fileWords.some((f) => same(f, word))).length
+  const inName = fileWords.filter((word) => nameWords.some((n) => same(n, word))).length
+  return (inFile / nameWords.length + inName / fileWords.length) / 2
 }
 
 /** Plik → base64 bez prefiksu data:, bo API przyjmuje samą zawartość. */
@@ -111,6 +141,14 @@ export function MenuImportClient({
 
   // Zdjęcia trzymamy w pamięci, żeby dało się ponowić odczyt z innym promptem
   const [lastImages, setLastImages] = useState<{ filename: string; mime_type: string; content_base64: string }[]>([])
+  // Krok 4: zdjęcia potraw dla właśnie utworzonych produktów
+  const [imported, setImported] = useState<{ id: number; name: string }[]>([])
+  const [photos, setPhotos] = useState<Record<number, File | undefined>>({})
+  const [uploaded, setUploaded] = useState<Record<number, boolean>>({})
+  const photoBulkRef = useRef<HTMLInputElement>(null)
+  const photoOneRef = useRef<HTMLInputElement>(null)
+  const photoTargetRef = useRef<number | null>(null)
+
   const [promptOpen, setPromptOpen] = useState(false)
   const [promptText, setPromptText] = useState(promptInfo?.prompt ?? '')
   const [promptSource, setPromptSource] = useState(promptInfo?.source ?? 'default')
@@ -237,6 +275,9 @@ export function MenuImportClient({
       setResult(res.data)
       setRows(null)
       setLastImages([])
+      setImported(res.data.products || [])
+      setPhotos({})
+      setUploaded({})
       router.refresh()
     } catch (err: any) {
       setMessage({ kind: 'error', text: humanizeError(err) })
@@ -244,6 +285,97 @@ export function MenuImportClient({
       setBusy(null)
     }
   }
+
+  /** Hurtowy wybór: dopasowujemy po nazwie pliku, resztę użytkownik przypisuje ręcznie. */
+  const assignPhotos = (files: FileList) => {
+    const list = Array.from(files)
+    const pairs: { score: number; file: File; id: number }[] = []
+    for (const file of list) {
+      const fileWords = normalizeWords(file.name)
+      for (const item of imported) {
+        const score = matchScore(fileWords, normalizeWords(item.name))
+        if (score >= 0.55) pairs.push({ score, file, id: item.id })
+      }
+    }
+    pairs.sort((a, b) => b.score - a.score)
+
+    const next = { ...photos }
+    const used = new Set<File>()
+    for (const pair of pairs) {
+      if (used.has(pair.file) || next[pair.id]) continue
+      next[pair.id] = pair.file
+      used.add(pair.file)
+    }
+    setPhotos(next)
+
+    const leftover = list.length - used.size
+    setMessage(
+      used.size === 0
+        ? { kind: 'error', text: 'Nie dopasowaliśmy żadnego zdjęcia po nazwie pliku — przypisz je przyciskiem przy pozycji' }
+        : {
+            kind: 'success',
+            text: `Dopasowano ${used.size} zdjęć po nazwie pliku${leftover > 0 ? `, ${leftover} zostało bez pary — przypisz je ręcznie` : ''}`,
+          }
+    )
+  }
+
+  const uploadPhotos = async () => {
+    const entries = Object.entries(photos).filter(([id, file]) => file && !uploaded[Number(id)]) as [string, File][]
+    if (entries.length === 0) return
+
+    setMessage(null)
+    const failed: string[] = []
+    let done = 0
+    setBusy(`Wgrywam zdjęcia 0/${entries.length}...`)
+
+    for (const [id, file] of entries) {
+      try {
+        const { blob, mimeType } = await downscaleImage(file, PHOTO_EDGE)
+        const name = file.name.replace(/\.[^.]+$/, '') + (mimeType === 'image/jpeg' ? '.jpg' : '')
+        const form = new FormData()
+        form.append('image', new File([blob], name, { type: mimeType }))
+
+        const res = await fetch(`/api/products/${id}/image`, { method: 'POST', body: form })
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({}))
+          throw new Error(detail.error || `HTTP ${res.status}`)
+        }
+        setUploaded((prev) => ({ ...prev, [Number(id)]: true }))
+      } catch (err: any) {
+        failed.push(`${imported.find((i) => i.id === Number(id))?.name || id}: ${humanizeError(err)}`)
+      }
+      done++
+      setBusy(`Wgrywam zdjęcia ${done}/${entries.length}...`)
+    }
+
+    setBusy(null)
+    setMessage(
+      failed.length === 0
+        ? { kind: 'success', text: `Wgrano ${entries.length} zdjęć` }
+        : { kind: 'error', text: `Nie udało się wgrać ${failed.length}: ${failed.join('; ')}` }
+    )
+    router.refresh()
+  }
+
+  const finishPhotos = () => {
+    setImported([])
+    setPhotos({})
+    setUploaded({})
+    setMessage(null)
+  }
+
+  const photosToUpload = imported.filter((item) => photos[item.id] && !uploaded[item.id]).length
+
+  // Miniatury robimy raz na zmianę przypisań i sprzątamy po sobie, żeby nie zostawiać blobów w pamięci.
+  const previews = useMemo(() => {
+    const map: Record<number, string> = {}
+    for (const [id, file] of Object.entries(photos)) {
+      if (file) map[Number(id)] = URL.createObjectURL(file)
+    }
+    return map
+  }, [photos])
+
+  useEffect(() => () => Object.values(previews).forEach((url) => URL.revokeObjectURL(url)), [previews])
 
   return (
     <div className="mt-6 space-y-4">
@@ -269,8 +401,111 @@ export function MenuImportClient({
         </div>
       )}
 
+      {/* Krok 4: zdjęcia potraw dla właśnie zaimportowanych produktów */}
+      {imported.length > 0 && (
+        <div className="card space-y-4">
+          <div>
+            <p className="text-sm font-semibold">
+              📷 Zdjęcia potraw <span className="text-xs font-normal text-neutral-500">(opcjonalnie)</span>
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              Wrzuć zdjęcia hurtem — dopasujemy je po nazwie pliku (np. <code>tost-losos-awokado.jpg</code>).
+              Pozostałe przypiszesz przyciskiem przy pozycji.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => photoBulkRef.current?.click()}
+              className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold hover:border-brand disabled:opacity-40"
+            >
+              Wybierz zdjęcia
+            </button>
+            <button type="button" disabled={!!busy || photosToUpload === 0} onClick={uploadPhotos} className="btn-brand sm:w-auto sm:px-4">
+              Wgraj zdjęcia{photosToUpload > 0 ? ` (${photosToUpload})` : ''}
+            </button>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={finishPhotos}
+              className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-600 hover:border-neutral-400"
+            >
+              Zakończ
+            </button>
+          </div>
+
+          <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+            {imported.map((item) => {
+              const file = photos[item.id]
+              return (
+                <li key={item.id} className="flex items-center gap-3 px-3 py-2">
+                  {file ? (
+                    <img src={previews[item.id]} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
+                  ) : (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-neutral-100 text-neutral-300">—</div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{item.name}</p>
+                    <p className="truncate text-xs text-neutral-500">
+                      {uploaded[item.id] ? 'wgrane ✓' : file ? file.name : 'bez zdjęcia'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!!busy}
+                    onClick={() => { photoTargetRef.current = item.id; photoOneRef.current?.click() }}
+                    className="text-xs font-semibold text-brand hover:underline disabled:opacity-40"
+                  >
+                    {file ? 'Zmień' : 'Wybierz'}
+                  </button>
+                  {file && !uploaded[item.id] && (
+                    <button
+                      type="button"
+                      disabled={!!busy}
+                      onClick={() => setPhotos((prev) => ({ ...prev, [item.id]: undefined }))}
+                      className="text-xs text-neutral-500 hover:underline disabled:opacity-40"
+                    >
+                      Usuń
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+
+          <input
+            ref={photoBulkRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) assignPhotos(e.target.files)
+              e.target.value = ''
+            }}
+          />
+          <input
+            ref={photoOneRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              const id = photoTargetRef.current
+              if (file && id !== null) {
+                setPhotos((prev) => ({ ...prev, [id]: file }))
+                setUploaded((prev) => ({ ...prev, [id]: false }))
+              }
+              e.target.value = ''
+            }}
+          />
+        </div>
+      )}
+
       {/* Krok 1: marka i źródło */}
-      {!rows && (
+      {!rows && imported.length === 0 && (
         <div className="card space-y-4">
           <div className="max-w-xs">
             <label className="label" htmlFor="brand">Marka, do której trafi menu</label>
