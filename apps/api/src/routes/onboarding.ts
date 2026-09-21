@@ -318,6 +318,23 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         { expiresIn: '30d' }
       );
 
+    /**
+     * The admin panel needs the same user shape the login endpoint returns — it is stored in the
+     * `rycos_user` cookie. Without it the panel cannot resolve the signed-in user and bounces
+     * between /dashboard and /login.
+     */
+    const panelUser = (userId: string, companyId: number, role: string) => ({
+      id: userId,
+      email: order.email,
+      user_metadata: {
+        id: userId,
+        company_id: companyId,
+        role,
+        name: order.companyName,
+        email: order.email,
+      },
+    });
+
     // Already completed: auto-login only shortly after completion (the token in the URL must not be a permanent key)
     if (order.status === 'completed' && order.createdCompanyId) {
       const completedAgoMs = order.completedAt ? Date.now() - new Date(order.completedAt).getTime() : Infinity;
@@ -333,6 +350,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         company_name: existingCompany?.name || order.companyName,
         nip: order.nip,
         token: signToken(order.createdUserId || 'admin', order.createdCompanyId, 'admin'),
+        user: panelUser(order.createdUserId || 'admin', order.createdCompanyId, 'admin'),
         redirect_to: `${env.PUBLIC_ADMIN_URL}/dashboard/licenses`,
       }, 'Onboarding already completed');
     }
@@ -522,6 +540,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         company_name: newCompany.name,
         nip: newCompany.nip,
         token: signToken(userId, newCompany.id, 'admin'),
+        user: panelUser(userId, newCompany.id, 'admin'),
         redirect_to: `${env.PUBLIC_ADMIN_URL}/dashboard/licenses`,
       }, 'Firma została pomyślnie utworzona i skonfigurowana');
     } catch (err: any) {

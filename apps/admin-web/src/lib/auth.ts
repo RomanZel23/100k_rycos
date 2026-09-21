@@ -9,6 +9,10 @@ export async function currentUser(): Promise<User | null> {
     try {
       return JSON.parse(userCookie) as User
     } catch {}
+    // The cookie may have been set by the browser (onboarding hand-off) and still be encoded
+    try {
+      return JSON.parse(decodeURIComponent(userCookie)) as User
+    } catch {}
   }
 
   try {
