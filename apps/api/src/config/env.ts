@@ -67,7 +67,7 @@ const envSchema = z.object({
   // Odczyt karty dań ze zdjęć (import menu)
   MENU_AI_PROVIDER: z.string().default(process.env.MENU_AI_PROVIDER || 'gemini'),
   GEMINI_API_KEY: z.string().default(process.env.GEMINI_API_KEY || ''),
-  GEMINI_MODEL: z.string().default(process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
+  GEMINI_MODEL: z.string().default(process.env.GEMINI_MODEL || 'gemini-3.6-flash'),
   /** Nadpisanie promptu bez wdrożenia; panel ma pierwszeństwo przed tą zmienną. */
   MENU_AI_PROMPT: z.string().default(process.env.MENU_AI_PROMPT || ''),
 

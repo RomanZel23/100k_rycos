@@ -17,6 +17,7 @@ interface Capabilities {
   images: boolean
   max_images: number
   max_image_mb: number
+  max_total_mb?: number
   default_tax_rate: number
 }
 interface PromptInfo { prompt: string; source: string; default_prompt: string; is_default: boolean }
@@ -64,6 +65,15 @@ async function downscaleImage(file: File): Promise<{ blob: Blob; mimeType: strin
 }
 
 /** Plik → base64 bez prefiksu data:, bo API przyjmuje samą zawartość. */
+/** Limity po drodze (Fastify, server action) meldują się po angielsku — tłumaczymy na konkret. */
+function humanizeError(err: any): string {
+  const text = String(err?.message || err || 'Nie udało się odczytać karty')
+  if (/body is too large|Body exceeded|413/i.test(text)) {
+    return 'Zdjęcia są za duże dla serwera — wyślij mniej zdjęć naraz albo zrób je w niższej rozdzielczości'
+  }
+  return text
+}
+
 function readAsBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -122,7 +132,7 @@ export function MenuImportClient({
       applyDraft(res.data)
       setLastImages([])
     } catch (err: any) {
-      setMessage({ kind: 'error', text: err.message })
+      setMessage({ kind: 'error', text: humanizeError(err) })
     } finally {
       setBusy(null)
     }
@@ -134,14 +144,31 @@ export function MenuImportClient({
     setBusy(`Przygotowuję ${list.length} plik(ów)...`)
     setMessage(null)
     try {
-      const payload = await Promise.all(
+      const prepared = await Promise.all(
         list.map(async (file) => {
           const { blob, mimeType } = await downscaleImage(file)
           if (blob.size > capabilities.max_image_mb * 1024 * 1024) {
             throw new Error(`Plik ${file.name} jest za duży (limit ${capabilities.max_image_mb} MB) — zrób zdjęcie w niższej rozdzielczości`)
           }
-          return { filename: file.name, mime_type: mimeType, content_base64: await readAsBase64(blob) }
+          return { name: file.name, blob, mimeType }
         })
+      )
+
+      // Serwer przyjmuje zdjęcia w jednym żądaniu, więc pilnujemy też sumy, nie tylko pojedynczych plików.
+      const totalMb = prepared.reduce((sum, item) => sum + item.blob.size, 0) / (1024 * 1024)
+      const totalLimit = capabilities.max_total_mb || 16
+      if (totalMb > totalLimit) {
+        throw new Error(
+          `Zdjęcia łącznie zajmują ${totalMb.toFixed(1)} MB (limit ${totalLimit} MB) — wyślij mniej zdjęć naraz`
+        )
+      }
+
+      const payload = await Promise.all(
+        prepared.map(async (item) => ({
+          filename: item.name,
+          mime_type: item.mimeType,
+          content_base64: await readAsBase64(item.blob),
+        }))
       )
       setBusy(`Odczytuję kartę z ${list.length} plik(ów)...`)
       const res = await analyzeImagesAction(payload)
@@ -149,7 +176,7 @@ export function MenuImportClient({
       applyDraft(res.data)
       setLastImages(payload)
     } catch (err: any) {
-      setMessage({ kind: 'error', text: err.message })
+      setMessage({ kind: 'error', text: humanizeError(err) })
     } finally {
       setBusy(null)
     }
@@ -164,7 +191,7 @@ export function MenuImportClient({
       if (!res.ok || !res.data) throw new Error(res.error || 'Nie udało się odczytać karty')
       applyDraft(res.data)
     } catch (err: any) {
-      setMessage({ kind: 'error', text: err.message })
+      setMessage({ kind: 'error', text: humanizeError(err) })
     } finally {
       setBusy(null)
     }
@@ -180,7 +207,7 @@ export function MenuImportClient({
       setPromptSource(res.data.source)
       setMessage({ kind: 'success', text: restoreDefault ? 'Przywrócono wbudowany prompt' : 'Prompt zapisany — używają go wszystkie kolejne odczyty' })
     } catch (err: any) {
-      setMessage({ kind: 'error', text: err.message })
+      setMessage({ kind: 'error', text: humanizeError(err) })
     } finally {
       setBusy(null)
     }
@@ -212,7 +239,7 @@ export function MenuImportClient({
       setLastImages([])
       router.refresh()
     } catch (err: any) {
-      setMessage({ kind: 'error', text: err.message })
+      setMessage({ kind: 'error', text: humanizeError(err) })
     } finally {
       setBusy(null)
     }
