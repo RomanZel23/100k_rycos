@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import QRCode from 'qrcode'
@@ -109,6 +109,10 @@ const TIER_LABELS: Record<string, { label: string; bg: string; text: string; des
   },
 };
 
+/** Aplikacja RYCOS na terminale — bez niej urządzenie nie sparuje się z miejscem licencyjnym. */
+const RYCOS_APP_URL = process.env.NEXT_PUBLIC_RYCOS_APP_URL || 'https://portal.rycos.eu/api/app/download';
+const RYCOS_APP_PACKAGE = 'com.solutionsbay.rycos';
+
 export function LicensesClient({ data }: { data: LicensingData }) {
   const router = useRouter();
   const [loadingSeatId, setLoadingSeatId] = useState<string | null>(null);
@@ -122,6 +126,16 @@ export function LicensesClient({ data }: { data: LicensingData }) {
   const [savingToken, setSavingToken] = useState(false);
   const [refreshingLicense, setRefreshingLicense] = useState(false);
   const [isRefreshingOverview, setIsRefreshingOverview] = useState(false);
+  const [appQr, setAppQr] = useState<string>('');
+
+  // QR z linkiem do APK — telefon/terminal pobiera aplikację bez przepisywania adresu
+  useEffect(() => {
+    let active = true;
+    QRCode.toDataURL(RYCOS_APP_URL, { width: 220, margin: 1, color: { dark: '#002633', light: '#ffffff' } })
+      .then((url) => { if (active) setAppQr(url); })
+      .catch((err) => console.warn('QR (APK) generation error:', err));
+    return () => { active = false; };
+  }, []);
 
   const { company, integrator, server_license } = data;
 
@@ -395,6 +409,48 @@ export function LicensesClient({ data }: { data: LicensingData }) {
         </div>
       </div>
 
+      {/* Aplikacja RYCOS do pobrania (warunek sparowania urządzenia) */}
+      <div className="rounded-xl border border-neutral-200 bg-white shadow-2xs p-5">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <div className="shrink-0 mx-auto sm:mx-0">
+            {appQr ? (
+              <div className="rounded-xl border border-neutral-200 bg-white p-2.5 shadow-xs">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={appQr} alt="Kod QR do pobrania aplikacji RYCOS" className="h-32 w-32 object-contain" />
+              </div>
+            ) : (
+              <div className="h-[148px] w-[148px] rounded-xl border border-dashed border-neutral-200 bg-neutral-50" />
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-2 text-center sm:text-left">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
+              📱 Aplikacja Android
+            </span>
+            <h2 className="text-base font-bold text-techbay-blue">Zainstaluj aplikację RYCOS na terminalu</h2>
+            <p className="text-xs text-neutral-600 leading-relaxed">
+              Bez niej urządzenie nie sparuje się z miejscem licencyjnym. Zeskanuj kod QR aparatem terminala
+              lub pobierz plik APK i zainstaluj go na urządzeniu.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1 sm:justify-start">
+              <a
+                href={RYCOS_APP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-techbay-blue px-4 py-2 text-sm font-bold text-white hover:bg-techbay-blue-dark transition"
+              >
+                ⬇ Pobierz APK
+              </a>
+              <code className="rounded-md bg-neutral-100 px-2 py-1 text-[11px] text-neutral-600">{RYCOS_APP_PACKAGE}</code>
+            </div>
+            <p className="text-[11px] text-neutral-400">
+              Android poprosi o zgodę na instalację z nieznanego źródła — to normalne przy pliku APK.
+              Po instalacji wróć tutaj po 6-cyfrowy PIN parowania.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Seats & Devices Fleet Table */}
       <div className="rounded-xl border border-neutral-200 bg-white shadow-2xs overflow-hidden">
         <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
@@ -579,6 +635,24 @@ export function LicensesClient({ data }: { data: LicensingData }) {
                 </p>
               </div>
             )}
+
+            {/* Brak aplikacji na urządzeniu? */}
+            <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white p-3">
+              {appQr ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={appQr} alt="Kod QR do pobrania aplikacji RYCOS" className="h-16 w-16 shrink-0 object-contain" />
+              ) : null}
+              <div className="min-w-0 text-left">
+                <p className="text-[11px] font-bold text-techbay-blue">Nie masz jeszcze aplikacji na tym urządzeniu?</p>
+                <p className="text-[11px] text-neutral-500 leading-snug">
+                  Zeskanuj ten kod aparatem terminala albo{' '}
+                  <a href={RYCOS_APP_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-techbay-blue underline">
+                    pobierz APK
+                  </a>
+                  . Parowanie PIN-em działa dopiero po jej instalacji.
+                </p>
+              </div>
+            </div>
 
             <div className="flex gap-2 pt-1">
               <button
