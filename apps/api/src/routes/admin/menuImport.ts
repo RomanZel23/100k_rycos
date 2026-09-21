@@ -26,7 +26,14 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_ITEMS = 500;
 const MAX_IMAGES = 6;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const MAX_IMAGES_TOTAL_BYTES = 16 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'];
+
+// Pliki jada w JSON-ie jako base64 (+~33%), wiec limit ciala zadania liczymy z limitu plikow.
+// Domyslny limit Fastify to 1 MB - bez tego zdjecia karty odbijaja sie z "Request body is too large".
+const base64BodyLimit = (bytes: number) => Math.ceil((bytes * 4) / 3) + 512 * 1024;
+const PARSE_BODY_LIMIT = base64BodyLimit(MAX_FILE_BYTES);
+const ANALYZE_BODY_LIMIT = base64BodyLimit(MAX_IMAGES_TOTAL_BYTES);
 
 /** Prompt odczytu karty jest wspólny dla całej platformy — zmienia go tylko jej operator. */
 function isPlatformOperator(req: any): boolean {
@@ -41,7 +48,7 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
    * POST /v1/admin/menu-import/parse
    * Plik (base64) → draft do korekty. Nic nie zapisuje w bazie.
    */
-  fastify.post('/v1/admin/menu-import/parse', async (req, reply) => {
+  fastify.post('/v1/admin/menu-import/parse', { bodyLimit: PARSE_BODY_LIMIT }, async (req, reply) => {
     const body = (req.body ?? {}) as { filename?: string; content_base64?: string };
     const raw = String(body.content_base64 || '');
 
@@ -79,6 +86,7 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
       images: visionConfigured(),
       max_images: MAX_IMAGES,
       max_image_mb: MAX_IMAGE_BYTES / (1024 * 1024),
+      max_total_mb: MAX_IMAGES_TOTAL_BYTES / (1024 * 1024),
       default_tax_rate: DEFAULT_TAX_RATE,
     });
   });
@@ -87,7 +95,7 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
    * POST /v1/admin/menu-import/analyze-images
    * Zdjęcia karty dań (lub PDF) → ten sam draft co import z pliku. Nic nie zapisuje w bazie.
    */
-  fastify.post('/v1/admin/menu-import/analyze-images', async (req, reply) => {
+  fastify.post('/v1/admin/menu-import/analyze-images', { bodyLimit: ANALYZE_BODY_LIMIT }, async (req, reply) => {
     const body = (req.body ?? {}) as {
       images?: { filename?: string; mime_type?: string; content_base64?: string }[];
       prompt_override?: string;
@@ -105,12 +113,19 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
     }
 
     const images: MenuImageInput[] = [];
+    let totalBytes = 0;
     for (const item of incoming) {
       const raw = String(item?.content_base64 || '').replace(/^data:[^;]+;base64,/, '');
       if (!raw) continue;
       const bytes = Buffer.byteLength(raw, 'base64');
       if (bytes > MAX_IMAGE_BYTES) {
         return validationError(reply, { images: `Plik ${item?.filename || ''} jest za duży (limit ${MAX_IMAGE_BYTES / (1024 * 1024)} MB)` });
+      }
+      totalBytes += bytes;
+      if (totalBytes > MAX_IMAGES_TOTAL_BYTES) {
+        return validationError(reply, {
+          images: `Zdjęcia łącznie są za duże (limit ${MAX_IMAGES_TOTAL_BYTES / (1024 * 1024)} MB) — wyślij mniej zdjęć naraz`,
+        });
       }
       const mimeType = String(item?.mime_type || 'image/jpeg').toLowerCase();
       if (!ALLOWED_IMAGE_TYPES.includes(mimeType)) {

@@ -7,7 +7,7 @@ const nextConfig = {
     serverActions: {
       // Import menu ze zdjęć wysyła kilka kadrów naraz w jednym wywołaniu akcji serwerowej;
       // domyślny limit 1 MB ucinał je błędem 400 jeszcze przed dotarciem do API.
-      bodySizeLimit: '16mb',
+      bodySizeLimit: '24mb',
     },
   },
   async rewrites() {

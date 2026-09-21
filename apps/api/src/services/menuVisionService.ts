@@ -101,8 +101,25 @@ export async function saveMenuPrompt(prompt: string | null, actor: string): Prom
     });
 }
 
-async function callGemini(images: MenuImageInput[], prompt: string): Promise<RawVisionItem[]> {
-  const model = env.GEMINI_MODEL || 'gemini-2.5-flash';
+const DEFAULT_MODEL = 'gemini-3.6-flash';
+
+function configuredModel(): string {
+  return (env.GEMINI_MODEL || '').trim() || DEFAULT_MODEL;
+}
+
+/**
+ * Google wycofuje modele i w treści błędu 404 podaje następcę
+ * ("...use models/gemini-3.6-flash..."). Wyciągamy go, żeby odczyt karty
+ * nie padał do czasu podmiany zmiennej środowiskowej.
+ */
+function suggestedModel(message: string, current: string): string | null {
+  const names = Array.from(String(message).matchAll(/models\/([a-zA-Z0-9._-]+)/g)).map((m) => m[1]);
+  return names.find((name) => name.toLowerCase() !== current.toLowerCase()) || null;
+}
+
+type GeminiAttempt = { ok: boolean; status: number; payload: any; bodyText: string };
+
+async function requestGemini(model: string, images: MenuImageInput[], prompt: string): Promise<GeminiAttempt> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
 
   const parts: any[] = images.map((img) => ({
@@ -142,11 +159,30 @@ async function callGemini(images: MenuImageInput[], prompt: string): Promise<Raw
     payload = {};
   }
 
-  if (!response.ok) {
+  return { ok: response.ok, status: response.status, payload, bodyText };
+}
+
+async function callGemini(images: MenuImageInput[], prompt: string): Promise<{ items: RawVisionItem[]; model: string }> {
+  let model = configuredModel();
+  let attempt = await requestGemini(model, images, prompt);
+
+  if (!attempt.ok && attempt.status === 404) {
+    const detail = attempt.payload?.error?.message || attempt.bodyText;
+    const fallback = suggestedModel(detail, model);
+    if (fallback) {
+      console.warn(`[Menu Import] Model ${model} niedostepny - ponawiam na ${fallback}`);
+      model = fallback;
+      attempt = await requestGemini(model, images, prompt);
+    }
+  }
+
+  const { payload, bodyText, status } = attempt;
+
+  if (!attempt.ok) {
     // Odpowiedź bez JSON-owego błędu zwykle nie pochodzi od modelu, tylko od czegoś po drodze
     // (proxy, firewall, blokada klucza) — wtedy pokazujemy fragment treści, bo to on mówi, co się stało.
-    const detail = payload?.error?.message || bodyText.trim().slice(0, 200) || `HTTP ${response.status}`;
-    throw new Error(`Model odrzucił żądanie (HTTP ${response.status}): ${detail}`);
+    const detail = payload?.error?.message || bodyText.trim().slice(0, 200) || `HTTP ${status}`;
+    throw new Error(`Model odrzucił żądanie (HTTP ${status}, model ${model}): ${detail}`);
   }
 
   const text = payload?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || '').join('') || '';
@@ -161,7 +197,7 @@ async function callGemini(images: MenuImageInput[], prompt: string): Promise<Raw
   } catch {
     throw new Error('Model zwrócił odpowiedź, której nie da się odczytać jako JSON');
   }
-  return Array.isArray(parsed?.items) ? parsed.items : [];
+  return { items: Array.isArray(parsed?.items) ? parsed.items : [], model };
 }
 
 /** Zdjęcia → draft w tym samym formacie co import z pliku. */
@@ -173,7 +209,7 @@ export async function analyzeMenuImages(images: MenuImageInput[], promptOverride
   const resolved = promptOverride && promptOverride.trim()
     ? { prompt: promptOverride.trim(), source: 'test' as const }
     : await getMenuPrompt();
-  const rawItems = await callGemini(images, resolved.prompt);
+  const { items: rawItems, model: usedModel } = await callGemini(images, resolved.prompt);
   const warnings: string[] = [];
   const items: DraftItem[] = [];
 
@@ -214,7 +250,7 @@ export async function analyzeMenuImages(images: MenuImageInput[], promptOverride
       encoding: 'vision',
       columns: {
         source: `${images.length} plik(ów)`,
-        model: env.GEMINI_MODEL || 'gemini-2.5-flash',
+        model: usedModel,
         prompt: resolved.source,
       },
     },
