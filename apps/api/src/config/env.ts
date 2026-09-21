@@ -68,6 +68,8 @@ const envSchema = z.object({
   MENU_AI_PROVIDER: z.string().default(process.env.MENU_AI_PROVIDER || 'gemini'),
   GEMINI_API_KEY: z.string().default(process.env.GEMINI_API_KEY || ''),
   GEMINI_MODEL: z.string().default(process.env.GEMINI_MODEL || 'gemini-2.5-flash'),
+  /** Nadpisanie promptu bez wdrożenia; panel ma pierwszeństwo przed tą zmienną. */
+  MENU_AI_PROMPT: z.string().default(process.env.MENU_AI_PROMPT || ''),
 
   // RYCOS Portal & Licensing Integration
   RYCOS_PORTAL_URL: z.string().default(process.env.RYCOS_PORTAL_URL || 'https://portal.rycos.eu'),

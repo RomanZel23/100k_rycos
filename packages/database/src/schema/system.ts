@@ -36,6 +36,14 @@ export const platformPricing = pgTable('platform_pricing', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+/** Ustawienia platformy (nie firmy) — np. prompt odczytu karty dań. */
+export const platformSettings = pgTable('platform_settings', {
+  settingKey: varchar('setting_key', { length: 64 }).primaryKey(),
+  value: text('value'),
+  updatedBy: varchar('updated_by', { length: 255 }),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const onboardingOrders = pgTable('onboarding_orders', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   orderToken: varchar('order_token', { length: 64 }).notNull().unique(),

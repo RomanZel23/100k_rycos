@@ -10,9 +10,16 @@ import {
   sql,
 } from '@rycos/database';
 import { requireAdminAuth, getCompanyId } from '../../middleware/adminAuth.js';
-import { success, error, validationError, notFound } from '../../lib/response.js';
+import { success, error, validationError, notFound, forbidden } from '../../lib/response.js';
 import { parseMenuFile, DEFAULT_TAX_RATE, type DraftItem } from '../../services/menuImportService.js';
-import { analyzeMenuImages, visionConfigured, type MenuImageInput } from '../../services/menuVisionService.js';
+import {
+  analyzeMenuImages,
+  visionConfigured,
+  getMenuPrompt,
+  saveMenuPrompt,
+  DEFAULT_PROMPT,
+  type MenuImageInput,
+} from '../../services/menuVisionService.js';
 import { invalidateBrandMenuCache } from '../../services/catalogService.js';
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -20,6 +27,12 @@ const MAX_ITEMS = 500;
 const MAX_IMAGES = 6;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'];
+
+/** Prompt odczytu karty jest wspólny dla całej platformy — zmienia go tylko jej operator. */
+function isPlatformOperator(req: any): boolean {
+  const role = String(req.user?.role || '').toLowerCase();
+  return role === 'platform_admin' || role === 'super_admin';
+}
 
 export async function adminMenuImportRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', requireAdminAuth);
@@ -75,7 +88,10 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
    * Zdjęcia karty dań (lub PDF) → ten sam draft co import z pliku. Nic nie zapisuje w bazie.
    */
   fastify.post('/v1/admin/menu-import/analyze-images', async (req, reply) => {
-    const body = (req.body ?? {}) as { images?: { filename?: string; mime_type?: string; content_base64?: string }[] };
+    const body = (req.body ?? {}) as {
+      images?: { filename?: string; mime_type?: string; content_base64?: string }[];
+      prompt_override?: string;
+    };
     const incoming = Array.isArray(body.images) ? body.images : [];
 
     if (incoming.length === 0) {
@@ -109,7 +125,9 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
 
     const startedAt = Date.now();
     try {
-      const draft = await analyzeMenuImages(images);
+      // Podgląd innego promptu bez zapisywania go — wyłącznie dla operatora platformy
+      const override = isPlatformOperator(req) ? body.prompt_override : undefined;
+      const draft = await analyzeMenuImages(images, override);
       if (draft.items.length > MAX_ITEMS) {
         draft.items = draft.items.slice(0, MAX_ITEMS);
         draft.warnings.push(`Rozpoznano więcej niż ${MAX_ITEMS} pozycji — zaimportujemy pierwsze ${MAX_ITEMS}.`);
@@ -119,6 +137,37 @@ export async function adminMenuImportRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       console.error('[Menu Import] Odczyt zdjec nie powiodl sie:', err.message);
       return error(reply, err.message || 'Nie udało się odczytać karty ze zdjęcia', 502);
+    }
+  });
+
+  /**
+   * GET /v1/admin/menu-import/prompt — podgląd i edycja promptu odczytu karty (tylko operator platformy).
+   */
+  fastify.get('/v1/admin/menu-import/prompt', async (req, reply) => {
+    if (!isPlatformOperator(req)) return forbidden(reply, 'Tylko operator platformy może zmieniać prompt');
+    const resolved = await getMenuPrompt();
+    return success(reply, {
+      prompt: resolved.prompt,
+      source: resolved.source,
+      default_prompt: DEFAULT_PROMPT,
+      is_default: resolved.source === 'default',
+    });
+  });
+
+  /**
+   * PUT /v1/admin/menu-import/prompt — zapisuje własną wersję; pusty tekst przywraca wbudowaną.
+   */
+  fastify.put('/v1/admin/menu-import/prompt', async (req, reply) => {
+    if (!isPlatformOperator(req)) return forbidden(reply, 'Tylko operator platformy może zmieniać prompt');
+    const body = (req.body ?? {}) as { prompt?: string | null };
+    const actor = String((req.user as any)?.email || (req.user as any)?.id || 'admin');
+
+    try {
+      await saveMenuPrompt(body.prompt ?? null, actor);
+      const resolved = await getMenuPrompt();
+      return success(reply, { prompt: resolved.prompt, source: resolved.source }, 'Prompt zapisany');
+    } catch (err: any) {
+      return error(reply, err.message || 'Nie udało się zapisać promptu', 500);
     }
   });
 

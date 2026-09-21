@@ -1,3 +1,4 @@
+import { getDatabase, platformSettings, eq } from '@rycos/database';
 import { env } from '../config/env.js';
 import { parsePrice, parseTaxRate, DEFAULT_TAX_RATE, type DraftItem, type MenuDraft } from './menuImportService.js';
 
@@ -14,7 +15,7 @@ export interface MenuImageInput {
   filename?: string;
 }
 
-const PROMPT = `Jesteś asystentem, który przepisuje kartę dań restauracji do systemu sprzedaży.
+export const DEFAULT_PROMPT = `Jesteś asystentem, który przepisuje kartę dań restauracji do systemu sprzedaży.
 
 Odczytaj ze zdjęć wszystkie pozycje menu wraz z cenami. Zasady:
 - Przepisuj wyłącznie to, co widać. Nie dopisuj pozycji, których nie ma na zdjęciu.
@@ -59,14 +60,55 @@ export function visionConfigured(): boolean {
   return Boolean(env.GEMINI_API_KEY);
 }
 
-async function callGemini(images: MenuImageInput[]): Promise<RawVisionItem[]> {
+const PROMPT_SETTING_KEY = 'menu_import_prompt';
+
+/**
+ * Prompt odczytu karty: wersja zapisana w panelu, potem zmienna środowiskowa, na końcu wbudowana.
+ * Dzięki temu można go stroić bez wdrożenia.
+ */
+export async function getMenuPrompt(): Promise<{ prompt: string; source: 'panel' | 'env' | 'default' }> {
+  try {
+    const db = getDatabase();
+    const [row] = await db
+      .select({ value: platformSettings.value })
+      .from(platformSettings)
+      .where(eq(platformSettings.settingKey, PROMPT_SETTING_KEY))
+      .limit(1);
+    if (row?.value && row.value.trim()) {
+      return { prompt: row.value, source: 'panel' };
+    }
+  } catch (err: any) {
+    console.warn('[Menu Import] Nie udało się odczytać promptu z bazy:', err.message);
+  }
+
+  if (env.MENU_AI_PROMPT && env.MENU_AI_PROMPT.trim()) {
+    return { prompt: env.MENU_AI_PROMPT, source: 'env' };
+  }
+  return { prompt: DEFAULT_PROMPT, source: 'default' };
+}
+
+/** Zapis własnej wersji promptu; pusta wartość przywraca wbudowaną. */
+export async function saveMenuPrompt(prompt: string | null, actor: string): Promise<void> {
+  const db = getDatabase();
+  const value = prompt && prompt.trim() ? prompt.trim() : null;
+
+  await db
+    .insert(platformSettings)
+    .values({ settingKey: PROMPT_SETTING_KEY, value, updatedBy: actor.substring(0, 255), updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: platformSettings.settingKey,
+      set: { value, updatedBy: actor.substring(0, 255), updatedAt: new Date() },
+    });
+}
+
+async function callGemini(images: MenuImageInput[], prompt: string): Promise<RawVisionItem[]> {
   const model = env.GEMINI_MODEL || 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
 
   const parts: any[] = images.map((img) => ({
     inline_data: { mime_type: img.mimeType, data: img.data },
   }));
-  parts.push({ text: PROMPT });
+  parts.push({ text: prompt });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
@@ -123,12 +165,15 @@ async function callGemini(images: MenuImageInput[]): Promise<RawVisionItem[]> {
 }
 
 /** Zdjęcia → draft w tym samym formacie co import z pliku. */
-export async function analyzeMenuImages(images: MenuImageInput[]): Promise<MenuDraft> {
+export async function analyzeMenuImages(images: MenuImageInput[], promptOverride?: string): Promise<MenuDraft> {
   if (!visionConfigured()) {
     throw new Error('Odczyt zdjęć nie jest skonfigurowany — brakuje klucza modelu w ustawieniach serwera');
   }
 
-  const rawItems = await callGemini(images);
+  const resolved = promptOverride && promptOverride.trim()
+    ? { prompt: promptOverride.trim(), source: 'test' as const }
+    : await getMenuPrompt();
+  const rawItems = await callGemini(images, resolved.prompt);
   const warnings: string[] = [];
   const items: DraftItem[] = [];
 
@@ -167,7 +212,11 @@ export async function analyzeMenuImages(images: MenuImageInput[]): Promise<MenuD
       rows: items.length,
       delimiter: '-',
       encoding: 'vision',
-      columns: { source: `${images.length} plik(ów)`, model: env.GEMINI_MODEL || 'gemini-2.5-flash' },
+      columns: {
+        source: `${images.length} plik(ów)`,
+        model: env.GEMINI_MODEL || 'gemini-2.5-flash',
+        prompt: resolved.source,
+      },
     },
   };
 }
