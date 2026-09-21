@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { adminProductsRoutes } from './products.js';
 import { adminCategoriesRoutes } from './categories.js';
 import { adminAddonsRoutes } from './addons.js';
+import { adminMenuImportRoutes } from './menuImport.js';
 import { adminFiscalDevicesRoutes } from './fiscalDevices.js';
 import { adminTerminalsRoutes } from './terminals.js';
 import { adminCompaniesRoutes } from './companies.js';
@@ -22,6 +23,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   await fastify.register(adminProductsRoutes);
   await fastify.register(adminCategoriesRoutes);
   await fastify.register(adminAddonsRoutes);
+  await fastify.register(adminMenuImportRoutes);
   await fastify.register(adminFiscalDevicesRoutes);
   await fastify.register(adminTerminalsRoutes);
   await fastify.register(adminCompaniesRoutes);

@@ -50,6 +50,7 @@ export default async function ProductsPage({
           <p className="mt-1 text-sm text-neutral-500">{getTranslation(locale, 'products.subtitle', 'Your menu / catalog. Changes apply across the vendor app and ordering.')}</p>
         </div>
         <div className="flex gap-4 text-sm font-semibold">
+          <Link href="/dashboard/products/import" className="text-brand hover:underline">{locale === 'pl' ? 'Import menu' : locale === 'de' ? 'Menü-Import' : 'Import menu'}</Link>
           <Link href="/dashboard/products/addons" className="text-brand hover:underline">{getTranslation(locale, 'products.addons_btn', 'Add-ons')}</Link>
           <Link href="/dashboard/products/stock" className="text-brand hover:underline">{getTranslation(locale, 'products.stock_btn', 'Stock →')}</Link>
         </div>

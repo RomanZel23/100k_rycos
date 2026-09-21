@@ -463,6 +463,13 @@ BEGIN
   END IF;
 END $ob$;
 
+CREATE TABLE IF NOT EXISTS "platform_settings" (
+  "setting_key" varchar(64) PRIMARY KEY NOT NULL,
+  "value" text,
+  "updated_by" varchar(255),
+  "updated_at" timestamp DEFAULT now() NOT NULL
+);
+
 -- Add-ons: per-option stock and per-product price overrides
 ALTER TABLE "addon_options" ADD COLUMN IF NOT EXISTS "stock_quantity" integer;
 
