@@ -38,7 +38,7 @@ export function GoSuccessClient({ orderToken }: { orderToken: string }) {
           const finalized = await finalizeOnboarding(orderToken);
           setResult(finalized);
           setStage('completed');
-          saveAuthCookie(finalized.token);
+          saveAuthCookie(finalized.token, finalized.user);
         } else {
           // Order is paid / pending, ask user for admin password
           setStage('set_password');
@@ -57,10 +57,19 @@ export function GoSuccessClient({ orderToken }: { orderToken: string }) {
     };
   }, [orderToken]);
 
-  const saveAuthCookie = (token: string) => {
+  /**
+   * Przekazanie sesji do panelu admina (inna subdomena, wspólna domena .rycos.eu).
+   * Panel potrzebuje OBU ciasteczek: tokenu do API i danych użytkownika. Sam token
+   * bez `rycos_user` kończył się pętlą przekierowań /dashboard ↔ /login.
+   */
+  const saveAuthCookie = (token: string, user?: unknown) => {
     const domain = window.location.hostname.includes('rycos.eu') ? '.rycos.eu' : undefined;
     const cookieDomain = domain ? `; domain=${domain}` : '';
     document.cookie = `rycos_token=${token}; path=/${cookieDomain}; max-age=2592000; SameSite=Lax`;
+    if (user) {
+      const value = encodeURIComponent(JSON.stringify(user));
+      document.cookie = `rycos_user=${value}; path=/${cookieDomain}; max-age=2592000; SameSite=Lax`;
+    }
   };
 
   // 2. Submit password and trigger finalization
@@ -89,7 +98,7 @@ export function GoSuccessClient({ orderToken }: { orderToken: string }) {
 
       setActivatingStep(3); // Utworzenie firmy i logowanie
       setResult(data);
-      saveAuthCookie(data.token);
+      saveAuthCookie(data.token, data.user);
       setStage('completed');
     } catch (err: any) {
       setErrorMsg(err.message || 'Wystąpił błąd podczas aktywacji konta');

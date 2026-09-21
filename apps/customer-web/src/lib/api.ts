@@ -236,6 +236,8 @@ export async function finalizeOnboarding(orderToken: string, password?: string):
   company_name: string;
   nip: string;
   token: string;
+  /** Kształt użytkownika, jakiego oczekuje panel admina w ciasteczku rycos_user. */
+  user?: { id: string; email: string; user_metadata: Record<string, unknown> };
   redirect_to: string;
 }> {
   const apiBase = getApiBaseUrl();
