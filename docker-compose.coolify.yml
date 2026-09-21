@@ -23,6 +23,8 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-http://host.docker.internal:8000}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - PUBLIC_API_URL=${PUBLIC_API_URL:-https://100k-api.rycos.eu}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - RYCOS_MQTT_HOST=${RYCOS_MQTT_HOST:-rycos.eu}
       - RYCOS_MQTT_PORT=${RYCOS_MQTT_PORT:-8883}
       - RYCOS_MQTT_USERNAME=${RYCOS_MQTT_USERNAME}
