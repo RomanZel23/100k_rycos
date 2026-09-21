@@ -59,8 +59,8 @@ export async function analyzeImagesAction(
 export async function commitAction(
   brandId: number,
   items: DraftItem[]
-): Promise<ActionResult<{ createdProducts: number; createdCategories: number; skipped: { name: string; reason: string }[] }>> {
-  const result = await callApi<{ createdProducts: number; createdCategories: number; skipped: { name: string; reason: string }[] }>(
+): Promise<ActionResult<{ createdProducts: number; createdCategories: number; skipped: { name: string; reason: string }[]; products: { id: number; name: string }[] }>> {
+  const result = await callApi<{ createdProducts: number; createdCategories: number; skipped: { name: string; reason: string }[]; products: { id: number; name: string }[] }>(
     '/menu-import/commit',
     { brand_id: brandId, items }
   )
