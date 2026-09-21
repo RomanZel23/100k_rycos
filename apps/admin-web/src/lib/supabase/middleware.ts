@@ -12,6 +12,31 @@ import { NextResponse, type NextRequest } from 'next/server'
  * /dashboard: ERR_TOO_MANY_REDIRECTS. A half-session is now treated as signed out and
  * the leftover cookies are cleared, so the visitor lands on the login form instead.
  */
+/**
+ * The onboarding hand-off writes the cookies for the whole `.rycos.eu` domain, the login
+ * action writes them for this host only. A cookie is removed only when the delete matches
+ * its domain, so both variants have to be expired.
+ */
+export function parentCookieDomain(hostname: string): string | undefined {
+  const host = (hostname || '').trim().toLowerCase().replace(/\.$/, '')
+  if (!host || host === 'localhost') return undefined
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':')) return undefined // IP address
+  const labels = host.split('.')
+  if (labels.length < 3) return undefined // already the registrable domain
+  return `.${labels.slice(-2).join('.')}`
+}
+
+function clearSessionCookies(response: NextResponse, request: NextRequest) {
+  const parentDomain = parentCookieDomain(request.nextUrl.hostname || request.headers.get('host') || '')
+
+  for (const name of ['rycos_token', 'rycos_user']) {
+    response.cookies.set(name, '', { path: '/', maxAge: 0 })
+    if (parentDomain) {
+      response.cookies.set(name, '', { path: '/', maxAge: 0, domain: parentDomain })
+    }
+  }
+}
+
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname
   if (path.startsWith('/api/health')) {
@@ -33,8 +58,7 @@ export async function updateSession(request: NextRequest) {
     const target = path.startsWith('/dashboard') ? '/login?expired=1' : path
     const response =
       target === path ? NextResponse.next({ request }) : NextResponse.redirect(new URL(target, request.url))
-    response.cookies.delete('rycos_token')
-    response.cookies.delete('rycos_user')
+    clearSessionCookies(response, request)
     return response
   }
 
