@@ -28,11 +28,46 @@ interface Row extends DraftItem {
 
 const TAX_RATES = [0, 5, 8, 23]
 
+/** Dłuższy bok zdjęcia po zmniejszeniu — tekst karty pozostaje czytelny, a plik schodzi do ~500 KB. */
+const MAX_IMAGE_EDGE = 2200
+
+/**
+ * Zdjęcie z telefonu potrafi mieć 8 MB i 4000 px. Zmniejszamy je w przeglądarce przed wysyłką:
+ * szybciej się wgrywa, mieści się w limicie API i taniej kosztuje odczyt. Gdy cokolwiek zawiedzie
+ * (np. HEIC, którego przeglądarka nie dekoduje), wracamy do oryginalnego pliku.
+ */
+async function downscaleImage(file: File): Promise<{ blob: Blob; mimeType: string }> {
+  if (!file.type.startsWith('image/')) return { blob: file, mimeType: file.type || 'application/pdf' }
+
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height))
+    if (scale === 1 && file.size < 1.5 * 1024 * 1024) {
+      bitmap.close()
+      return { blob: file, mimeType: file.type }
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('brak kontekstu canvas')
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+    if (!blob) throw new Error('nie udało się zmniejszyć zdjęcia')
+    return { blob, mimeType: 'image/jpeg' }
+  } catch {
+    return { blob: file, mimeType: file.type || 'image/jpeg' }
+  }
+}
+
 /** Plik → base64 bez prefiksu data:, bo API przyjmuje samą zawartość. */
-function readAsBase64(file: File): Promise<string> {
+function readAsBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onerror = () => reject(new Error(`Nie udało się odczytać pliku ${file.name}`))
+    reader.onerror = () => reject(new Error('Nie udało się odczytać pliku'))
     reader.onload = () => {
       const result = String(reader.result || '')
       resolve(result.includes(',') ? result.slice(result.indexOf(',') + 1) : result)
@@ -95,22 +130,20 @@ export function MenuImportClient({
 
   const handleImages = async (files: FileList) => {
     const list = Array.from(files).slice(0, capabilities.max_images)
-    const tooBig = list.find((f) => f.size > capabilities.max_image_mb * 1024 * 1024)
-    if (tooBig) {
-      setMessage({ kind: 'error', text: `Plik ${tooBig.name} jest większy niż ${capabilities.max_image_mb} MB` })
-      return
-    }
 
-    setBusy(`Odczytuję kartę z ${list.length} plik(ów)...`)
+    setBusy(`Przygotowuję ${list.length} plik(ów)...`)
     setMessage(null)
     try {
       const payload = await Promise.all(
-        list.map(async (file) => ({
-          filename: file.name,
-          mime_type: file.type || 'image/jpeg',
-          content_base64: await readAsBase64(file),
-        }))
+        list.map(async (file) => {
+          const { blob, mimeType } = await downscaleImage(file)
+          if (blob.size > capabilities.max_image_mb * 1024 * 1024) {
+            throw new Error(`Plik ${file.name} jest za duży (limit ${capabilities.max_image_mb} MB) — zrób zdjęcie w niższej rozdzielczości`)
+          }
+          return { filename: file.name, mime_type: mimeType, content_base64: await readAsBase64(blob) }
+        })
       )
+      setBusy(`Odczytuję kartę z ${list.length} plik(ów)...`)
       const res = await analyzeImagesAction(payload)
       if (!res.ok || !res.data) throw new Error(res.error || 'Nie udało się odczytać karty')
       applyDraft(res.data)
@@ -249,7 +282,7 @@ export function MenuImportClient({
               <p className="text-sm font-semibold">📷 Zdjęcia karty dań</p>
               <p className="mt-1 text-xs text-neutral-500">
                 {capabilities.images
-                  ? `Do ${capabilities.max_images} zdjęć lub PDF (maks. ${capabilities.max_image_mb} MB każdy). Fotografuj prosto, przy dobrym świetle.`
+                  ? `Do ${capabilities.max_images} zdjęć lub PDF. Możesz zrobić zdjęcia telefonem — zmniejszymy je przed wysłaniem. Fotografuj prosto, przy dobrym świetle.`
                   : 'Niedostępne — na serwerze nie skonfigurowano odczytu zdjęć.'}
               </p>
             </button>

@@ -49,7 +49,12 @@ export async function adminApi(path: string, init: RequestInit = {}): Promise<Re
         headers,
         cache: 'no-store',
       });
-      if (res.status !== 502 && res.status !== 503 && res.status !== 504) {
+      // 502/503/504 z JSON-em to odpowiedź NASZEGO API (np. model odczytu zdjęć nie odpowiedział)
+      // — trzeba ją oddać z jej komunikatem. Tylko odpowiedź bez JSON-a (bramka, proxy, martwy
+      // kontener) oznacza, że pod tym adresem nikogo nie ma i warto spróbować kolejnego.
+      const isGatewayStatus = res.status === 502 || res.status === 503 || res.status === 504;
+      const spokeJson = (res.headers.get('content-type') || '').includes('application/json');
+      if (!isGatewayStatus || spokeJson) {
         return res;
       }
       if (i === uniqueUrls.length - 1) {
