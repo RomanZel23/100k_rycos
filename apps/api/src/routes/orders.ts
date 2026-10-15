@@ -9,6 +9,7 @@ import { verifyPinAndComplete, pickupChallenge, pickupConfirm } from '../service
 import { requireStaffAuth, resolveAnyPrincipal, getCompanyId } from '../middleware/adminAuth.js';
 import { sendHttpError } from '../lib/response.js';
 import { rateLimit } from '../lib/rateLimit.js';
+import { sendReceiptEmail } from '../services/emailService.js';
 
 const CASH_LIKE_METHODS = new Set(['cash', 'card', 'terminal_tap', 'blik', 'voucher', 'other']);
 
@@ -45,6 +46,33 @@ export async function orderRoutes(fastify: FastifyInstance) {
     const order = await getOrderById(params.id);
     if (!order) return reply.code(404).send({ error: 'Order not found' });
     return reply.send({ data: order });
+  });
+
+  // POST /v1/orders/:id/email-receipt - Send order receipt to customer email
+  fastify.post('/v1/orders/:id/email-receipt', async (req, reply) => {
+    const params = req.params as { id: string };
+    const body = (req.body ?? {}) as { email?: string };
+
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!email || !email.includes('@') || !email.includes('.')) {
+      return reply.code(400).send({ error: 'Podaj poprawny adres e-mail' });
+    }
+
+    if (!(await rateLimit(`email_rcpt:${req.ip}:${params.id}`, 5, 300))) {
+      return reply.code(429).send({ error: 'Zbyt wiele prób wysyłki dla tego zamówienia. Odczekaj chwilę.' });
+    }
+
+    const order = await getOrderById(params.id);
+    if (!order) {
+      return reply.code(404).send({ error: 'Zamówienie nie zostało odnalezione' });
+    }
+
+    try {
+      const result = await sendReceiptEmail({ order, recipientEmail: email });
+      return reply.send({ success: true, message: 'E-paragon został pomyślnie wysłany na Twój adres e-mail!', emailId: result.id });
+    } catch (err: any) {
+      return sendHttpError(reply, err, 'Błąd podczas wysyłania e-maila z paragonem');
+    }
   });
 
   // POST /v1/orders/service-call - Customer calls waiter or requests bill (company derived from brand)

@@ -79,6 +79,9 @@ const envSchema = z.object({
   // GUS REGON BIR API (Główny Urząd Statystyczny)
   GUS_USER_KEY: z.string().default(process.env.GUS_USER_KEY || 'abcde12345abcde12345'),
   GUS_TEST_MODE: envBool(process.env.GUS_USER_KEY ? false : true),
+  // Resend Email Integration (Receipts & Notifications)
+  RESEND_API_KEY: z.string().default(process.env.RESEND_API_KEY || ''),
+  RESEND_FROM_EMAIL: z.string().default(process.env.RESEND_FROM_EMAIL || 'no-reply@receipts.rycos.eu'),
 });
 
 const parsed = envSchema.safeParse(process.env);
