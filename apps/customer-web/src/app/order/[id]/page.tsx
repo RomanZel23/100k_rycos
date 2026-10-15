@@ -4,8 +4,8 @@ import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { OrderDetail, OrderStatus } from '@rycos/shared';
-import { fetchOrder, getApiBaseUrl } from '../../../lib/api';
-import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode, ArrowLeft, Banknote } from 'lucide-react';
+import { fetchOrder, getApiBaseUrl, sendReceiptEmail } from '../../../lib/api';
+import { CheckCircle2, Clock, UtensilsCrossed, BellRing, Receipt, Download, Loader2, Sparkles, CreditCard, AlertCircle, QrCode, ArrowLeft, Banknote, Mail, Check } from 'lucide-react';
 import QRCode from 'qrcode';
 import { PaymentModal } from '../../../components/PaymentModal';
 import { saveStoredOrder, updateStoredOrderStatus } from '../../../store/orderStorage';
@@ -49,6 +49,26 @@ function OrderTrackingContent() {
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [receiptQrDataUrl, setReceiptQrDataUrl] = useState<string | null>(null);
+  const [receiptEmail, setReceiptEmail] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSentMessage, setEmailSentMessage] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  const handleSendReceiptEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!receiptEmail || !receiptEmail.includes('@') || !orderId) return;
+    setSendingEmail(true);
+    setEmailError(null);
+    setEmailSentMessage(null);
+    try {
+      const res = await sendReceiptEmail(orderId, receiptEmail);
+      setEmailSentMessage(res.message || (lang === 'de' ? 'Kassenbon erfolgreich gesendet!' : lang === 'en' ? 'Receipt sent successfully!' : 'E-paragon wysłany!'));
+    } catch (err: any) {
+      setEmailError(err.message || (lang === 'de' ? 'Fehler beim Senden' : lang === 'en' ? 'Failed to send' : 'Błąd podczas wysyłania e-paragonu'));
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   // 2-Factor Live Handover: PIN is hidden until staff scans the QR code at pickup
   const [revealedPin, setRevealedPin] = useState<string | null>(null);
@@ -565,6 +585,44 @@ function OrderTrackingContent() {
               </div>
             </div>
           )}
+
+          {/* Email receipt form */}
+          <div className="pt-3 border-t border-slate-100">
+            <div className="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+              <Mail size={14} />
+              <span>{lang === 'de' ? 'Kassenbon per E-Mail erhalten:' : lang === 'en' ? 'Get receipt via email:' : 'Wyślij e-paragon na e-mail:'}</span>
+            </div>
+            {emailSentMessage ? (
+              <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                <Check size={16} className="text-emerald-600 flex-shrink-0" />
+                <span>{emailSentMessage}</span>
+              </div>
+            ) : (
+              <form onSubmit={handleSendReceiptEmail} className="flex gap-2">
+                <input
+                  type="email"
+                  required
+                  placeholder={lang === 'de' ? 'Ihre E-Mail-Adresse' : lang === 'en' ? 'Your email address' : 'twoj@email.com'}
+                  value={receiptEmail}
+                  onChange={(e) => setReceiptEmail(e.target.value)}
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                <button
+                  type="submit"
+                  disabled={sendingEmail}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {sendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                  <span>{lang === 'de' ? 'Senden' : lang === 'en' ? 'Send' : 'Wyślij'}</span>
+                </button>
+              </form>
+            )}
+            {emailError && (
+              <div className="mt-1.5 text-xs text-rose-600 font-medium">
+                {emailError}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

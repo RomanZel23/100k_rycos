@@ -256,4 +256,18 @@ export async function finalizeOnboarding(orderToken: string, password?: string):
   return json.data;
 }
 
+export async function sendReceiptEmail(orderId: string, email: string): Promise<{ success: boolean; message: string }> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(`${apiBase}/v1/orders/${encodeURIComponent(orderId)}/email-receipt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
 
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(json.error || json.message || 'Nie udało się wysłać e-paragonu');
+  }
+
+  return json;
+}
