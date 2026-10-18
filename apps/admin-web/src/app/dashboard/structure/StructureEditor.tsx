@@ -10,6 +10,7 @@ import {
 } from './model'
 import { saveStructure, fetchStructureStatus, type LiveStatus } from './actions'
 import { TerminalPanel, BrandPanel, DevicePanel, IssuesPanel, TablesEditor, KIND_CLASS, presenceOf } from './panels'
+import { StructureGuideModal } from './StructureGuide'
 
 type Sel = { type: 'node' | 'edge' | 'frame'; key: string } | null
 type Drag =
@@ -55,6 +56,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
   const [past, setPast] = useState<Graph[]>([])
   const [future, setFuture] = useState<Graph[]>([])
   const [live, setLive] = useState<LiveStatus | null>(null)
+  const [guideOpen, setGuideOpen] = useState(false)
   const graphRef = useRef(graph)
   graphRef.current = graph
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -490,6 +492,9 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
         <button className={s.tbtn} onClick={redo} disabled={!future.length} title="Ponów (Ctrl/⌘+Shift+Z)" aria-label="Ponów">↷</button>
         <Link className={s.tbtn} href="/dashboard/brands">Marki…</Link>
         <Link className={s.tbtn} href="/dashboard/fiscal-devices">Urządzenia…</Link>
+        <button className={s.tbtn} type="button" onClick={() => setGuideOpen(true)} title="Otwórz instrukcję obsługi diagramu">
+          ❓ Instrukcja (Jak to działa?)
+        </button>
         <span className={s.spacer} />
         {dirty && <span className={s.dirty}>Niezapisane zmiany{changes ? ` (${changes})` : ''}</span>}
         <button className={s.tbtn} onClick={resetAll} disabled={!dirty || saving}>Odrzuć</button>
@@ -627,6 +632,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
       </div>
 
       {toast && <div className={`${s.toast} ${toast.err ? s.toastErr : ''}`} role="status" aria-live="polite">{toast.msg}</div>}
+      <StructureGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   )
 }
