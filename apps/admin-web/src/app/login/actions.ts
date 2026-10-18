@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
+import { adminApi } from '@/lib/api';
 
 export async function login(formData: FormData) {
   const email = String(formData.get('email') || '').trim();
@@ -15,7 +16,8 @@ export async function login(formData: FormData) {
   ].filter(Boolean) as string[];
 
   const uniqueUrls = Array.from(new Set(candidateUrls));
-  let lastErrorMsg = 'Nieprawidłowy login lub hasło';
+  let lastErrorMsg = 'Nieprawidłowy adres email lub hasło';
+  let unverifiedEmail = '';
   let successData: any = null;
 
   try {
@@ -36,8 +38,11 @@ export async function login(formData: FormData) {
           }
         } else {
           const json = await res.json().catch(() => ({}));
+          if (json?.errors?.unverified_email) {
+            unverifiedEmail = String(json.errors.unverified_email);
+          }
           if (res.status === 401 || res.status === 403 || res.status === 422) {
-            lastErrorMsg = json?.message || json?.error || 'Nieprawidłowy login lub hasło';
+            lastErrorMsg = json?.message || json?.error || 'Nieprawidłowy adres email lub hasło';
           } else {
             lastErrorMsg = `Błąd serwera (${res.status}): ${json?.message || json?.error || 'Wystąpił błąd podczas logowania'}`;
           }
@@ -49,7 +54,9 @@ export async function login(formData: FormData) {
     }
 
     if (!successData) {
-      redirect('/login?error=' + encodeURIComponent(lastErrorMsg));
+      const qs = new URLSearchParams({ error: lastErrorMsg });
+      if (unverifiedEmail) qs.set('unverified', unverifiedEmail);
+      redirect('/login?' + qs.toString());
     }
 
     const { access_token, user } = successData;
@@ -77,4 +84,20 @@ export async function login(formData: FormData) {
   }
 
   redirect('/dashboard');
+}
+
+export async function resendVerificationFromLogin(email: string): Promise<{ ok: boolean; message?: string; error?: string }> {
+  try {
+    const res = await adminApi('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: json?.message || json?.error || 'Nie udało się wysłać linku aktywacyjnego' };
+    }
+    return { ok: true, message: json?.message || 'Wysłano nowy link aktywacyjny na Twój adres e-mail.' };
+  } catch {
+    return { ok: false, error: 'Błąd połączenia z serwerem' };
+  }
 }

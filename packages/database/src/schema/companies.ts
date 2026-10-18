@@ -87,6 +87,11 @@ export const users = pgTable('users', {
   role: varchar('role', { length: 32 }).default('staff').notNull(), // 'super_admin' | 'admin' | 'manager' | 'staff' | 'kitchen'
   passwordHash: text('password_hash'),
   isActive: boolean('is_active').default(true).notNull(),
+  emailVerified: boolean('email_verified').default(true).notNull(),
+  verificationToken: varchar('verification_token', { length: 128 }),
+  verificationExpiresAt: timestamp('verification_expires_at'),
+  resetToken: varchar('reset_token', { length: 128 }),
+  resetExpiresAt: timestamp('reset_expires_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

@@ -344,6 +344,11 @@ ALTER TABLE "terminals" ADD COLUMN IF NOT EXISTS "config_json" jsonb DEFAULT '{}
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_job_id" varchar(64);
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "fiscal_qr_code" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email_verified" boolean DEFAULT true NOT NULL;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "verification_token" varchar(128);
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "verification_expires_at" timestamp;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_token" varchar(128);
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_expires_at" timestamp;
 ALTER TABLE "locations" ADD COLUMN IF NOT EXISTS "tables" jsonb DEFAULT '["1","2","3","4","5","6","7","8","9","10","Bar","Ogródek 1","Ogródek 2"]'::jsonb NOT NULL;
 ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "tables" jsonb;
 ALTER TABLE "brands" ADD COLUMN IF NOT EXISTS "location_id" integer;
