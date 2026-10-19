@@ -11,6 +11,7 @@ import {
 import { saveStructure, fetchStructureStatus, type LiveStatus } from './actions'
 import { TerminalPanel, BrandPanel, DevicePanel, IssuesPanel, TablesEditor, KIND_CLASS, presenceOf } from './panels'
 import { StructureGuideModal } from './StructureGuide'
+import { StructureVoiceTour, VOICE_TOUR_STEPS, type TourTarget } from './StructureVoiceTour'
 
 type Sel = { type: 'node' | 'edge' | 'frame'; key: string } | null
 type Drag =
@@ -57,6 +58,9 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
   const [future, setFuture] = useState<Graph[]>([])
   const [live, setLive] = useState<LiveStatus | null>(null)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
+  const [tourStep, setTourStep] = useState(0)
+  const activeTourTarget: TourTarget | null = tourOpen ? (VOICE_TOUR_STEPS[tourStep]?.id ?? null) : null
   const graphRef = useRef(graph)
   graphRef.current = graph
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -476,32 +480,71 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
   const selEdge = sel?.type === 'edge' ? graph.edges.find((e) => e.key === sel.key) : undefined
   const selFrame = sel?.type === 'frame' ? graph.frames.find((f) => f.key === sel.key) : undefined
 
+  const handleTourDemoAction = (target: TourTarget) => {
+    if (target === 'frame-canvas') {
+      const firstLoc = graph.frames.find((f) => f.key !== NONE_FRAME) || graph.frames[0]
+      if (firstLoc) setSel({ type: 'frame', key: firstLoc.key })
+    } else if (target === 'brands-devices') {
+      const firstBrand = graph.nodes.find((n) => n.type === 'brand') || graph.nodes.find((n) => n.type === 'device')
+      if (firstBrand) setSel({ type: 'node', key: firstBrand.key })
+    } else if (target === 'inspector-panel') {
+      setSel(null)
+    }
+  }
+
   return (
     <div className={s.root}>
       <div className={s.toolbar}>
-        <select id="structure-add-role" className={s.tselect} value={addRole} onChange={(e) => setAddRole(e.target.value as Role)} aria-label="Rola nowego stanowiska">
+        <select
+          id="structure-add-role"
+          className={`${s.tselect} ${activeTourTarget === 'add-terminal' ? s.tourFocus : ''}`}
+          value={addRole}
+          onChange={(e) => setAddRole(e.target.value as Role)}
+          aria-label="Rola nowego stanowiska"
+        >
           {ROLES.map((r) => <option key={r} value={r}>{ROLE_INFO[r].name}</option>)}
         </select>
-        <button className={s.tbtn} onClick={addTerminal}>+ Stanowisko</button>
-        <button className={s.tbtn} onClick={addLocation}>+ Lokalizacja</button>
-        <select id="structure-template" className={s.tselect} value="" onChange={(e) => { addTemplate(e.target.value); e.target.value = '' }} aria-label="Dodaj gotowy szablon lokalu">
+        <button className={`${s.tbtn} ${activeTourTarget === 'add-terminal' ? s.tourFocus : ''}`} onClick={addTerminal}>+ Stanowisko</button>
+        <button className={`${s.tbtn} ${activeTourTarget === 'location-template' ? s.tourFocus : ''}`} onClick={addLocation}>+ Lokalizacja</button>
+        <select
+          id="structure-template"
+          className={`${s.tselect} ${activeTourTarget === 'location-template' ? s.tourFocus : ''}`}
+          value=""
+          onChange={(e) => { addTemplate(e.target.value); e.target.value = '' }}
+          aria-label="Dodaj gotowy szablon lokalu"
+        >
           <option value="">+ Szablon lokalu…</option>
           {Object.entries(TEMPLATES).map(([id, t]) => <option key={id} value={id}>{t.label}</option>)}
         </select>
-        <button className={s.tbtn} onClick={undo} disabled={!past.length} title="Cofnij (Ctrl/⌘+Z)" aria-label="Cofnij">↶</button>
+        <button className={`${s.tbtn} ${activeTourTarget === 'save-controls' ? s.tourFocus : ''}`} onClick={undo} disabled={!past.length} title="Cofnij (Ctrl/⌘+Z)" aria-label="Cofnij">↶</button>
         <button className={s.tbtn} onClick={redo} disabled={!future.length} title="Ponów (Ctrl/⌘+Shift+Z)" aria-label="Ponów">↷</button>
-        <Link className={s.tbtn} href="/dashboard/brands">Marki…</Link>
-        <Link className={s.tbtn} href="/dashboard/fiscal-devices">Urządzenia…</Link>
+        <Link className={`${s.tbtn} ${activeTourTarget === 'brands-devices' ? s.tourFocus : ''}`} href="/dashboard/brands">Marki…</Link>
+        <Link className={`${s.tbtn} ${activeTourTarget === 'brands-devices' ? s.tourFocus : ''}`} href="/dashboard/fiscal-devices">Urządzenia…</Link>
         <button className={s.tbtn} type="button" onClick={() => setGuideOpen(true)} title="Otwórz instrukcję obsługi diagramu">
           ❓ Instrukcja (Jak to działa?)
         </button>
+        <button
+          className={`${s.tbtn} ${tourOpen ? s.tourBtnActive : s.tourBtn}`}
+          type="button"
+          onClick={() => {
+            if (tourOpen) {
+              setTourOpen(false)
+            } else {
+              setTourStep(0)
+              setTourOpen(true)
+            }
+          }}
+          title="Uruchom interaktywny przewodnik głosowy krok po kroku nad diagramem"
+        >
+          {tourOpen ? '🔊 Przewodnik aktywny (Zatrzymaj)' : '🎧 Przewodnik głosowy'}
+        </button>
         <span className={s.spacer} />
         {dirty && <span className={s.dirty}>Niezapisane zmiany{changes ? ` (${changes})` : ''}</span>}
-        <button className={s.tbtn} onClick={resetAll} disabled={!dirty || saving}>Odrzuć</button>
-        <button className={`${s.tbtn} ${s.primary}`} onClick={save} disabled={!dirty || saving}>{saving ? 'Zapisywanie…' : 'Zapisz strukturę'}</button>
+        <button className={`${s.tbtn} ${activeTourTarget === 'save-controls' ? s.tourFocus : ''}`} onClick={resetAll} disabled={!dirty || saving}>Odrzuć</button>
+        <button className={`${s.tbtn} ${s.primary} ${activeTourTarget === 'save-controls' ? s.tourFocus : ''}`} onClick={save} disabled={!dirty || saving}>{saving ? 'Zapisywanie…' : 'Zapisz strukturę'}</button>
       </div>
 
-      <div className={s.legend} aria-label="Legenda połączeń">
+      <div className={`${s.legend} ${activeTourTarget === 'pins-legend' ? s.tourFocus : ''}`} style={activeTourTarget === 'pins-legend' ? { padding: '6px 10px', borderRadius: 8, background: '#fff' } : undefined} aria-label="Legenda połączeń">
         <span className={s.kSale}><i /><em className={s.legendText}>marka → stanowisko</em></span>
         <span className={s.kFiscal}><i /><em className={s.legendText}>fiskalizacja</em></span>
         <span className={s.kPay}><i /><em className={s.legendText}>płatność kartą</em></span>
@@ -514,7 +557,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
           onWheel={onWheel} role="application" aria-label="Schemat struktury lokalu">
           <div className={s.stage} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
             {graph.frames.map((f) => (
-              <div key={f.key} className={`${s.frame} ${f.key === NONE_FRAME ? s.frameNone : ''} ${sel?.key === f.key ? s.frameSel : ''}`}
+              <div key={f.key} className={`${s.frame} ${f.key === NONE_FRAME ? s.frameNone : ''} ${sel?.key === f.key ? s.frameSel : ''} ${activeTourTarget === 'frame-canvas' && f.key !== NONE_FRAME ? s.tourFocus : ''}`}
                 style={{ left: f.x, top: f.y, width: f.w, height: f.h }}>
                 <div className={s.frameHead} data-frame-head={f.key}>
                   {f.name}
@@ -537,10 +580,13 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
                 : <>{ROLE_INFO[n.role].name} · <span className={s.mono}>{n.code ?? 'nowe'}</span></>
               const statusDot = w === 'err' ? s.dotErr : w === 'warn' ? s.dotWarn : s.dotOk
               const presence = presenceOf(n, live)
+              const tourHighlightNode =
+                (activeTourTarget === 'brands-devices' && (n.type === 'brand' || n.type === 'device')) ||
+                (activeTourTarget === 'add-terminal' && n.type === 'terminal')
               return (
                 <div key={n.key} data-node={n.key} tabIndex={0}
                   onKeyDown={(e) => { if (e.key === 'Enter') setSel({ type: 'node', key: n.key }) }}
-                  className={`${s.node} ${sel?.key === n.key ? s.nodeSel : ''} ${w === 'err' ? s.nodeErr : ''} ${term?.tempId ? s.nodeNew : ''} ${presence ? (presence.online ? s.online : s.offline) : ''}`}
+                  className={`${s.node} ${sel?.key === n.key ? s.nodeSel : ''} ${w === 'err' ? s.nodeErr : ''} ${term?.tempId ? s.nodeNew : ''} ${presence ? (presence.online ? s.online : s.offline) : ''} ${tourHighlightNode ? s.tourFocus : ''}`}
                   title={presence ? presence.label : undefined}
                   style={{ left: n.x, top: n.y }}>
                   <span className={`${s.dot} ${statusDot}`} title={w === 'err' ? 'Błąd konfiguracji' : w === 'warn' ? 'Do sprawdzenia' : 'Konfiguracja OK'} />
@@ -555,7 +601,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
                       return (
                         <div key={id} className={`${s.pinRow} ${p.dir === 'out' ? s.pinOut : ''}`}>
                           {p.label}{builtIn && <span className={s.chip}>wbudowana</span>}
-                          <span className={`${s.pin} ${KIND_CLASS[p.kind]} ${hotPin === id ? s.pinHot : ''}`} data-pin={id} />
+                          <span className={`${s.pin} ${KIND_CLASS[p.kind]} ${hotPin === id ? s.pinHot : ''} ${activeTourTarget === 'pins-legend' ? s.tourPinFocus : ''}`} data-pin={id} />
                         </div>
                       )
                     })}
@@ -572,7 +618,7 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
           </div>
         </div>
 
-        <aside className={s.panel} aria-label="Właściwości">
+        <aside className={`${s.panel} ${activeTourTarget === 'inspector-panel' || (activeTourTarget === 'frame-canvas' && selFrame) ? s.tourFocus : ''}`} aria-label="Właściwości">
           {selNode?.type === 'terminal' && (
             <TerminalPanel
               n={selNode} graph={graph} live={live} issues={issues.filter((i) => i.node === selNode.key)}
@@ -633,6 +679,13 @@ export function StructureEditor({ initial }: { initial: ApiStructure }) {
 
       {toast && <div className={`${s.toast} ${toast.err ? s.toastErr : ''}`} role="status" aria-live="polite">{toast.msg}</div>}
       <StructureGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
+      <StructureVoiceTour
+        open={tourOpen}
+        stepIndex={tourStep}
+        onStepChange={setTourStep}
+        onClose={() => setTourOpen(false)}
+        onDemoAction={handleTourDemoAction}
+      />
     </div>
   )
 }

@@ -85,3 +85,14 @@
 .presenceTextOn { color:#067647; }
 .nodeSel.online { box-shadow: inset 3px 0 0 #12b76a, 0 0 0 2px rgba(29,95,209,.25), 0 4px 12px rgba(16,24,40,.08); }
 .nodeSel.offline { box-shadow: inset 3px 0 0 #d0d5dd, 0 0 0 2px rgba(29,95,209,.25), 0 4px 12px rgba(16,24,40,.08); }
+
+@keyframes tourPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(237, 28, 36, 0.85), 0 0 18px rgba(237, 28, 36, 0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(237, 28, 36, 0.35), 0 0 26px rgba(237, 28, 36, 0.7); }
+}
+.tourBtn { border-color:#fecdd3; background:#fff1f2; color:#be123c; }
+.tourBtn:hover { border-color:#fda4af; background:#ffe4e6; }
+.tourBtnActive { background:#ed1c24; border-color:#ed1c24; color:#fff; }
+.tourFocus { position:relative; z-index:25; border-color:#ed1c24 !important; animation:tourPulse 1.6s infinite ease-in-out; }
+.tourPinFocus { transform:scale(1.45); box-shadow:0 0 0 4px rgba(237, 28, 36, 0.45); z-index:30; }
+
