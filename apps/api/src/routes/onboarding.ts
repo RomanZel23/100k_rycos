@@ -61,6 +61,11 @@ async function ensureOnboardingTables() {
         "completed_at" timestamp
       );
       ALTER TABLE "onboarding_orders" ADD COLUMN IF NOT EXISTS "provisioning_state" jsonb DEFAULT '{}'::jsonb NOT NULL;
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email_verified" boolean DEFAULT true NOT NULL;
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "verification_token" varchar(128);
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "verification_expires_at" timestamp;
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_token" varchar(128);
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_expires_at" timestamp;
     `);
 
     // Seed default pricing if empty
@@ -512,6 +517,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
           name: order.companyName,
           role: 'admin',
           isActive: true,
+          emailVerified: true,
         });
 
         await tx

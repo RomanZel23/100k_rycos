@@ -81,7 +81,14 @@ async function syncSupabaseAuthUser(opts: {
 
 function sanitizeUser(userRow: any) {
   if (!userRow) return userRow;
-  const { passwordHash, ...safeUser } = userRow;
+  const {
+    passwordHash,
+    verificationToken,
+    verificationExpiresAt,
+    resetToken,
+    resetExpiresAt,
+    ...safeUser
+  } = userRow;
   return {
     ...safeUser,
     company_id: userRow.companyId ?? userRow.company_id,
@@ -113,10 +120,11 @@ async function ensureAuthenticatedUserInCompany(db: any, authUser: any, companyI
         name: authUser.name || (authUser.user_metadata as any)?.name || 'Administrator',
         role: authUser.role || (authUser.user_metadata as any)?.role || 'super_admin',
         isActive: true,
+        emailVerified: true,
       })
       .onConflictDoUpdate({
         target: users.id,
-        set: { companyId, isActive: true, updatedAt: new Date() },
+        set: { companyId, isActive: true, emailVerified: true, updatedAt: new Date() },
       })
       .returning();
 
@@ -139,10 +147,20 @@ export async function adminUsersRoutes(fastify: FastifyInstance) {
         "role" varchar(32) DEFAULT 'staff' NOT NULL,
         "password_hash" text,
         "is_active" boolean DEFAULT true NOT NULL,
+        "email_verified" boolean DEFAULT true NOT NULL,
+        "verification_token" varchar(128),
+        "verification_expires_at" timestamp,
+        "reset_token" varchar(128),
+        "reset_expires_at" timestamp,
         "created_at" timestamp DEFAULT now() NOT NULL,
         "updated_at" timestamp DEFAULT now() NOT NULL
       );
       ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password_hash" text;
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email_verified" boolean DEFAULT true NOT NULL;
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "verification_token" varchar(128);
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "verification_expires_at" timestamp;
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_token" varchar(128);
+      ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "reset_expires_at" timestamp;
     `);
   } catch (err: any) {
     console.warn('[Users] Self-healing schema warning:', err?.message);
