@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDatabase, getRawClient, platformPricing, onboardingOrders, companies, brands, locations, users, eq, and, sql } from '@rycos/database';
+import { getDatabase, getRawClient, platformPricing, onboardingOrders, companies, companyPaymentGateways, brands, locations, users, eq, and, sql } from '@rycos/database';
 import { env, getJwtSecret } from '../config/env.js';
 import { rateLimit } from '../lib/rateLimit.js';
 import { success, error, validationError } from '../lib/response.js';
@@ -83,7 +83,44 @@ async function ensureOnboardingTables() {
   }
 }
 
-function getSolutionsBayCredentials() {
+async function getSolutionsBayCredentials() {
+  if (env.SOLUTIONSBAY_SAFERPAY_API_PASSWORD && env.SOLUTIONSBAY_SAFERPAY_API_PASSWORD.trim() !== '') {
+    return {
+      customerId: env.SOLUTIONSBAY_SAFERPAY_CUSTOMER_ID,
+      terminalId: env.SOLUTIONSBAY_SAFERPAY_TERMINAL_ID,
+      username: env.SOLUTIONSBAY_SAFERPAY_API_USERNAME,
+      password: env.SOLUTIONSBAY_SAFERPAY_API_PASSWORD,
+      testMode: env.SOLUTIONSBAY_SAFERPAY_TEST_MODE,
+    };
+  }
+
+  // Fallback to SaferPay gateway configured in Admin Panel (/dashboard/payment-gateways)
+  try {
+    const db = getDatabase();
+    const gateways = await db
+      .select()
+      .from(companyPaymentGateways)
+      .where(and(
+        eq(companyPaymentGateways.gatewayName, 'SaferPay'),
+        eq(companyPaymentGateways.isActive, true)
+      ));
+
+    const validGateways = gateways.filter((g) => g.customerId && g.publicKey && g.privateKey);
+    const chosen = validGateways.find((g) => g.companyId === 1) || validGateways[0];
+
+    if (chosen && chosen.customerId && chosen.publicKey && chosen.privateKey) {
+      return {
+        customerId: chosen.customerId,
+        terminalId: chosen.terminalId || env.SOLUTIONSBAY_SAFERPAY_TERMINAL_ID,
+        username: chosen.publicKey,
+        password: chosen.privateKey,
+        testMode: chosen.isTest ?? env.SOLUTIONSBAY_SAFERPAY_TEST_MODE,
+      };
+    }
+  } catch (err: any) {
+    console.warn('[Onboarding] Could not check company_payment_gateways fallback:', err?.message);
+  }
+
   return {
     customerId: env.SOLUTIONSBAY_SAFERPAY_CUSTOMER_ID,
     terminalId: env.SOLUTIONSBAY_SAFERPAY_TERMINAL_ID,
@@ -238,14 +275,14 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
 
     // Initialize Saferpay payment
     const returnUrl = `${env.PUBLIC_CUSTOMER_URL}/go/success?order_token=${orderToken}`;
-    const creds = getSolutionsBayCredentials();
+    const creds = await getSolutionsBayCredentials();
 
     let redirectUrl: string | undefined;
     let saferpayToken: string | undefined;
 
-    // Without Saferpay credentials a test checkout is allowed ONLY outside production
+    // Without Saferpay credentials a test checkout is allowed in testMode or outside production
     if (!creds.password || creds.password === '') {
-      if (env.NODE_ENV === 'production') {
+      if (env.NODE_ENV === 'production' && !creds.testMode) {
         return error(reply, 'Płatności online są chwilowo niedostępne (brak konfiguracji bramki).', 503);
       }
       console.warn('[Onboarding] SolutionsBay Saferpay password not configured, fallback to direct test checkout');
@@ -396,13 +433,13 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
     };
 
     try {
-      // Step 1: Payment verification (mandatory; test tokens only outside production)
+      // Step 1: Payment verification (mandatory; test tokens allowed in testMode or outside production)
       if (!order.saferpayTransactionId) {
-        const creds = getSolutionsBayCredentials();
+        const creds = await getSolutionsBayCredentials();
         if (!order.saferpayToken) return await fail('Brak płatności dla zamówienia', 402);
 
         if (order.saferpayToken.startsWith('test_token_')) {
-          if (env.NODE_ENV === 'production') return await fail('Testowa płatność nie jest akceptowana', 402);
+          if (env.NODE_ENV === 'production' && !creds.testMode) return await fail('Testowa płatność nie jest akceptowana', 402);
         } else {
           const assertRes = await assertPaymentPage(order.saferpayToken, creds);
           if (!assertRes.success || !assertRes.transactionId) {
