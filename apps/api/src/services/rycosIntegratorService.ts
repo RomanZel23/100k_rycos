@@ -405,6 +405,31 @@ class RycosIntegratorService {
   }
 
   /**
+   * Shortens long GUS company names so `instance_name` never exceeds RYCOS Portal's 60-character limit.
+   */
+  public formatInstanceName(raw?: string): string {
+    const base = (raw || '100k-rycos')
+      .replace(/SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ/gi, 'SP. Z O.O.')
+      .replace(/SPOLKA Z OGRANICZONA ODPOWIEDZIALNOSCIA/gi, 'SP. Z O.O.')
+      .replace(/SPÓŁKA KOMANDYTOWO-AKCYJNA/gi, 'S.K.A.')
+      .replace(/SPÓŁKA KOMANDYTOWA/gi, 'SP.K.')
+      .replace(/SPÓŁKA JAWNA/gi, 'SP.J.')
+      .replace(/SPÓŁKA AKCYJNA/gi, 'S.A.')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (base.length <= 60) return base || '100k-rycos';
+
+    const suffix = ' (100k)';
+    if (base.endsWith(suffix)) {
+      const prefix = base.slice(0, base.length - suffix.length).trim();
+      return `${prefix.slice(0, 60 - suffix.length).trim()}${suffix}`;
+    }
+
+    return base.slice(0, 60).trim();
+  }
+
+  /**
    * Create / generate a server solution license for a client via Integrator API v2
    */
   public async createSolutionLicense(
@@ -423,7 +448,7 @@ class RycosIntegratorService {
 
     const payload = {
       solution: options.solution || 'p_immo',
-      instance_name: options.instance_name || '100k-rycos',
+      instance_name: this.formatInstanceName(options.instance_name),
       valid_until: options.valid_until || null,
       grace_days: options.grace_days ?? 14,
       notes: options.notes || 'Created via 100k Self-Service Onboarding',

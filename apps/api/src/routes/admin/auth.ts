@@ -281,13 +281,14 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
       }
 
       // 1. Create Company, Default Location & Default Brand
-      const baseSlug = slugify(companyName) || 'firma';
+      const safeCompanyName = companyName.slice(0, 255);
+      const baseSlug = (slugify(companyName) || 'firma').slice(0, 80).replace(/-+$/, '') || 'firma';
       const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
 
       const [newCompany] = await db
         .insert(companies)
         .values({
-          name: companyName,
+          name: safeCompanyName,
           slug: uniqueSlug,
           nip: cleanNip,
           address,
@@ -315,7 +316,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
         await db.insert(brands).values({
           companyId,
           locationId: loc.id,
-          name: companyName,
+          name: safeCompanyName,
           slug: uniqueSlug,
           currency: (body.currency || 'PLN').slice(0, 8),
           isActive: true,
@@ -338,7 +339,7 @@ export async function adminAuthRoutes(fastify: FastifyInstance) {
           id: userId,
           companyId,
           email,
-          name: body.name?.trim() || companyName,
+          name: (body.name?.trim() || companyName).slice(0, 128),
           role: 'admin',
           passwordHash,
           isActive: false,

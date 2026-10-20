@@ -43,7 +43,11 @@ class RycosLicenseService {
     extraStats?: Record<string, unknown>;
   } = {}): Promise<RycosServerLicenseStatus> {
     const rawToken = (params.token || '').trim() || this.globalToken;
-    const instanceName = params.instanceName || '100k-rycos';
+    const instanceName = (params.instanceName || '100k-rycos')
+      .replace(/SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ/gi, 'SP. Z O.O.')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60);
 
     if (!rawToken) {
       const unconf: RycosServerLicenseStatus = {

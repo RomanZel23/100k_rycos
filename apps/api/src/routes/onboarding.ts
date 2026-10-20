@@ -510,16 +510,18 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
       }
 
       // Step 3: Company, location, brand and admin user — one transaction
-      const baseSlug = order.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'firma';
+      const baseSlug = order.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 80).replace(/-+$/, '') || 'firma';
       const uniqueSuffix = randomUUID().slice(0, 6);
       const generatedLicenseToken: string | null = state.licenseToken || null;
       const userId = `usr_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      const safeCompanyName = order.companyName.slice(0, 255);
+      const safeUserName = order.companyName.slice(0, 128);
 
       const newCompany = await db.transaction(async (tx) => {
         const [company] = await tx
           .insert(companies)
           .values({
-            name: order.companyName,
+            name: safeCompanyName,
             slug: `${baseSlug}-${uniqueSuffix}`,
             nip: order.nip,
             email: order.email,
@@ -540,7 +542,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
         await tx.insert(brands).values({
           companyId: company.id,
           locationId: loc.id,
-          name: order.companyName,
+          name: safeCompanyName,
           slug: `${baseSlug}-${uniqueSuffix}`,
           isActive: true,
           allowPayAtCounter: true,
@@ -551,7 +553,7 @@ export async function onboardingRoutes(fastify: FastifyInstance) {
           companyId: company.id,
           email: order.email,
           passwordHash: finalPasswordHash,
-          name: order.companyName,
+          name: safeUserName,
           role: 'admin',
           isActive: true,
           emailVerified: true,
