@@ -63,6 +63,16 @@ export interface RycosLicensingOverview {
   error?: string | null;
 }
 
+/**
+ * RYCOS app reports companion apps in device_info.companion_apps as objects
+ * ({ worldline: { installed: true, version, checked_at } } — portal /api/v2/devices/status);
+ * older builds sent plain booleans. Comparing with `=== true` only ever matched the old format.
+ */
+function companionInstalled(v: unknown): boolean {
+  if (v === true) return true;
+  return Boolean(v && typeof v === 'object' && (v as { installed?: unknown }).installed === true);
+}
+
 class RycosIntegratorService {
   private get baseUrl(): string {
     return (env.RYCOS_PORTAL_URL || 'https://portal.rycos.eu').replace(/\/+$/, '');
@@ -385,9 +395,9 @@ class RycosIntegratorService {
           appVersion: info.app_version || null,
           model: info.model || info.manufacturer || null,
           companionApps: {
-            aplikasa: companionApps.aplikasa === true || info.aplikasa_installed === true,
-            worldline: companionApps.worldline === true,
-            printer: companionApps.printer === true,
+            aplikasa: companionInstalled(companionApps.aplikasa) || info.aplikasa_installed === true,
+            worldline: companionInstalled(companionApps.worldline) || Boolean(info.worldline_tid),
+            printer: companionInstalled(companionApps.printer) || Boolean(info.default_printer_mac),
           },
         });
       }
