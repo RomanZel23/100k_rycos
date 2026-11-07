@@ -492,6 +492,69 @@ UPDATE "addon_groups" SET "selection_mode" = 'multiple' WHERE "selection_mode" L
 DELETE FROM "idempotency_keys" WHERE "expires_at" < now();
 `;
 
+/**
+ * Zamyka tabele schematu `public` przed REST API Supabase (PostgREST), które obsługuje
+ * role `anon` i `authenticated` (klucz anon jest publiczny — trafia do przeglądarki).
+ *
+ * - włącza RLS na każdej tabeli `public` (bez polityk = brak dostępu dla anon/authenticated),
+ * - odbiera tym rolom uprawnienia do tabel, sekwencji i funkcji w `public`
+ *   oraz domyślne uprawnienia do obiektów tworzonych w przyszłości.
+ *
+ * 100k łączy się z bazą jako właściciel tabel (DATABASE_URL), a właściciel omija RLS —
+ * API i worker działają bez zmian. Panel używa Supabase wyłącznie do logowania (schemat `auth`).
+ * Uruchamiane przy każdym starcie, więc obejmuje też tabele dodane później.
+ */
+async function lockDownPublicSchemaFromDataApi(raw: ReturnType<typeof getRawClient>) {
+  try {
+    const result: any = await raw.unsafe(`
+      DO $rls$
+      DECLARE
+        t record;
+        n integer := 0;
+      BEGIN
+        FOR t IN
+          SELECT c.relname
+          FROM pg_class c
+          JOIN pg_namespace ns ON ns.oid = c.relnamespace
+          WHERE ns.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relrowsecurity
+        LOOP
+          EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.relname);
+          n := n + 1;
+        END LOOP;
+        IF n > 0 THEN
+          RAISE NOTICE 'RLS enabled on % table(s)', n;
+        END IF;
+
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+          REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+          REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;
+          REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM anon;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM anon;
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+          REVOKE ALL ON ALL TABLES IN SCHEMA public FROM authenticated;
+          REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM authenticated;
+          REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM authenticated;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM authenticated;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM authenticated;
+          ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM authenticated;
+        END IF;
+      END $rls$;
+
+      SELECT count(*)::int AS open_tables
+      FROM pg_class c JOIN pg_namespace ns ON ns.oid = c.relnamespace
+      WHERE ns.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relrowsecurity;
+    `);
+    const open = Array.isArray(result) ? result.at(-1)?.[0]?.open_tables ?? result[0]?.open_tables : undefined;
+    console.log(`✓ [DB Auto-Init] public schema closed to Supabase Data API (RLS on, anon/authenticated revoked)${open ? ` — ${open} table(s) still without RLS` : ''}`);
+  } catch (err: any) {
+    // Nie blokujemy startu API, ale głośno logujemy — to ustawienie bezpieczeństwa.
+    console.error('[DB Auto-Init] SECURITY: could not lock public schema from Supabase Data API:', err?.message || err);
+  }
+}
+
 export async function ensureDatabaseSchema() {
   const raw = getRawClient();
   if (!raw) return;
@@ -892,6 +955,8 @@ export async function ensureDatabaseSchema() {
         END $storage$;
       `);
     } finally {
+      // Zawsze — także gdy DDL lub seed wyżej się wywróci; funkcja sama łapie swoje błędy.
+      await lockDownPublicSchemaFromDataApi(raw);
       await raw.unsafe(`SELECT pg_advisory_unlock(100100);`);
     }
   } catch (err: any) {
